@@ -2,7 +2,10 @@
 
 > 迁移计划存档 **v3（2026-08-08，业务场景转向后重写）**
 >
-> 配套：`docs/LEARNING_GUIDE.md`（学习路线）、`docs/DATA_STRUCTURES.md`（原项目数据结构）
+> 配套文档：
+> - [`DESIGN_CORE_MECHANISMS.md`](DESIGN_CORE_MECHANISMS.md) —— **核查清单 / 未核实标记 / 风险评分卡的地基设计，Stage 1-2 编码前必读**
+> - [`LEARNING_GUIDE.md`](LEARNING_GUIDE.md) —— 学习路线
+> - [`DATA_STRUCTURES.md`](DATA_STRUCTURES.md) —— 原项目数据结构
 
 ## 修订历史
 
@@ -90,7 +93,33 @@ Critic → 风控复核是最关键的一处映射：原本只是个"检查报�
 5. 记录基线数据：一次完整研究的耗时、token 消耗——这是 Stage 5.2 优化前后对比的"前"
 6. **V1 vs V2 对比**（已确认要做）：同一问题分别跑两条链路，记录报告质量/耗时/token，产出"为什么需要多智能体"的一手数据，写进 README。必须在 Stage 0.4 删除 V1 之前完成
 
-⚠️ **pymilvus 版本风险**：实测环境为 **pymilvus 3.0.0**，而项目代码按 2.x 编写。项目用到的符号（`connections`/`Collection`/`CollectionSchema`/`FieldSchema`/`DataType`/`utility`）在 3.x 中均存在，表面兼容，但行为可能有变化。**基线验证时重点测知识库上传与检索链路**；若不兼容，退回 `pymilvus>=2.3,<3`。
+### ✅ 基线验证结果（2026-08-09 完成）
+
+环境：`F:\conda_envs\dd-assistant`（Python 3.11.15），依赖装自 `backend/requirements.txt`。
+
+| 项 | 结果 |
+|---|---|
+| Docker 六容器 | ✅ 全部 healthy |
+| 后端启动 | ✅ `http://localhost:8000`，52 个端点 |
+| 前端启动 | ✅ **`http://localhost:5183`**（非 README 写的 5173） |
+| 认证链路 | ✅ 注册/登录/JWT 签发正常，PostgreSQL 写入正常 |
+| 知识库 CRUD | ✅ 创建/列表正常 |
+| Milvus 连接 | ✅ pymilvus 3.0.1 → Milvus server v2.3.3 |
+| 基线提交 | ✅ `e11ea53`（main 分支，276 文件）；工作分支 `migration/due-diligence` |
+
+实测版本：langgraph **1.2.10** / pymilvus **3.0.1** / fastapi **0.141.1** / pandas **3.0.5** / numpy **2.4.6**。
+
+### ⚠️ 基线暴露的新问题
+
+**pymilvus ORM API 即将失效（新增待办）**
+`milvus_service.py` 全文基于 ORM-style API（`connections.connect` / `Collection` / `utility.*`），实测每次调用都抛：
+```
+PyMilvusDeprecationWarning: ORM-style PyMilvus API and will be removed in
+PyMilvus 3.1. Use `MilvusClient` instead.
+```
+当前 3.0.1 仍可用，但**下个小版本就会断**。建议在 Stage 1 一并迁移到 `MilvusClient`——这也是个可写进 README 的工程化改造点。若暂不改，需在 requirements 中锁 `pymilvus>=2.3,<3.1`。
+
+**其它**：`research_router.py:154` 使用了已废弃的 FastAPI `example` 参数（应改 `examples`），非阻塞。
 
 ### 0.1 ✅ 清除源码硬编码 API Key（已完成）
 `dr_g.py:29-30` 曾把真实密钥写成 `os.getenv` 默认值，现已改为空字符串默认值。全仓库源码扫描零命中。
@@ -383,8 +412,8 @@ git 历史按 Stage 分组；README 如实说明基于课程项目二次开发�
 |---|---|---|
 | **Python 环境方案** | Stage 0.0 | 见下方"环境说明" |
 | **LangGraph：修复还是删除？** | Stage 0.5 | 方案 A（修复）。⚠️ 可行性尚未验证——langgraph 未安装，requirements 里的 `>=0.0.20` 是很老的版本号，推荐方案依赖较新版本的 `get_stream_writer()` / `stream_mode="custom"`。**装好环境后先验证实际 API 再定** |
-| **「未核实」机制的跨层结构** | Stage 2.2 | 🔑 需单独设计。涉及 Scout 产出 → ResearchState 承载 → Writer 渲染 → Critic 检查 → 前端展示五层，结构定错会全面返工 |
-| **风险评分卡规则** | Stage 2.3 | 🔑 需单独设计。维度/权重/阈值直接决定 Stage 5.1 评测 ground truth 怎么标 |
+| ~~「未核实」机制的跨层结构~~ | Stage 2.2 | ✅ 已完成 → [`DESIGN_CORE_MECHANISMS.md`](DESIGN_CORE_MECHANISMS.md) 第一部分 |
+| ~~风险评分卡规则~~ | Stage 2.3 | ✅ 已完成 → [`DESIGN_CORE_MECHANISMS.md`](DESIGN_CORE_MECHANISMS.md) 第二部分 |
 | 版权署名文本 | Stage 6.1 | — |
 | LICENSE 选型 | Stage 6.1 | 取决于授权范围 |
 | 项目正式名 | Stage 4 | — |
