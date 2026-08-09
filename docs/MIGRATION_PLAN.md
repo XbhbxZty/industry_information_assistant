@@ -17,6 +17,35 @@
 
 ---
 
+## 〇、恢复开发环境（下次回来先看这里）
+
+```bash
+# 1. 起中间件（6 个容器）
+cd D:/pythoncode/industry_information_assistant/industry_information_assistant
+docker compose up -d
+```
+```bash
+# 2. 起后端（专属环境，conda 在 E:\Anaconda3 但不在 PATH）
+cd backend && F:/conda_envs/dd-assistant/python.exe app/app_main.py
+```
+```bash
+# 3. 起前端
+cd frontend && npm run dev
+```
+
+| 项 | 值 |
+|---|---|
+| Python 环境 | `F:\conda_envs\dd-assistant`（3.11.15，专用，勿动已有的 `agent`/`rag`） |
+| 后端 | http://localhost:8000 ，API 文档 `/docs` |
+| 前端 | **http://localhost:5183** （不是 README 写的 5173） |
+| 测试账号 | `ddtest` / `test123456` |
+| 当前分支 | `migration/due-diligence`（`main` 保持迁移前基线 `e11ea53`） |
+| 执行顺序 | 以 [`ITERATION_ROADMAP.md`](ITERATION_ROADMAP.md) 为准，本文档是文件级改动清单 |
+
+> 注意：用 PowerShell 后台启动服务时**不要**接 `| Select-Object -First N`——达到行数上限会关闭管道并杀掉进程（已踩过一次）。
+
+---
+
 ## 一、项目定位与叙事
 
 ### 场景

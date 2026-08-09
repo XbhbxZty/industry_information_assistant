@@ -47,3 +47,6 @@ langfuse/
 .cache/
 *.cache
 USER_ACTION.md
+
+# Agent 运行时生成的临时图表（CodeWizard 当前写入 CWD，见 BADCASES.md BC-08）
+backend/*.png
