@@ -255,10 +255,11 @@ def fill_field_checks(
         v = _fin_series(key)
         if v:
             resolved[fid] = (v, "financial")
-    if fins:
-        resolved["debt_ratio"] = (
-            "；".join(f"{f['period']} {f['debt_ratio']:.1%}" for f in fins if "debt_ratio" in f),
-            "financial")
+    # 与上面的 _fin_series 保持一致：拼不出内容就不要写进 resolved，
+    # 否则空串会被判为 verified（值为空）——曾出现过此缺陷
+    _dr = "；".join(f"{f['period']} {f['debt_ratio']:.1%}" for f in fins if "debt_ratio" in f)
+    if _dr:
+        resolved["debt_ratio"] = (_dr, "financial")
 
     for fid, kind in (("litigation", "涉诉"), ("enforcement", "被执行"),
                       ("dishonesty", "失信"), ("equity_freeze", "股权冻结")):
@@ -266,11 +267,23 @@ def fill_field_checks(
         if v:
             resolved[fid] = (v, "judicial")
 
-    if company.get("negative_news"):
+    # 舆情：必须区分「已确认属于本主体」与「疑似相关但主体未确认」。
+    # 公开报道常以"某地一企业"指代而不点名，把这类报道直接归属给尽调对象，
+    # 与 BC-10（同名主体混淆）是同一类错误——只是方向相反。
+    news = company.get("negative_news") or []
+    confirmed = [n for n in news if n.get("subject_confirmed") is True]
+    unconfirmed = [n for n in news if n.get("subject_confirmed") is not True]
+    if confirmed:
         resolved["negative_news"] = (
-            "；".join(f"{n['title']}（{n['publish_date']}，{n['severity']}）"
-                     for n in company["negative_news"]),
+            "；".join(f"{n['title']}（{n['publish_date']}，{n['severity']}）" for n in confirmed),
             "opinion")
+    # unconfirmed 的线索不进 resolved：它不能作为"已核实的本主体舆情"，
+    # 但会在下方写入 pending_attribution，让报告披露"检索到疑似相关但主体未确认"
+    pending_attribution = {
+        "negative_news": [
+            f"{n['title']}（{n['publish_date']}）" for n in unconfirmed
+        ]
+    } if unconfirmed else {}
 
     # 数据源覆盖范围：区分「查了但无记录」与「未查询」。
     # 这两者在尽调中的业务含义完全不同——前者是可支持授信的正面结论，
@@ -296,18 +309,44 @@ def fill_field_checks(
             chk["value"] = value
             chk["sources"] = facts_by_cat.get(cat, [])
             chk["failure_reason"] = ""
+
         elif fid in queried:
-            # 查询已执行但无记录 —— 这是已核实的正面结论，不是缺口
-            chk["status"] = "verified"
-            chk["value"] = "经查询，无相关记录"
-            chk["sources"] = []
-            chk["failure_reason"] = ""
+            # 查询已执行但无内容。「无记录」是否构成有效结论，取决于字段类型。
+            if item and not item.absence_meaningful:
+                # 属性型字段（工商登记/股东/营收…）：存续企业必然具备。
+                # 查询返回空不是"没有"，而是主体存疑或数据源异常，
+                # 绝不能粉饰成"经查询无相关记录"。
+                chk["status"] = "unverified"
+                chk["value"] = None
+                chk["failure_reason"] = (
+                    f"数据源 {source_tag} 已查询但未返回该项内容。"
+                    f"此为必备属性，缺失属异常信号（主体可能不存在/已注销，或数据源故障），"
+                    f"须人工核实主体真实性"
+                )
+            else:
+                # 事件型字段（涉诉/失信/担保/舆情…）：可以合法地不存在
+                chk["status"] = "verified"
+                chk["value"] = "经查询，无相关记录"
+                chk["sources"] = []
+                chk["failure_reason"] = ""
+
         else:
             # 该数据源根本不覆盖此项 —— 真正的信息缺口
             chk["status"] = "unverified"
             chk["value"] = None
             chk["failure_reason"] = not_queried_reason.get(
                 fid, f"数据源 {source_tag} 未覆盖该项"
+            )
+
+        # 主体归属未确认的线索：不能算已核实，但必须在报告中披露
+        if fid in pending_attribution and pending_attribution[fid]:
+            leads = "；".join(pending_attribution[fid])
+            if chk["status"] == "verified" and chk["value"] == "经查询，无相关记录":
+                chk["status"] = "unverified"
+                chk["value"] = None
+            chk["failure_reason"] = (
+                (chk["failure_reason"] + "；" if chk["failure_reason"] else "")
+                + f"另检索到疑似相关线索但主体归属未确认，需人工核对：{leads}"
             )
 
     return field_checks

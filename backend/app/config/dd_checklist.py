@@ -25,6 +25,19 @@ class ChecklistItem:
     required: bool         # 必查项未核实会触发风险等级下限（v0.5 完整度闸门）
     description: str       # 供 Writer 理解该项要交代什么
     primary_source: str    # 主数据源，未取到时写入 attempted_sources
+    absence_meaningful: bool = True
+    """
+    数据源查询后返回空结果时，「无记录」是否构成有效结论。
+
+    True  —— 事件型字段（涉诉、失信、对外担保、舆情…）。
+             这类事件可以合法地不存在，查询返回空 = 已核实的正面结论。
+
+    False —— 属性型字段（工商登记、股东结构、营业收入…）。
+             一个存续经营的企业必然具备这些属性。查询返回空不是"没有"，
+             而是**异常信号**：主体可能不存在、已注销，或数据源故障。
+             绝不能表述为"经查询无相关记录"——那会把 critical 风险
+             粉饰成中性结论。
+    """
 
 
 # 维度 → 章节。与 Architect 生成的 8 章尽调提纲对齐。
@@ -40,7 +53,8 @@ CATEGORY_TO_SECTION: Dict[str, str] = {
 }
 
 
-def _item(field_id, field_name, category, required, description, primary_source):
+def _item(field_id, field_name, category, required, description, primary_source,
+          absence_meaningful=True):
     return ChecklistItem(
         field_id=field_id,
         field_name=field_name,
@@ -49,6 +63,7 @@ def _item(field_id, field_name, category, required, description, primary_source)
         required=required,
         description=description,
         primary_source=primary_source,
+        absence_meaningful=absence_meaningful,
     )
 
 
@@ -57,17 +72,17 @@ CHECKLIST: List[ChecklistItem] = [
     # —— 企业基本情况 ——
     _item("registration", "工商登记基本信息", "basic", True,
           "统一社会信用代码、注册资本、实缴资本、成立日期、法定代表人、注册地址、企业类型",
-          "business_registry"),
+          "business_registry", absence_meaningful=False),
     _item("business_scope", "经营范围", "basic", True,
-          "登记经营范围，与实际业务是否一致", "business_registry"),
+          "登记经营范围，与实际业务是否一致", "business_registry", absence_meaningful=False),
     _item("operating_status", "登记状态", "basic", True,
-          "存续/在业/吊销/注销。非存续状态是一票否决级风险", "business_registry"),
+          "存续/在业/吊销/注销。非存续状态是一票否决级风险", "business_registry", absence_meaningful=False),
 
     # —— 股权结构与实际控制人 ——
     _item("shareholders", "股东结构", "equity", True,
-          "股东名称、类型、持股比例、认缴出资额", "business_registry"),
+          "股东名称、类型、持股比例、认缴出资额", "business_registry", absence_meaningful=False),
     _item("actual_controller", "实际控制人", "equity", True,
-          "实际控制人认定及认定依据。不得由持股比例自行推断", "business_registry"),
+          "实际控制人认定及认定依据。不得由持股比例自行推断", "business_registry", absence_meaningful=False),
     _item("external_investment", "对外投资", "equity", False,
           "作为股东对外投资的企业及持股情况", "business_registry"),
 
@@ -77,13 +92,13 @@ CHECKLIST: List[ChecklistItem] = [
 
     # —— 财务分析 ——
     _item("revenue", "营业收入", "financial", True,
-          "近三年营业收入及变动趋势", "financial_report"),
+          "近三年营业收入及变动趋势", "financial_report", absence_meaningful=False),
     _item("net_profit", "净利润", "financial", True,
-          "近三年净利润及变动趋势，关注增收不增利", "financial_report"),
+          "近三年净利润及变动趋势，关注增收不增利", "financial_report", absence_meaningful=False),
     _item("debt_ratio", "资产负债率", "financial", True,
-          "近三年资产负债率，关注上升趋势", "financial_report"),
+          "近三年资产负债率，关注上升趋势", "financial_report", absence_meaningful=False),
     _item("cash_flow", "经营性现金流", "financial", False,
-          "经营活动现金流净额，关注由正转负", "financial_report"),
+          "经营活动现金流净额，关注由正转负", "financial_report", absence_meaningful=False),
 
     # —— 司法与合规风险 ——
     _item("litigation", "涉诉记录", "judicial", True,
@@ -147,6 +162,39 @@ def build_field_checks(
             "checked_at": checked_at,
         })
     return checks
+
+
+def record_search_attempt(
+    field_checks: List[Dict],
+    section_id: str,
+    source_tag: str,
+    checked_at: str = "",
+) -> int:
+    """
+    记录某章节发生过外部检索尝试（Scout 回写）。
+
+    ⚠️ 刻意**不**翻转 status。理由：
+    通用网页检索命中一篇新闻，不等于核实了"对外担保"这个字段。
+    字段级核实需要定向抽取与结构化解析——那是 v0.4 数据源适配层的职责。
+
+    此处只如实追加 attempted_sources，使清单反映"尝试过但未获字段级证据"，
+    而不是让检索的存在制造"已核实"的假象。核实率因此不会被外部检索虚高。
+
+    Returns: 被更新的条目数
+    """
+    n = 0
+    for c in field_checks:
+        if c.get("section_id") != section_id:
+            continue
+        if c.get("status") in ("verified", "not_applicable"):
+            continue
+        attempted = c.setdefault("attempted_sources", [])
+        if source_tag not in attempted:
+            attempted.append(source_tag)
+            if checked_at:
+                c["checked_at"] = checked_at
+            n += 1
+    return n
 
 
 def compute_completeness(field_checks: List[Dict]) -> Dict:

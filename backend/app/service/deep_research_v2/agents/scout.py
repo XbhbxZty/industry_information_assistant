@@ -694,6 +694,23 @@ URL: {url}
                         "searchType": "local"
                     })
 
+        # 回写核查清单：如实记录本章节发生过外部检索（不翻转 status，见函数注释）
+        if all_results and state.get("field_checks"):
+            try:
+                try:
+                    from config.dd_checklist import record_search_attempt
+                except ImportError:
+                    from app.config.dd_checklist import record_search_attempt
+                tag = "web_search" if search_web else "local_kb"
+                touched = record_search_attempt(
+                    state["field_checks"], section_id, tag,
+                    checked_at=datetime.now().isoformat()
+                )
+                if touched:
+                    self.logger.info(f"[清单回写] {section_title}: {touched} 项追加 {tag} 检索记录")
+            except Exception as e:  # 回写失败不应中断研究主流程
+                self.logger.warning(f"[清单回写] 失败: {e}")
+
         if not all_results:
             self.logger.warning(f"No search results for section: {section_title}")
             return
