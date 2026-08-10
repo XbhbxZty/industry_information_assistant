@@ -55,6 +55,27 @@ class BaseAgent(ABC):
         """
         pass
 
+    @staticmethod
+    def _with_time_anchor(system_prompt: str) -> str:
+        """
+        给 system prompt 加时间基准（见 BADCASES.md BC-03）。
+
+        模型没有时钟，缺省会拿训练截止时间当"今天"。实测中 Critic 因此把
+        一年多以前的 2025 年数据判定为"尚未发生的未来事件"并报为 critical 幻觉。
+
+        更麻烦的是：即使正文里已出现"报告撰写于 2026年8月9日"，模型的先验仍会
+        压过上下文。所以这里不只给日期，还显式给出判定规则，堵掉推理捷径。
+        """
+        today = datetime.now().strftime('%Y年%m月%d日')
+        anchor = (
+            "【时间基准】当前日期是 " + today + "。\n"
+            "- 任何早于该日期的时间点都属于**已发生的过去**，不得判定为『未来事件』。\n"
+            "- 判断数据时效性（如『是否超过两年』『是否为近期』）一律以该日期为准，"
+            "不得依据你的训练数据截止时间。\n"
+            "- 只有当资料中的日期**晚于**该日期时，才可质疑其真实性。\n\n"
+        )
+        return anchor + system_prompt
+
     async def call_llm(
         self,
         system_prompt: str,
@@ -82,7 +103,7 @@ class BaseAgent(ABC):
             kwargs = {
                 "model": self.model,
                 "messages": [
-                    {"role": "system", "content": system_prompt},
+                    {"role": "system", "content": self._with_time_anchor(system_prompt)},
                     {"role": "user", "content": user_prompt}
                 ],
                 "temperature": temperature,

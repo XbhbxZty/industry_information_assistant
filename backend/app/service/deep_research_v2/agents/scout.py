@@ -282,6 +282,32 @@ URL: {url}
 
         return state
 
+    # 说明性文字而非检索词的特征。实测 Critic 产出过
+    # "（此信息无法通过公开搜索获得，必须要求企业提供）" 这类"查询"，
+    # 系统照单全收拿去搜索，纯属浪费调用。
+    _INVALID_QUERY_MARKERS = (
+        "无法通过", "无法获得", "必须要求", "需企业提供", "需要企业提供",
+        "建议要求", "不适用", "无需搜索", "N/A",
+    )
+
+    def _is_valid_search_query(self, query: str) -> bool:
+        """
+        判断模型产出的字符串是否是可用的检索词。
+
+        判据基于"检索词 vs 散文"的形态差异：真实检索词是短关键词组合，
+        几乎不含句读标点；模型跑偏时产出的是完整句子或整段说明。
+        """
+        if not query or not isinstance(query, str):
+            return False
+        q = query.strip()
+        if len(q) < 2 or len(q) > 40:          # 中文检索词很少超过 40 字
+            return False
+        if any(p in q for p in "。，；！？.;!"):  # 句读标点 => 是句子不是检索词
+            return False
+        if q.startswith(("（", "(")) and q.endswith(("）", ")")):  # 整句括号 => 注释
+            return False
+        return not any(m in q for m in self._INVALID_QUERY_MARKERS)
+
     async def _supplementary_research(self, state: ResearchState) -> ResearchState:
         """
         补充搜索阶段 - 处理审核后发现的信息缺失
@@ -294,6 +320,37 @@ URL: {url}
             self.logger.info("No pending search queries for supplementary research")
             state["phase"] = ResearchPhase.WRITING.value
             return state
+
+        # 补充搜索同样受搜索模式约束（见 BADCASES.md BC-11）。
+        # 此前这条路径不检查开关，导致纯内部数据源模式下仍会联网检索。
+        if not state.get("search_web", True) and not state.get("search_local", False):
+            self.logger.info(
+                f"纯内部数据源模式，跳过 {len(pending_queries)} 条补充搜索；"
+                f"审核提出的信息缺口将保持未核实状态"
+            )
+            self.add_message(state, "thought", {
+                "agent": self.name,
+                "content": (
+                    "当前为纯内部数据源模式，不执行外部检索。"
+                    f"审核提出的 {len(pending_queries)} 项信息缺口维持未核实状态。"
+                )
+            })
+            state["pending_search_queries"] = []
+            state["phase"] = ResearchPhase.WRITING.value
+            return state
+
+        # 过滤无效检索词：模型有时会把说明性文字当作查询产出
+        # （实测出现过 "（此信息无法通过公开搜索获得，必须要求企业提供）"）
+        valid_queries = [q for q in pending_queries if self._is_valid_search_query(q)]
+        dropped = len(pending_queries) - len(valid_queries)
+        if dropped:
+            self.logger.warning(f"丢弃 {dropped} 条无效补充检索词（说明性文字而非查询）")
+        if not valid_queries:
+            self.logger.warning("补充检索词全部无效，跳过补充搜索")
+            state["pending_search_queries"] = []
+            state["phase"] = ResearchPhase.WRITING.value
+            return state
+        pending_queries = valid_queries
 
         self.logger.info(f"Starting supplementary research with {len(pending_queries)} queries")
 
