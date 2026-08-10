@@ -212,11 +212,19 @@ URL: {url}
         search_web = state.get("search_web", True)
         search_local = state.get("search_local", False)
 
-        # 如果没有选择任何搜索模式，警告并使用默认的网络搜索
+        # 两个搜索模式都关闭时的处理：
+        # 若已有预置事实（如注入的企业档案），这是**合法的纯内部数据源模式**，
+        # 必须尊重——v0.4 的评测运行依赖它保证输入与 ground truth 一致（见 BADCASES.md BC-10）。
+        # 只有在既无外部检索又无任何已知事实时，才回退到网络搜索，否则无米下炊。
         if not search_web and not search_local:
-            self.logger.warning("No search mode selected, defaulting to web search")
-            search_web = True
-            state["search_web"] = True
+            if state.get("facts"):
+                self.logger.info(
+                    f"仅使用内部数据源（已有 {len(state['facts'])} 条预置事实），不执行外部检索"
+                )
+            else:
+                self.logger.warning("未选择任何搜索模式且无预置事实，回退到网络搜索")
+                search_web = True
+                state["search_web"] = True
 
         # 获取需要研究的章节
         pending_sections = [s for s in state["outline"] if s.get("status") == "pending"]
