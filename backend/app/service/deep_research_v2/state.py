@@ -123,6 +123,10 @@ class ResearchState(TypedDict):
     search_web: bool                        # 是否启用网络搜索
     search_local: bool                      # 是否启用本地知识库搜索
 
+    # 尽调对象（v0.1：来自硬编码档案；v0.4 起改由数据源适配层提供）
+    company_name: str                       # 识别出的尽调对象企业名，未识别则为空
+    credit_context: str                     # 授信申请背景，拼入 Architect 规划提示词
+
     # 规划输出
     outline: List[Dict[str, Any]]           # 动态大纲 (Section序列化)
     mind_map: Dict[str, Any]                # 知识图谱/思维导图
@@ -180,6 +184,8 @@ def create_initial_state(
         max_iterations=3,
         search_web=search_web,
         search_local=search_local,
+        company_name="",
+        credit_context="",
         outline=[],
         mind_map={},
         key_entities=[],

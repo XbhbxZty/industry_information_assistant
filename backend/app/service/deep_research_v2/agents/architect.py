@@ -29,41 +29,56 @@ class ChiefArchitect(BaseAgent):
     - 根据新发现调整计划
     """
 
-    PLANNING_PROMPT = """研究课题：{query}
+    PLANNING_PROMPT = """尽调任务：{query}
 
-请为该课题生成研究大纲和研究假设，输出JSON格式如下：
+{credit_context}
+
+你是信贷机构的尽职调查负责人，需要为该笔授信申请制定**贷前尽职调查提纲**。
+
+尽调报告采用固定章节体系（保证不同企业的报告可横向比较），请按下列结构输出：
 
 {{
-  "hypothesis_1": "关于市场/行业趋势的假设（需要验证）",
-  "hypothesis_2": "关于竞争格局或技术发展的假设（需要验证）",
-  "hypothesis_3": "关于政策或外部因素影响的假设（需要验证）",
-  "sec_1_title": "市场概况",
-  "sec_1_desc": "描述市场规模、增速",
-  "sec_1_query": "搜索关键词",
-  "sec_2_title": "竞争格局",
-  "sec_2_desc": "描述主要企业",
-  "sec_2_query": "搜索关键词",
-  "sec_3_title": "技术趋势",
-  "sec_3_desc": "描述核心技术",
-  "sec_3_query": "搜索关键词",
-  "sec_4_title": "政策环境",
-  "sec_4_desc": "描述相关政策",
-  "sec_4_query": "搜索关键词",
-  "sec_5_title": "挑战机遇",
-  "sec_5_desc": "描述挑战和机会",
-  "sec_5_query": "搜索关键词",
-  "sec_6_title": "未来展望",
-  "sec_6_desc": "描述发展趋势",
-  "sec_6_query": "搜索关键词",
-  "questions": "核心问题1;核心问题2;核心问题3"
+  "hypothesis_1": "关于该企业偿债能力的风险假设（需用证据验证）",
+  "hypothesis_2": "关于该企业经营真实性与持续性的风险假设（需用证据验证）",
+  "hypothesis_3": "关于该企业或有负债与关联风险的风险假设（需用证据验证）",
+  "sec_1_title": "企业基本情况",
+  "sec_1_desc": "工商登记、成立年限、经营范围、登记状态、参保人数",
+  "sec_1_query": "核查所需的检索词",
+  "sec_2_title": "股权结构与实际控制人",
+  "sec_2_desc": "股东构成、持股比例、实际控制人认定、股权稳定性",
+  "sec_2_query": "核查所需的检索词",
+  "sec_3_title": "经营状况",
+  "sec_3_desc": "主营业务、客户结构、订单与中标情况、产能与人员变化",
+  "sec_3_query": "核查所需的检索词",
+  "sec_4_title": "财务分析",
+  "sec_4_desc": "营收利润趋势、资产负债率、应收账款、经营性现金流",
+  "sec_4_query": "核查所需的检索词",
+  "sec_5_title": "司法与合规风险",
+  "sec_5_desc": "涉诉、被执行、失信、行政处罚记录及其影响",
+  "sec_5_query": "核查所需的检索词",
+  "sec_6_title": "关联关系与对外担保",
+  "sec_6_desc": "关联方、对外投资、对外担保、担保圈风险",
+  "sec_6_query": "核查所需的检索词",
+  "sec_7_title": "舆情扫描",
+  "sec_7_desc": "负面报道、监管处罚、行业风险传导",
+  "sec_7_query": "核查所需的检索词",
+  "sec_8_title": "风险汇总与授信建议",
+  "sec_8_desc": "各维度风险归纳、风险等级判断、授信意见与增信建议",
+  "sec_8_query": "核查所需的检索词",
+  "questions": "核心尽调问题1;核心尽调问题2;核心尽调问题3"
 }}
 
-研究假设示例：
-- 假设市场规模将持续增长，需要用数据验证增速
-- 假设某类技术会成为主流，需要找证据支持或反驳
-- 假设政策变化会影响行业格局，需要分析政策走向
+风险假设示例（尽调关注的是风险，不是机会）：
+- 假设该企业应收账款快速增长伴随回款恶化，需用现金流数据验证
+- 假设该企业存在未披露的对外担保，需要核查
+- 假设涉诉记录会影响其履约能力，需评估金额占比
 
-请根据研究课题填写具体内容，每个字段都是字符串类型。"""
+⚠️ 重要原则：
+1. 章节结构固定为上述 8 章，不要增删或改名
+2. 检索词应针对"需要核实什么"，而非"想了解什么"
+3. **不得在提纲阶段预设结论**——提纲只定义要查什么，不定义查到什么
+
+请填写具体内容，每个字段都是字符串类型。"""
 
     REVISION_PROMPT = """你是总架构师，需要根据研究进展动态调整大纲。
 
@@ -118,13 +133,15 @@ class ChiefArchitect(BaseAgent):
             if title_key not in flat_result:
                 break
 
+            # 尽调提纲固定 8 章，需要数据/图表的是经营(3)与财务(4)章节
+            data_sections = {3, 4}
             section = {
                 "id": f"sec_{i}",
                 "title": flat_result.get(title_key, f"章节{i}"),
                 "description": flat_result.get(desc_key, ""),
-                "section_type": "mixed",
-                "requires_data": i <= 2,  # 前两章需要数据
-                "requires_chart": i <= 2,
+                "section_type": "quantitative" if i in data_sections else "qualitative",
+                "requires_data": i in data_sections,
+                "requires_chart": i in data_sections,
                 "search_queries": [flat_result.get(query_key, flat_result.get(title_key, ""))]
             }
             outline.append(section)
@@ -186,17 +203,25 @@ class ChiefArchitect(BaseAgent):
         # 发送状态消息
         self.add_message(state, "thought", {
             "agent": self.name,
-            "content": "正在分析研究问题，构建知识图谱和研究大纲..."
+            "content": "正在分析尽调对象与授信申请，制定尽职调查提纲..."
         })
 
         # 调用LLM生成规划 - 带重试机制
-        prompt = self.PLANNING_PROMPT.format(query=state["query"])
+        # credit_context 由 graph 在识别到尽调对象时注入（v0.1 来自硬编码档案）
+        prompt = self.PLANNING_PROMPT.format(
+            query=state["query"],
+            credit_context=state.get("credit_context", "（未提供授信申请信息）")
+        )
         result = None
         max_retries = 2
 
         for attempt in range(max_retries + 1):
             response = await self.call_llm(
-                system_prompt="你是一位专业的行业研究规划师。请严格按照要求的JSON格式输出，不要添加任何额外内容。",
+                system_prompt=(
+                    "你是信贷机构的尽职调查负责人，负责制定贷前尽调提纲。"
+                    "尽调的目的是发现风险而非论证可行性。"
+                    "请严格按照要求的JSON格式输出，不要添加任何额外内容。"
+                ),
                 user_prompt=prompt,
                 json_mode=True,
                 temperature=0.3,
@@ -228,15 +253,16 @@ class ChiefArchitect(BaseAgent):
             if attempt < max_retries:
                 self.logger.warning(f"Outline generation failed or incomplete, retrying... (attempt {attempt + 1})")
                 # 简化提示词重试
-                prompt = f"""请为"{state['query']}"生成研究大纲。
+                prompt = f"""请为"{state['query']}"生成贷前尽职调查提纲。
 
 输出JSON格式：
 {{"outline": [
-    {{"id": "sec_1", "title": "章节标题", "description": "描述", "section_type": "mixed", "requires_data": true, "requires_chart": false, "search_queries": ["关键词1", "关键词2"]}},
-    ...更多章节(共5-8个)...
-], "research_questions": ["问题1", "问题2", "问题3"], "key_entities": []}}
+    {{"id": "sec_1", "title": "章节标题", "description": "描述", "section_type": "mixed", "requires_data": true, "requires_chart": false, "search_queries": ["核查检索词"]}},
+    ...共8个章节...
+], "research_questions": ["尽调问题1", "尽调问题2", "尽调问题3"], "key_entities": []}}
 
-要求：outline必须包含5-8个章节，覆盖市场概况、企业竞争、技术趋势、政策环境、未来展望等方面。"""
+要求：outline 必须是固定的 8 个章节，依次为：企业基本情况、股权结构与实际控制人、
+经营状况、财务分析、司法与合规风险、关联关系与对外担保、舆情扫描、风险汇总与授信建议。"""
 
         if not result:
             state["errors"].append("Failed to generate research plan after retries")

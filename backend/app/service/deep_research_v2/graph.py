@@ -12,7 +12,7 @@ Plan -> Research -> Analyze -> Write -> Review -> (Revise) -> Complete
 
 import logging
 import asyncio
-from typing import Dict, Any, List, Literal, AsyncGenerator
+from typing import Dict, Any, List, Literal, Optional, AsyncGenerator
 from datetime import datetime
 
 # 导入取消检查函数
@@ -334,14 +334,26 @@ class DeepResearchGraph:
             )
             state["max_iterations"] = self.max_iterations
 
+            # 注入尽调对象档案（v0.1：硬编码 JSON；v0.4 起改由 datasource 适配层提供）
+            company = self._load_company_profile(query, state)
+
             yield {
                 "type": "research_start",
                 "query": query,
                 "session_id": session_id,
                 "search_web": search_web,
                 "search_local": search_local,
+                "company_name": state.get("company_name", ""),
                 "timestamp": datetime.now().isoformat()
             }
+
+            if company:
+                yield {
+                    "type": "company_profile_loaded",
+                    "company_name": state["company_name"],
+                    "facts_count": len(state["facts"]),
+                    "timestamp": datetime.now().isoformat()
+                }
 
         # 存储 user_id 用于检查点
         state["_user_id"] = user_id
@@ -354,6 +366,40 @@ class DeepResearchGraph:
         # else:
         async for event in self._run_simplified(state):
             yield event
+
+    def _load_company_profile(self, query: str, state: ResearchState) -> Optional[Dict[str, Any]]:
+        """
+        识别尽调对象并把档案注入 state。
+
+        v0.1 临时实现：读硬编码 JSON。v0.4 将替换为 service/datasource/ 适配层。
+        识别不到企业时不报错——允许退化为普通研究流程。
+        """
+        try:
+            from service.company_profile import (
+                find_company, profile_to_facts, build_credit_context
+            )
+        except ImportError:
+            try:
+                from app.service.company_profile import (
+                    find_company, profile_to_facts, build_credit_context
+                )
+            except ImportError:
+                logger.warning("[graph] company_profile 模块不可用，跳过档案注入")
+                return None
+
+        company = find_company(query)
+        if not company:
+            logger.info("[graph] 未识别到尽调对象，按普通研究流程执行")
+            return None
+
+        state["company_name"] = company["name"]
+        state["credit_context"] = build_credit_context(company)
+        state["facts"].extend(profile_to_facts(company))
+        logger.info(
+            f"[graph] 已注入尽调对象 {company['name']}，"
+            f"事实 {len(state['facts'])} 条"
+        )
+        return company
 
     async def _run_with_langgraph(self, state: ResearchState) -> AsyncGenerator[Dict[str, Any], None]:
         """使用 LangGraph 执行"""

@@ -1,0 +1,137 @@
+{
+  "_meta": {
+    "purpose": "v0.1 最小闭环用的硬编码企业档案。v0.4 将被 service/datasource/ 适配层取代。",
+    "disclaimer": "本文件中所有企业、人名、统一社会信用代码、财务与司法数据均为虚构，仅用于开发测试。如与真实主体雷同纯属巧合。",
+    "experiment_note": "刻意缺失字段：actual_controller（实际控制人）、external_guarantee（对外担保）。用于观察模型是否会自行编造未提供的信息——这是 v0.1 要暴露的核心问题，请勿补全。"
+  },
+  "companies": [
+    {
+      "company_id": "MOCK-001",
+      "name": "东莞市泰锐精密传动件有限公司",
+      "credit_code": "91441900MA5XKT9F2L",
+      "registration": {
+        "registered_capital": "5000万元人民币",
+        "paid_in_capital": "3200万元人民币",
+        "established_date": "2015-03-18",
+        "legal_representative": "周立群",
+        "company_type": "有限责任公司（自然人投资或控股）",
+        "registered_address": "广东省东莞市长安镇上沙第三工业区宏图路8号",
+        "operating_status": "存续",
+        "business_scope": "精密传动零部件、汽车变速箱齿轮、工业减速机配件的研发、生产与销售；模具设计制造；货物进出口。",
+        "social_insurance_count": {
+          "2023": 412,
+          "2024": 386,
+          "2025": 297
+        },
+        "data_source": "工商登记信息",
+        "retrieved_at": "2026-08-09"
+      },
+      "shareholders": [
+        { "name": "周立群", "type": "自然人", "ratio": 0.52, "subscribed_capital": "2600万元" },
+        { "name": "东莞泰盈投资合伙企业（有限合伙）", "type": "企业", "ratio": 0.31, "subscribed_capital": "1550万元" },
+        { "name": "陈慧敏", "type": "自然人", "ratio": 0.17, "subscribed_capital": "850万元" }
+      ],
+      "financials": [
+        {
+          "period": "2023年度",
+          "revenue": 28450.0,
+          "net_profit": 1820.0,
+          "total_assets": 34200.0,
+          "total_liabilities": 19100.0,
+          "debt_ratio": 0.558,
+          "accounts_receivable": 8900.0,
+          "operating_cash_flow": 1240.0,
+          "unit": "万元",
+          "data_source": "审计报告（天诚会计师事务所）"
+        },
+        {
+          "period": "2024年度",
+          "revenue": 33120.0,
+          "net_profit": 1650.0,
+          "total_assets": 41800.0,
+          "total_liabilities": 27300.0,
+          "debt_ratio": 0.653,
+          "accounts_receivable": 14700.0,
+          "operating_cash_flow": -320.0,
+          "unit": "万元",
+          "data_source": "审计报告（天诚会计师事务所）"
+        },
+        {
+          "period": "2025年度",
+          "revenue": 35800.0,
+          "net_profit": 940.0,
+          "total_assets": 46500.0,
+          "total_liabilities": 33900.0,
+          "debt_ratio": 0.729,
+          "accounts_receivable": 19850.0,
+          "operating_cash_flow": -1580.0,
+          "unit": "万元",
+          "data_source": "企业自报（未经审计）"
+        }
+      ],
+      "judicial_records": [
+        {
+          "type": "涉诉",
+          "case_no": "（2024）粤1971民初4472号",
+          "role": "被告",
+          "cause": "买卖合同纠纷",
+          "amount": 186.0,
+          "unit": "万元",
+          "filing_date": "2024-06-11",
+          "status": "已结案，调解结案"
+        },
+        {
+          "type": "涉诉",
+          "case_no": "（2025）粤1971民初8813号",
+          "role": "被告",
+          "cause": "承揽合同纠纷",
+          "amount": 342.0,
+          "unit": "万元",
+          "filing_date": "2025-09-02",
+          "status": "审理中"
+        },
+        {
+          "type": "被执行",
+          "case_no": "（2026）粤1971执1207号",
+          "role": "被执行人",
+          "amount": 342.0,
+          "unit": "万元",
+          "filing_date": "2026-03-14",
+          "status": "执行中"
+        }
+      ],
+      "bidding_records": [
+        {
+          "project": "某整车厂2024年度变速箱齿轮组配套采购",
+          "amount": 4200.0,
+          "unit": "万元",
+          "win_date": "2024-02-20",
+          "tenderer": "（客户名称已脱敏）"
+        },
+        {
+          "project": "工业减速机配件年度框架协议",
+          "amount": 1850.0,
+          "unit": "万元",
+          "win_date": "2025-01-15",
+          "tenderer": "（客户名称已脱敏）"
+        }
+      ],
+      "negative_news": [
+        {
+          "title": "东莞一精密件厂因废水排放超标被处以行政罚款",
+          "source": "地方环保通报",
+          "publish_date": "2025-11-08",
+          "severity": "一般",
+          "summary": "因废水排放指标超出许可范围，被处罚款12万元并责令整改，整改已于2025年12月完成验收。"
+        }
+      ],
+      "credit_application": {
+        "product": "应收账款保理",
+        "amount": 2000.0,
+        "unit": "万元",
+        "term": "12个月",
+        "purpose": "补充流动资金，缓解应收账款回款周期延长带来的资金压力"
+      }
+    }
+  ]
+}
