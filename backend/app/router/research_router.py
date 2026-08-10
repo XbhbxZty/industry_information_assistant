@@ -112,7 +112,8 @@ async def stream_research(
                     session_id=request.session_id,
                     kb_name=request.kb_name,
                     search_web=search_web,
-                    search_local=search_local
+                    search_local=search_local,
+                    max_iterations=request.max_iterations
                 ):
                     yield event
             except Exception as e:
@@ -184,9 +185,14 @@ async def stream_research_get(
 
         async def generate_sse_v2():
             try:
+                # 注意：search_web / search_local 必须显式转发。
+                # 曾因漏传导致 GET 端点的这些查询参数被静默忽略（见 BADCASES.md BC-05）
                 async for event in service_v2.research(
                     query=query,
-                    kb_name=kb_name
+                    kb_name=kb_name,
+                    search_web=search_web,
+                    search_local=search_local,
+                    max_iterations=max_iterations
                 ):
                     yield event
             except Exception as e:

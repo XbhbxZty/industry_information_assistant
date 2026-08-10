@@ -234,6 +234,68 @@ CodeWizard 执行 LLM 生成的 matplotlib 代码时，`plt.savefig()` 用的是
 
 ---
 
+## 🔴 BC-09：检查点保存全部失败 —— 防护代码被一个参数废掉
+
+**严重度**：高（研究历史无法恢复；v0.6 人机协同的暂停/恢复失去地基）
+**发现于**：v0.1 首次尽调运行时，观察后端日志
+
+### 现象
+```
+ERROR:service.checkpoint_service:Failed to save checkpoint:
+  (builtins.TypeError) Object of type Queue is not JSON serializable
+  [SQL: INSERT INTO research_checkpoints (...)]
+ERROR:DeepResearchGraph:[检查点保存失败] session_id=0287dab1-...
+```
+**每一次检查点保存都失败。**
+
+### 定位过程
+1. 报错指向 `_message_queue`（`asyncio.Queue`），而项目自带的
+   `DATA_STRUCTURES.md` §6.2 早就写明："运行时会注入 `_user_id`、
+   `_message_queue: asyncio.Queue`……**保存 JSON 前必须过滤/序列化它们**"
+2. 于是去看是否有过滤——`checkpoint_service.py` 确实有
+   `_clean_state_for_storage()`，说明作者知道这件事
+3. 读该函数，发现问题出在检测方式：
+   ```python
+   json.dumps(value, default=str)   # 检测
+   clean[key] = value               # 存原始对象
+   ```
+4. 单独验证：`json.dumps(asyncio.Queue(), default=str)` **不抛异常**
+
+### 根因
+`default=str` 是 `json.dumps` 的兜底转换器——**任何**对象都会被 `str()` 转成
+字符串，因此这个"序列化测试"永远成功，`except` 分支永远不执行。
+Queue 对象被判定为"可序列化"并原样存入 `clean`；真正的失败发生在
+SQLAlchemy 写 JSONB 列时（那里用的是不带 `default` 的 `json.dumps`）。
+
+**防护代码存在、意图正确，却被一个参数完全废掉。**
+
+### 解决方案
+```python
+if isinstance(key, str) and key.startswith("_"):
+    continue          # 运行时注入的私有字段不持久化
+try:
+    json.dumps(value)  # 去掉 default=str，让检测真正生效
+    clean[key] = value
+except (TypeError, ValueError):
+    ...                # 递归清理 dict / list，标量转 str
+```
+双保险：显式跳过 `_` 私有字段（治本），同时修复检测逻辑（防其它不可序列化类型）。
+
+### 验证
+构造含 `_message_queue`、嵌套 Queue、`datetime`、混合 list 的 state，
+断言：私有字段被剔除、嵌套 Queue 降级为字符串、`json.dumps(clean)` 成功。
+
+### 举一反三
+**"能容错"的写法会掩盖"要检测"的意图。** `default=str`、
+`errors="ignore"`、裸 `except: pass` 都属于这一类——它们让代码看起来健壮，
+实际是把问题推迟到更难定位的地方。**检测用的序列化必须是严格模式，
+兜底转换只能用在真正输出的那一次。**
+
+> 这个 badcase 的价值在于：文档预警了、防护代码写了、但仍然失效。
+> 说明**只写防护不验证防护**等于没有防护——这也是 v0.4 要建评测的理由之一。
+
+---
+
 # 第二部分：预判的 Bad Case ⚪
 
 > **以下尚未发生**，是基于设计推演的风险点，用于指导迭代顺序。实际遇到后回填真实现象与解决过程；**预判错误的也要如实记录**——预判失败本身是有价值的信息。

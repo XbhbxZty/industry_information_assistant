@@ -90,7 +90,8 @@ class DeepResearchV2Service:
         resume: bool = False,
         user_id: Optional[str] = None,
         search_web: bool = True,
-        search_local: bool = False
+        search_local: bool = False,
+        max_iterations: Optional[int] = None
     ) -> AsyncGenerator[str, None]:
         """
         执行深度研究（SSE 流式输出）
@@ -103,12 +104,20 @@ class DeepResearchV2Service:
             user_id: 用户ID（用于检查点）
             search_web: 是否启用网络搜索（默认True）
             search_local: 是否启用本地知识库搜索（默认False）
+            max_iterations: 本次请求的最大审核迭代次数（覆盖实例默认值）
 
         Yields:
             SSE 格式的事件字符串
         """
         if not session_id:
             session_id = str(uuid.uuid4())
+
+        # 请求级 max_iterations 优先于配置默认值（见 BADCASES.md BC-05）
+        if max_iterations is not None and max_iterations != self.graph.max_iterations:
+            logger.info(
+                f"max_iterations 由请求覆盖: {self.graph.max_iterations} -> {max_iterations}"
+            )
+            self.graph.max_iterations = max_iterations
 
         if resume:
             logger.info(f"Resuming research for session {session_id}")

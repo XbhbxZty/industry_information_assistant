@@ -309,22 +309,33 @@ class CheckpointService:
 
     def _clean_state_for_storage(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
-        清理状态以便存储
+        清理状态以便存储，移除不可序列化的内容。
 
-        移除不可序列化的内容，保留可恢复的数据
+        注意两个易错点（见 BADCASES.md BC-09）：
+
+        1. 检测时**不能**用 `json.dumps(value, default=str)`。default=str 会把任意
+           对象兜底转成字符串，导致检测永远不抛异常，原始对象被当作"可序列化"
+           原样存入，最终在 SQLAlchemy 写 JSONB 时才炸。
+        2. 运行时会往 state 注入以下划线开头的私有字段（`_message_queue: asyncio.Queue`、
+           `_user_id`），它们不属于可持久化状态，直接跳过。
         """
         clean = {}
         for key, value in state.items():
+            # 运行时注入的私有字段不持久化
+            if isinstance(key, str) and key.startswith("_"):
+                continue
             try:
-                # 尝试序列化测试
-                json.dumps(value, default=str)
+                # 严格检测：不加 default，真正不可序列化的值才会抛异常
+                json.dumps(value)
                 clean[key] = value
             except (TypeError, ValueError):
-                # 跳过不可序列化的值，或转换为字符串
-                if isinstance(value, (list, tuple)):
-                    clean[key] = [str(v) for v in value]
-                elif isinstance(value, dict):
+                if isinstance(value, dict):
                     clean[key] = self._clean_state_for_storage(value)
+                elif isinstance(value, (list, tuple)):
+                    clean[key] = [
+                        self._clean_state_for_storage(v) if isinstance(v, dict) else str(v)
+                        for v in value
+                    ]
                 else:
                     clean[key] = str(value)
         return clean
