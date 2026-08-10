@@ -40,6 +40,24 @@ class LeadWriter(BaseAgent):
 描述: {section_description}
 类型: {section_type}
 
+## 📋 本章节核查清单（**最重要，必须逐项交代**）
+
+{field_checks}
+
+每一项的核查状态**已由数据源判定完毕**，你的任务是准确表述，不是重新判断。
+三种状态的写法要求完全不同：
+
+| 状态 | 写法要求 |
+|---|---|
+| 已核实：`<具体值>` | 正常陈述该事实，并在句末标注来源与日期 |
+| 已核实：`经查询，无相关记录` | **这是正面结论**，写"经查询未发现XX记录"，可作为有利因素 |
+| **未核实** | 必须写"该项未核实（原因：…）"，**严禁**写成"无""未发现""不存在" |
+| 数据冲突 | 并列披露各来源的值，明确指出冲突，要求人工核实 |
+
+⚠️ 最易犯的致命错误：把「未核实」写成「无」。
+「经查询无失信记录」是可支持授信的结论；「失信记录未核实」是必须补查的缺口。
+二者混淆会直接误导信贷审批。
+
 ## 可用素材（这是你唯一可以依据的信息）
 
 ### 已核实事实
@@ -58,11 +76,10 @@ class LeadWriter(BaseAgent):
 
 尽调报告是信贷审批的依据，一句编造的结论可能导致坏账。因此：
 
-1. **素材中没有的信息，一律写"未核实"**，格式：`该项未核实（原因：数据源未提供）`
-2. **禁止推断填充**。例如素材只给了股东名单而没有实际控制人认定，
-   不得自行推断"周某为实际控制人"，必须写"实际控制人未核实"
-3. **禁止用"暂无""无"替代"未核实"**。"无对外担保"和"对外担保未核实"
-   是完全不同的结论——前者是事实断言，后者是信息缺口。写错会误导审批
+1. **清单中标为「未核实」的项，不得以任何方式给出实质性结论**
+2. **禁止推断填充**。例如清单给了股东名单但实际控制人未核实，
+   不得自行推断"周某为实际控制人"
+3. **禁止把「未核实」写成「无」**（见上表，这是最易犯的致命错误）
 4. **禁止把缺失当利好**。查不到负面信息 ≠ 没有负面信息
 5. 每个事实性陈述后标注来源与获取时间，格式：`（来源：工商登记信息，2026-08-09）`
 
@@ -297,6 +314,40 @@ class LeadWriter(BaseAgent):
 
         return state
 
+    @staticmethod
+    def _format_field_checks(state: ResearchState, section_id: str) -> str:
+        """
+        渲染本章节的核查清单（v0.2）。
+
+        这是从"希望模型标注未核实"到"清单要求逐项交代"的转变：
+        每一项的状态由数据源判定并传入，模型只负责表述，不负责判断有没有。
+
+        三种状态的表述要求截然不同，尤其「已核实·无记录」是正面结论，
+        不能与「未核实」混为一谈。
+        """
+        checks = [c for c in state.get("field_checks", []) if c.get("section_id") == section_id]
+        if not checks:
+            return "（本章节无对应核查项，请依据上方素材撰写）"
+
+        lines = []
+        for c in checks:
+            tag = "必查" if c.get("required") else "选查"
+            status = c.get("status")
+            if status == "verified":
+                lines.append(f"- [{tag}] {c['field_name']}｜已核实：{c.get('value')}")
+            elif status == "unverified":
+                lines.append(
+                    f"- [{tag}] {c['field_name']}｜**未核实**，原因：{c.get('failure_reason') or '数据源未覆盖'}"
+                )
+            elif status == "conflicting":
+                detail = "；".join(
+                    f"{d.get('source')}={d.get('value')}" for d in (c.get("conflict_detail") or [])
+                )
+                lines.append(f"- [{tag}] {c['field_name']}｜**数据冲突**：{detail}")
+            else:
+                lines.append(f"- [{tag}] {c['field_name']}｜不适用于本主体")
+        return "\n".join(lines)
+
     async def _write_section(self, state: ResearchState, section: Dict) -> None:
         """撰写单个章节"""
         section_id = section["id"]
@@ -338,7 +389,8 @@ class LeadWriter(BaseAgent):
             facts="\n".join(facts_text) if facts_text else "（暂无相关事实）",
             data_points="\n".join(data_text) if data_text else "（暂无数据点）",
             insights="\n".join([f"- {i}" for i in state["insights"][:5]]) if state["insights"] else "（暂无洞察）",
-            charts_info="\n".join(charts_info) if charts_info else "（暂无图表）"
+            charts_info="\n".join(charts_info) if charts_info else "（暂无图表）",
+            field_checks=self._format_field_checks(state, section_id)
         )
 
         response = await self.call_llm(

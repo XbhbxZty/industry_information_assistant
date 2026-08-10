@@ -42,6 +42,33 @@ class Section:
     requires_chart: bool = False
 
 
+class FieldCheck(TypedDict):
+    """
+    核查项运行时状态（清单定义见 config/dd_checklist.py）
+
+    这是反幻觉设计的地基：把"查没查到"从散落在正文里的措辞，
+    变成显式、可计数、下游可消费的结构化数据。
+
+    status 语义（务必区分，写错会误导授信决策）：
+        verified       已核实，有值且可溯源到 sources 中的 fact
+        unverified     尝试过但未取到。**不等于"不存在"**
+        conflicting    多源数据不一致，本身即风险信号（v0.4 多源接入后才可能出现）
+        not_applicable 该项对此类主体无意义（如个体工商户无股权结构）
+    """
+    field_id: str
+    field_name: str
+    category: str
+    section_id: str
+    required: bool
+    status: str                      # verified|unverified|conflicting|not_applicable
+    value: Any                       # verified 时的值，其余为 None
+    sources: List[str]               # fact_id 列表，指向 facts 中的取证记录
+    attempted_sources: List[str]     # 尝试过的数据源标识
+    failure_reason: str              # unverified 时必填
+    conflict_detail: List[Dict[str, Any]]  # conflicting 时填 [{source, value}]
+    checked_at: str
+
+
 @dataclass
 class Fact:
     """结构化事实"""
@@ -127,6 +154,10 @@ class ResearchState(TypedDict):
     company_name: str                       # 识别出的尽调对象企业名，未识别则为空
     credit_context: str                     # 授信申请背景，拼入 Architect 规划提示词
 
+    # 核查清单（v0.2）——尽调的核心工作记忆
+    field_checks: List[FieldCheck]          # 20 项固定清单及其核查状态
+    completeness: Dict[str, Any]            # 核实率统计，由 compute_completeness 产出
+
     # 规划输出
     outline: List[Dict[str, Any]]           # 动态大纲 (Section序列化)
     mind_map: Dict[str, Any]                # 知识图谱/思维导图
@@ -186,6 +217,8 @@ def create_initial_state(
         search_local=search_local,
         company_name="",
         credit_context="",
+        field_checks=[],
+        completeness={},
         outline=[],
         mind_map={},
         key_entities=[],

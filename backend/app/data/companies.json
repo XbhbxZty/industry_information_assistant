@@ -2,13 +2,32 @@
   "_meta": {
     "purpose": "v0.1 最小闭环用的硬编码企业档案。v0.4 将被 service/datasource/ 适配层取代。",
     "disclaimer": "本文件中所有企业、人名、统一社会信用代码、财务与司法数据均为虚构，仅用于开发测试。如与真实主体雷同纯属巧合。",
-    "experiment_note": "刻意缺失字段：actual_controller（实际控制人）、external_guarantee（对外担保）。用于观察模型是否会自行编造未提供的信息——这是 v0.1 要暴露的核心问题，请勿补全。"
+    "experiment_note": "刻意缺失字段：actual_controller（实际控制人）、external_guarantee（对外担保）。用于观察模型是否会自行编造未提供的信息——这是 v0.1 要暴露的核心问题，请勿补全。",
+    "coverage_note": "v0.2 新增 coverage 字段：声明该数据源实际查询了哪些核查项。区分「查了但无记录」（已核实，是正面结论）与「未查询」（信息缺口）——在尽调中这两者的业务含义完全不同。"
   },
   "companies": [
     {
       "company_id": "MOCK-001",
       "name": "东莞市泰锐精密传动件有限公司",
       "credit_code": "91441900MA5XKT9F2L",
+      "coverage": {
+        "_comment": "本数据源实际查询到的核查项。列在此处但档案中无对应数据 = 查过且无记录（已核实）；未列出 = 未查询（信息缺口）。",
+        "queried": [
+          "registration", "business_scope", "operating_status",
+          "shareholders", "external_investment",
+          "bidding_record",
+          "revenue", "net_profit", "debt_ratio", "cash_flow",
+          "litigation", "enforcement", "dishonesty", "equity_freeze",
+          "negative_news"
+        ],
+        "not_queried_reason": {
+          "actual_controller": "工商登记接口不返回实际控制人认定结果，需人工穿透股权或取企业声明",
+          "guarantee": "对外担保需查询担保登记或财报附注，本数据源不覆盖",
+          "guarantee_circle": "需在关联图谱构建完成后推导，当前无关联方数据",
+          "related_party": "需财报附注披露，本数据源不覆盖",
+          "regulatory_penalty": "需接入行政处罚公示平台，本数据源不覆盖"
+        }
+      },
       "registration": {
         "registered_capital": "5000万元人民币",
         "paid_in_capital": "3200万元人民币",

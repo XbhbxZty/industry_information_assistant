@@ -354,6 +354,13 @@ class DeepResearchGraph:
                     "facts_count": len(state["facts"]),
                     "timestamp": datetime.now().isoformat()
                 }
+                # 核查清单状态：前端展示核实率，评测据此计算未核实识别率
+                yield {
+                    "type": "field_checks_updated",
+                    "field_checks": state["field_checks"],
+                    "completeness": state["completeness"],
+                    "timestamp": datetime.now().isoformat()
+                }
 
         # 存储 user_id 用于检查点
         state["_user_id"] = user_id
@@ -376,13 +383,15 @@ class DeepResearchGraph:
         """
         try:
             from service.company_profile import (
-                find_company, profile_to_facts, build_credit_context
+                find_company, profile_to_facts, build_credit_context, fill_field_checks
             )
+            from config.dd_checklist import build_field_checks, compute_completeness
         except ImportError:
             try:
                 from app.service.company_profile import (
-                    find_company, profile_to_facts, build_credit_context
+                    find_company, profile_to_facts, build_credit_context, fill_field_checks
                 )
+                from app.config.dd_checklist import build_field_checks, compute_completeness
             except ImportError:
                 logger.warning("[graph] company_profile 模块不可用，跳过档案注入")
                 return None
@@ -394,10 +403,21 @@ class DeepResearchGraph:
 
         state["company_name"] = company["name"]
         state["credit_context"] = build_credit_context(company)
-        state["facts"].extend(profile_to_facts(company))
+
+        facts = profile_to_facts(company)
+        state["facts"].extend(facts)
+
+        # 核查清单：生成骨架 → 用档案填充 → 统计核实率
+        checks = build_field_checks(checked_at=datetime.now().isoformat())
+        fill_field_checks(company, facts, checks)
+        state["field_checks"] = checks
+        state["completeness"] = compute_completeness(checks)
+
+        comp = state["completeness"]
         logger.info(
-            f"[graph] 已注入尽调对象 {company['name']}，"
-            f"事实 {len(state['facts'])} 条"
+            f"[graph] 已注入尽调对象 {company['name']}：事实 {len(facts)} 条，"
+            f"必查项核实 {comp['required_verified']}/{comp['required_total']} "
+            f"({comp['verified_rate']:.0%})，未核实：{comp['unverified_fields']}"
         )
         return company
 
@@ -773,7 +793,10 @@ class DeepResearchGraph:
                 "facts_count": len(state.get("facts", [])),
                 "charts_count": len(state.get("charts", [])),
                 "iterations": state.get("iteration", 0),
-                "references": final_ui_refs
+                "references": final_ui_refs,
+                # 核查清单结果（v0.2）：核实率是本轮唯一的可验收产出
+                "completeness": state.get("completeness", {}),
+                "field_checks": state.get("field_checks", [])
             }
 
         except Exception as e:
