@@ -87,6 +87,10 @@ class LeadWriter(BaseAgent):
 1. **客观中立**：陈述事实与风险，不做营销式表述
 2. **风险导向**：尽调的目的是发现问题，对异常指标要明确指出
 3. **数据支撑**：涉及数字的结论必须引用素材中的具体数值
+4. **证据等级不可混用**：跨年度做趋势分析时，若各期数据的证据等级不同
+   （如前两年为经审计资料、最近一年为企业自报未经审计），**必须显式指出这一点**，
+   并说明趋势结论因此存在的不确定性。不得把不同可信度的数据直接并列
+   得出确定性结论——这是尽调报告的常见误导来源
 4. **图表整合**：在合适位置插入图表引用 ![图表标题](chart_id)
 5. **字数控制**：本章节 400-800 字
 6. **不要重复标题**：正文开头不要再写章节标题
@@ -365,10 +369,28 @@ class LeadWriter(BaseAgent):
             # 如果没有特定关联，使用所有事实
             related_facts = state["facts"][:10]
 
-        # 格式化事实
+        # 格式化事实。
+        # 注意用语义化的证据等级而非裸分数——实测模型会把 "可信度: 0.95"
+        # 原样抄进报告正文，把内部字段泄漏给读者。
+        def _evidence_level(score) -> str:
+            try:
+                s = float(score)
+            except (TypeError, ValueError):
+                return "证据等级未知"
+            if s >= 0.9:
+                return "官方登记信息"
+            if s >= 0.8:
+                return "经审计资料"
+            if s >= 0.6:
+                return "企业自报未经审计"
+            return "公开报道，需佐证"
+
         facts_text = []
         for fact in related_facts:
-            facts_text.append(f"- {fact.get('content')} (来源: {fact.get('source_name')}, 可信度: {fact.get('credibility_score')})")
+            facts_text.append(
+                f"- {fact.get('content')}"
+                f"（来源：{fact.get('source_name')}；证据等级：{_evidence_level(fact.get('credibility_score'))}）"
+            )
 
         # 格式化数据点
         data_text = []

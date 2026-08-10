@@ -174,8 +174,19 @@ class CriticMaster(BaseAgent):
                 issue["resolved"] = False
                 state["critic_feedback"].append(issue)
 
-            # 更新质量分数
-            state["quality_score"] = review_result.get("overall_assessment", {}).get("quality_score", 0.0)
+            # 更新质量分数。
+            # 提示词声明取值 1-10，但模型不保证遵守——实测返回过 -1。
+            # 下游（阈值判断、评测、前端展示）都依赖这个范围，必须校验后再落库。
+            raw_score = review_result.get("overall_assessment", {}).get("quality_score", 0.0)
+            try:
+                score = float(raw_score)
+            except (TypeError, ValueError):
+                self.logger.warning(f"quality_score 非数值: {raw_score!r}，按 0 处理")
+                score = 0.0
+            if not (1.0 <= score <= 10.0):
+                self.logger.warning(f"quality_score 越界: {score}，裁剪到 [1,10]")
+                score = min(10.0, max(1.0, score))
+            state["quality_score"] = score
             state["unresolved_issues"] = len([i for i in review_result.get("issues", []) if i.get("severity") in ["critical", "major"]])
 
             # 发送审核结果
