@@ -142,30 +142,51 @@ def profile_to_facts(company: Dict[str, Any]) -> List[Dict[str, Any]]:
             "工商登记信息", "official", "equity"))
 
     # —— 财务 ——
+    # 数据源返回部分字段是常态（不同接口口径不同、部分指标未披露），
+    # 因此逐项按存在与否拼接，缺哪项就不写哪项——不得因缺一个字段而整条链路崩溃，
+    # 更不得用 0 或占位符填充造成虚假数据。
     for fin in company.get("financials", []):
         u = fin.get("unit", "万元")
-        stype = "report" if "审计" in fin.get("data_source", "") else "self_reported"
+        audited = "审计" in (fin.get("data_source", "") + fin.get("audit_status", ""))
+        stype = "report" if audited else "self_reported"
+        parts = []
+        for label, key, is_ratio in (
+            ("营业收入", "revenue", False),
+            ("净利润", "net_profit", False),
+            ("总资产", "total_assets", False),
+            ("总负债", "total_liabilities", False),
+            ("资产负债率", "debt_ratio", True),
+            ("应收账款", "accounts_receivable", False),
+            ("经营性现金流净额", "operating_cash_flow", False),
+        ):
+            if fin.get(key) is None:
+                continue
+            parts.append(f"{label} {fin[key]:.1%}" if is_ratio else f"{label} {fin[key]}{u}")
+        if not parts:
+            continue
+        audit_note = fin.get("audit_status") or ("已审计" if audited else "未注明审计状态")
         facts.append(_fact(
-            f"{name}{fin['period']}财务数据：营业收入 {fin['revenue']}{u}，"
-            f"净利润 {fin['net_profit']}{u}，总资产 {fin['total_assets']}{u}，"
-            f"总负债 {fin['total_liabilities']}{u}，资产负债率 {fin['debt_ratio']:.1%}，"
-            f"应收账款 {fin['accounts_receivable']}{u}，"
-            f"经营性现金流净额 {fin['operating_cash_flow']}{u}。",
+            f"{name}{fin.get('period', '（期间未载明）')}财务数据：" + "，".join(parts)
+            + f"。（{audit_note}）",
             fin.get("data_source", "财务报表"), stype, "financial"))
 
     # —— 司法 ——
     for jr in company.get("judicial_records", []):
+        role = f"，身份为{jr['role']}" if jr.get("role") else ""
         facts.append(_fact(
-            f"{name}{jr['type']}记录：案号 {jr['case_no']}，身份为{jr['role']}，"
-            f"案由/事由 {jr.get('cause','（未提供）')}，涉案金额 {jr['amount']}{jr.get('unit','万元')}，"
-            f"立案日期 {jr['filing_date']}，当前状态：{jr['status']}。",
+            f"{name}{jr.get('type', '司法')}记录：案号 {jr.get('case_no', '（未载明）')}{role}，"
+            f"案由/事由 {jr.get('cause', '（未提供）')}，"
+            f"涉案金额 {jr.get('amount', '（未载明）')}{jr.get('unit', '万元')}，"
+            f"立案日期 {jr.get('filing_date', '（未载明）')}，"
+            f"当前状态：{jr.get('status', '（未载明）')}。",
             "司法公开信息", "official", "judicial"))
 
     # —— 中标 ——
     for br in company.get("bidding_records", []):
         facts.append(_fact(
-            f"{name}中标记录：{br['project']}，中标金额 {br['amount']}{br.get('unit','万元')}，"
-            f"中标日期 {br['win_date']}。",
+            f"{name}中标记录：{br.get('project', '（项目未载明）')}，"
+            f"中标金额 {br.get('amount', '（未载明）')}{br.get('unit', '万元')}，"
+            f"中标日期 {br.get('win_date', '（未载明）')}。",
             "招投标公开信息", "official", "operation"))
 
     # —— 舆情 ——
@@ -244,6 +265,42 @@ def fill_field_checks(
             "；".join(f"{s['name']}（{s['type']}）{s['ratio']:.2%}" for s in company["shareholders"]),
             "equity")
 
+    ac = company.get("actual_controller") or {}
+    if ac.get("name"):
+        # 认定依据必须一并给出——尽调中"谁是实控人"和"凭什么这么认定"同等重要
+        resolved["actual_controller"] = (
+            f"{ac['name']}（认定依据：{ac.get('basis', '未说明')}）", "equity")
+
+    if company.get("external_investment"):
+        resolved["external_investment"] = (
+            "；".join(f"{e['name']} 持股{e['ratio']:.2%}" for e in company["external_investment"]),
+            "equity")
+
+    if company.get("guarantee"):
+        resolved["guarantee"] = (
+            "；".join(
+                f"为{g['beneficiary']}提供{g['guarantee_type']}{g['amount']}{g.get('unit', '万元')}"
+                f"（{g.get('period', '期限未载明')}，{g.get('board_resolution', '内部决议情况未载明')}）"
+                for g in company["guarantee"]
+            ),
+            "relation")
+
+    if company.get("related_party"):
+        resolved["related_party"] = (
+            "；".join(f"{r['name']}（{r['relation']}）" for r in company["related_party"]),
+            "relation")
+
+    penalties = [p for p in (company.get("regulatory_penalty") or [])
+                 if p.get("subject_confirmed") is True]
+    if penalties:
+        resolved["regulatory_penalty"] = (
+            "；".join(
+                f"{p['title']}（{p.get('authority', '处罚机关未载明')}，{p['publish_date']}"
+                + (f"，罚款{p['amount']}{p.get('unit', '万元')}" if p.get("amount") else "") + "）"
+                for p in penalties
+            ),
+            "opinion")
+
     if company.get("bidding_records"):
         resolved["bidding_record"] = (
             "；".join(f"{b['project']} {b['amount']}{b.get('unit','万元')}（{b['win_date']}）"
@@ -292,6 +349,23 @@ def fill_field_checks(
     queried = set(coverage.get("queried") or [])
     not_queried_reason = coverage.get("not_queried_reason") or {}
 
+    # 多源冲突：同一核查项存在多个数据源且取值不一致。
+    # 尽调中这类矛盾（如工商登记实缴 5000万 vs 财报附注实缴 1500万）是核心风险线索，
+    # 绝不能单方面采信其一——那等于替审批人做了没有依据的判断。
+    multi_source = company.get("multi_source") or {}
+    conflicts: Dict[str, List[Dict[str, Any]]] = {}
+    for fid, entries in multi_source.items():
+        if fid.startswith("_") or not isinstance(entries, list):
+            continue
+        distinct = {e.get("value") for e in entries if e.get("value") is not None}
+        if len(distinct) > 1:
+            conflicts[fid] = [
+                {"source": e.get("source", "未知来源"),
+                 "value": e.get("value"),
+                 "retrieved_at": e.get("retrieved_at", "")}
+                for e in entries
+            ]
+
     # 逐项落状态
     for chk in field_checks:
         if chk["status"] == "not_applicable":
@@ -302,7 +376,17 @@ def fill_field_checks(
         chk["attempted_sources"] = [source_tag] if fid in queried else []
         chk["checked_at"] = now
 
-        if fid in resolved:
+        if fid in conflicts:
+            # 冲突优先于一切：即便某个来源给出了完整取值，也不得据此判为已核实
+            chk["status"] = "conflicting"
+            chk["value"] = None
+            chk["conflict_detail"] = conflicts[fid]
+            chk["attempted_sources"] = [c["source"] for c in conflicts[fid]]
+            chk["failure_reason"] = (
+                "多个数据源取值不一致，需人工核实后方可采信："
+                + "；".join(f"{c['source']}={c['value']}" for c in conflicts[fid])
+            )
+        elif fid in resolved:
             # 查到了具体内容
             value, cat = resolved[fid]
             chk["status"] = "verified"

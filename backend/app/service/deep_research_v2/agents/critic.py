@@ -30,14 +30,70 @@ class CriticMaster(BaseAgent):
     - 有权打回重写
     """
 
-    REVIEW_PROMPT = """你是一位极其严苛的学术审稿人和事实核查专家。你的任务是找出研究报告中的所有问题。
+    REVIEW_PROMPT = """你是信贷机构的**风控复核岗**，负责在尽调报告进入信贷评审会之前把关。
+你的职责不是润色文字，而是找出会导致错误授信决策的问题。一旦放过，后果是坏账。
 
 ## 审核原则（必须严格执行）
 1. **零容忍幻觉**：任何没有明确来源的数据或事实，都是问题
 2. **逻辑闭环**：论点必须有论据支撑，论据必须有来源
 3. **偏见警惕**：单方面观点、情绪化表达都是问题
-4. **时效性**：过时的数据（超过2年）必须标注
+4. **时效性**：以上方给定的当前日期为准判断，不得依据你的训练数据截止时间
 5. **完整性**：是否遗漏重要方面
+
+## ⛔ 核查清单交叉校验（最高优先级，必须逐项执行）
+
+下方给出本次尽调的核查清单及其**真实状态**。报告正文必须与该状态一致。
+清单状态是数据源判定的结果，**报告无权推翻，也无权超出**。
+
+{field_checks}
+
+请逐项比对报告正文与上述状态，重点检出以下三类问题：
+
+**A. `unverified_as_fact`（把未核实字段当作事实断言）**
+   对每一个状态为 `未核实` 的字段，检查报告中是否出现了针对该字段的实质性结论。
+   - 违规示例：涉诉记录状态为「未核实」，报告却写"该企业无重大诉讼"或"司法风险较低"
+   - 注意**隐含断言**同样违规："经营合规""风险可控""资信良好"这类评价性表述，
+     如果其依据的字段未核实，同样是把未核实当事实
+   - 正确写法只能是"该项未核实（原因：…）"
+   - **反向陷阱**：`未核实` 既不等于"无记录"，也不等于"有记录"。
+     报告不得向任何一个方向倾斜
+   - 严重程度：critical
+
+**B. `conflict_silently_resolved`（把冲突数据单方面采信）**
+   对每一个状态为 `数据冲突` 的字段，检查报告是否只采信了其中一个来源而未披露冲突。
+   - 违规示例：注册资本状态为「数据冲突」（工商称实缴5000万，财报称1500万），
+     报告却写"注册资本5000万元且已全额实缴"
+   - 正确写法必须并列披露各来源取值，并指出需人工核实
+   - 严重程度：critical
+
+**C. `unsupported_risk_conclusion`（风险结论缺乏清单支撑）**
+   检查报告的风险评级与授信建议，是否建立在已核实的字段之上。
+   - 违规示例：多个必查项未核实，却直接给出"风险等级：低，建议核准授信"
+   - 信息缺口必须在结论中体现，不得被忽略
+   - 严重程度：major（若未核实项涉及司法维度，则为 critical）
+
+**注意「已核实：经查询，无相关记录」不是未核实**——那是数据源查询后确认无记录的
+正面结论，报告据此写"经查询未发现失信记录"是**正确**的，不要误报。
+
+### 判定这三类问题时的纪律（避免误报）
+
+误报的代价同样高：一个见谁都咬的检查器会被使用者忽略，等于没有。因此：
+
+1. **只在报告确实越界时才报**。报告如实写"该项未核实（原因：…）"、
+   如实并列披露冲突、在结论中明确体现信息缺口——这些都是**正确**处理，不得报违规。
+2. **不要因为"表述可以更严谨"而报 critical**。如果你的描述里出现
+   "基本正确""处理得当""但建议…"这类措辞，说明它至多是 minor。
+   critical 只留给会**导致错误授信决策**的问题。
+3. **不要因为报告缺少某个章节而报这三类问题**。章节缺失属于 `incomplete`，
+   与清单校验无关。你收到的可能只是报告的一部分。
+4. **拒绝给出确定性结论本身不是缺陷**。当必查项大量未核实时，
+   报告写"不具备定级条件，建议补充核查后再评审"是**风控上正确**的做法，
+   不得以"未给出风险评级"为由报 `unsupported_risk_conclusion`。
+   该类型针对的是**给了结论却无支撑**，不是**没给结论**。
+5. **报告引述核实率统计不是断言**。诸如"必查项核实 9/15""司法维度 0/3 已核实"
+   这类表述，是在如实转述本清单的统计结果，属于正确披露信息缺口的做法，
+   不得据此判定报告"对未核实项作出了断言"。真正要查的是报告有没有
+   对字段的**实质内容**下结论（如"无涉诉记录""司法风险较低"）。
 
 ## 研究问题
 {query}
@@ -57,7 +113,7 @@ class CriticMaster(BaseAgent):
 {data_points}
 
 ## 任务
-逐条审核上述内容，找出所有问题。你必须扮演一个"找茬专家"的角色。
+逐条审核上述内容，找出所有问题。先完成核查清单交叉校验，再做常规审核。
 
 ## 输出格式
 ```json
@@ -71,7 +127,7 @@ class CriticMaster(BaseAgent):
         {{
             "id": "issue_1",
             "target_section": "章节ID或'全局'",
-            "issue_type": "missing_source/logic_error/bias/hallucination/outdated/incomplete",
+            "issue_type": "unverified_as_fact/conflict_silently_resolved/unsupported_risk_conclusion/missing_source/logic_error/bias/hallucination/outdated/incomplete",
             "severity": "critical/major/minor",
             "location": "具体位置描述",
             "description": "问题详细描述",
@@ -138,6 +194,64 @@ class CriticMaster(BaseAgent):
     "final_comments": "最终评语"
 }}
 ```"""
+
+    @staticmethod
+    def _format_checklist_for_review(state: ResearchState) -> str:
+        """
+        渲染核查清单供交叉校验。
+
+        与 Writer 的渲染有意不同：这里按状态分组而非按章节，
+        让「哪些字段未核实」一目了然——复核岗要检查的正是报告有没有
+        越过这条线，分散在各章节里反而不利于比对。
+        """
+        checks = state.get("field_checks") or []
+        if not checks:
+            return "（本次尽调无核查清单，跳过交叉校验）"
+
+        groups = {"unverified": [], "conflicting": [], "verified_with_value": [],
+                  "verified_no_record": [], "not_applicable": []}
+        for c in checks:
+            st = c.get("status")
+            if st == "verified":
+                key = ("verified_no_record" if c.get("value") == "经查询，无相关记录"
+                       else "verified_with_value")
+            else:
+                key = st if st in groups else "unverified"
+            groups[key].append(c)
+
+        out = []
+
+        def _tag(c):
+            return "必查" if c.get("required") else "选查"
+
+        if groups["unverified"]:
+            out.append("### ⛔ 未核实字段（报告不得对这些字段给出任何实质性结论）")
+            for c in groups["unverified"]:
+                out.append(f"- [{_tag(c)}] {c['field_name']}｜原因：{c.get('failure_reason') or '未说明'}")
+        if groups["conflicting"]:
+            out.append("\n### ⚠️ 数据冲突字段（报告必须并列披露各来源，不得单方面采信）")
+            for c in groups["conflicting"]:
+                detail = "；".join(
+                    f"{d.get('source')}={d.get('value')}" for d in (c.get("conflict_detail") or [])
+                )
+                out.append(f"- [{_tag(c)}] {c['field_name']}｜{detail}")
+        if groups["verified_no_record"]:
+            out.append("\n### ✅ 已核实·经查询无记录（正面结论，报告如此表述是正确的，不要误报）")
+            out.append("- " + "、".join(c["field_name"] for c in groups["verified_no_record"]))
+        if groups["verified_with_value"]:
+            out.append("\n### ✅ 已核实·有具体内容")
+            out.append("- " + "、".join(c["field_name"] for c in groups["verified_with_value"]))
+        if groups["not_applicable"]:
+            out.append("\n### ➖ 不适用于本主体")
+            out.append("- " + "、".join(c["field_name"] for c in groups["not_applicable"]))
+
+        comp = state.get("completeness") or {}
+        if comp:
+            out.append(
+                f"\n**必查项核实率：{comp.get('required_verified')}/{comp.get('required_total')}"
+                f"（{comp.get('verified_rate', 0):.0%}）**"
+            )
+        return "\n".join(out)
 
     def __init__(self, llm_api_key: str, llm_base_url: str, model: str = "qwen-max"):
         super().__init__(
@@ -257,7 +371,12 @@ class CriticMaster(BaseAgent):
         issues = review_result.get("issues", [])
         missing_aspects = review_result.get("missing_aspects", [])
 
-        # 需要补充搜索的问题类型
+        # 需要补充搜索的问题类型。
+        # 注意三类清单校验问题**不在此列**：
+        #   unverified_as_fact / conflict_silently_resolved —— 问题在于报告"写多了"，
+        #     字段本就取不到，再搜一遍也拿不到，正确做法是改写表述而非补充检索
+        #   unsupported_risk_conclusion —— 需要的是在结论中体现信息缺口，同样是改写
+        # 把它们误判为"需补充检索"会导致无效的重复搜索（V1 空转的同类问题）
         research_needed_types = {"missing_source", "incomplete", "outdated"}
 
         search_queries = []
@@ -327,12 +446,17 @@ class CriticMaster(BaseAgent):
             outline="\n".join(outline_summary),
             draft_content=draft_content[:8000],  # 限制长度
             facts="\n".join(facts_summary) if facts_summary else "（暂无事实记录）",
-            data_points="\n".join(data_summary) if data_summary else "（暂无数据点）"
+            data_points="\n".join(data_summary) if data_summary else "（暂无数据点）",
+            field_checks=self._format_checklist_for_review(state)
         )
 
         self.logger.info(f"[CriticMaster] 调用 LLM 进行审核...")
         response = await self.call_llm(
-            system_prompt="你是一位极其严苛的质量审核专家，专门找出研究报告中的问题。你永远不会轻易满意。",
+            system_prompt=(
+                "你是信贷机构的风控复核岗，负责在尽调报告进入评审会前把关。"
+                "你的首要任务是核查清单交叉校验：报告正文不得超出清单已核实的范围。"
+                "放过一处未核实当事实的表述，可能导致错误授信与坏账。"
+            ),
             user_prompt=prompt,
             json_mode=True,
             temperature=0.2,

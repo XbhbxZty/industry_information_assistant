@@ -1,0 +1,292 @@
+{
+  "_meta": {
+    "purpose": "评测用企业档案集（v0.3/v0.4）。每家企业针对一个特定失效模式，用于量化核查清单判定规则的正确性。",
+    "disclaimer": "全部为虚构数据。企业名、统一社会信用代码、人名、财务与司法记录均系编造，仅用于开发测试。如与真实主体雷同纯属巧合。",
+    "design_note": "系统只能看到本文件；期望结果在 eval/ground_truth.json，两者必须分离——否则评测就变成了自我验证。",
+    "coverage_semantics": "coverage.queried 列出数据源实际执行了查询的核查项。列出但无数据：事件型字段=已核实无记录，属性型字段=异常（主体存疑）。未列出=信息缺口。"
+  },
+  "companies": [
+    {
+      "company_id": "EVAL-001",
+      "name": "苏州恒晟自动化设备有限公司",
+      "credit_code": "91320500MA1ND4KX7Y",
+      "_eval_profile": "优质企业：数据齐全、无不良记录、财务健康。用于检验系统不会无中生有地制造风险。",
+      "coverage": {
+        "queried": [
+          "registration", "business_scope", "operating_status",
+          "shareholders", "actual_controller", "external_investment",
+          "bidding_record",
+          "revenue", "net_profit", "debt_ratio", "cash_flow",
+          "litigation", "enforcement", "dishonesty", "equity_freeze",
+          "negative_news", "regulatory_penalty", "guarantee"
+        ],
+        "not_queried_reason": {
+          "guarantee_circle": "需在关联图谱构建完成后推导",
+          "related_party": "需财报附注披露，本数据源不覆盖"
+        }
+      },
+      "registration": {
+        "registered_capital": "8000万元人民币",
+        "paid_in_capital": "8000万元人民币",
+        "established_date": "2011-06-22",
+        "legal_representative": "顾长明",
+        "company_type": "有限责任公司（自然人投资或控股）",
+        "registered_address": "江苏省苏州市吴中区木渎镇金山路168号",
+        "operating_status": "存续",
+        "business_scope": "工业自动化设备、智能装配线、工业机器人系统集成的研发、制造与销售；技术服务。",
+        "social_insurance_count": { "2023": 268, "2024": 295, "2025": 331 },
+        "data_source": "工商登记信息"
+      },
+      "actual_controller": {
+        "name": "顾长明",
+        "basis": "直接持股 61%，且担任法定代表人与董事长",
+        "data_source": "工商登记信息"
+      },
+      "shareholders": [
+        { "name": "顾长明", "type": "自然人", "ratio": 0.61, "subscribed": "4880万元" },
+        { "name": "苏州木渎产业投资有限公司", "type": "企业", "ratio": 0.24, "subscribed": "1920万元" },
+        { "name": "王砚秋", "type": "自然人", "ratio": 0.15, "subscribed": "1200万元" }
+      ],
+      "financials": [
+        { "period": "2023年度", "revenue": 41200.0, "net_profit": 3980.0, "debt_ratio": 0.412, "operating_cash_flow": 3120.0, "audit_status": "已审计" },
+        { "period": "2024年度", "revenue": 47600.0, "net_profit": 4710.0, "debt_ratio": 0.398, "operating_cash_flow": 4050.0, "audit_status": "已审计" },
+        { "period": "2025年度", "revenue": 53900.0, "net_profit": 5520.0, "debt_ratio": 0.385, "operating_cash_flow": 4880.0, "audit_status": "已审计" }
+      ],
+      "bidding_records": [
+        { "project": "某新能源电池厂智能装配线采购", "amount": 6800.0, "win_date": "2025-04-11", "tenderer": "招标方已脱敏" },
+        { "project": "汽车零部件产线自动化改造", "amount": 3250.0, "win_date": "2024-09-03", "tenderer": "招标方已脱敏" }
+      ],
+      "judicial_records": [],
+      "negative_news": [],
+      "guarantee": []
+    },
+
+    {
+      "company_id": "EVAL-002",
+      "name": "郑州宏川物流供应链有限公司",
+      "credit_code": "91410100MA44QW8P3B",
+      "_eval_profile": "高风险企业：失信+被执行+资产负债率超85%+现金流持续为负。用于检验一票否决类指标能否被识别。",
+      "coverage": {
+        "queried": [
+          "registration", "business_scope", "operating_status",
+          "shareholders", "actual_controller",
+          "revenue", "net_profit", "debt_ratio", "cash_flow",
+          "litigation", "enforcement", "dishonesty", "equity_freeze",
+          "negative_news", "regulatory_penalty"
+        ],
+        "not_queried_reason": {
+          "guarantee": "对外担保需查询担保登记或财报附注，本数据源不覆盖",
+          "guarantee_circle": "需在关联图谱构建完成后推导",
+          "related_party": "需财报附注披露，本数据源不覆盖",
+          "external_investment": "本次未查询对外投资",
+          "bidding_record": "本次未查询招投标记录"
+        }
+      },
+      "registration": {
+        "registered_capital": "3000万元人民币",
+        "paid_in_capital": "1200万元人民币",
+        "established_date": "2018-11-05",
+        "legal_representative": "彭卫东",
+        "company_type": "有限责任公司（自然人投资或控股）",
+        "registered_address": "河南省郑州市管城回族区南三环东段物流园B区12号",
+        "operating_status": "存续",
+        "business_scope": "普通货物道路运输；仓储服务；供应链管理；国内货运代理。",
+        "social_insurance_count": { "2023": 156, "2024": 98, "2025": 41 },
+        "data_source": "工商登记信息"
+      },
+      "actual_controller": {
+        "name": "彭卫东",
+        "basis": "直接持股 70%，并担任执行董事",
+        "data_source": "工商登记信息"
+      },
+      "shareholders": [
+        { "name": "彭卫东", "type": "自然人", "ratio": 0.70, "subscribed": "2100万元" },
+        { "name": "郑州宏川投资管理合伙企业（有限合伙）", "type": "企业", "ratio": 0.30, "subscribed": "900万元" }
+      ],
+      "financials": [
+        { "period": "2023年度", "revenue": 18600.0, "net_profit": 420.0, "debt_ratio": 0.712, "operating_cash_flow": 310.0, "audit_status": "已审计" },
+        { "period": "2024年度", "revenue": 15200.0, "net_profit": -680.0, "debt_ratio": 0.804, "operating_cash_flow": -1240.0, "audit_status": "已审计" },
+        { "period": "2025年度", "revenue": 9800.0, "net_profit": -2150.0, "debt_ratio": 0.891, "operating_cash_flow": -2870.0, "audit_status": "企业自报（未经审计）" }
+      ],
+      "judicial_records": [
+        { "type": "涉诉", "case_no": "（2025）豫0104民初2216号", "cause": "运输合同纠纷", "amount": 486.0, "unit": "万元", "role": "被告", "filing_date": "2025-03-19", "status": "已判决，败诉" },
+        { "type": "涉诉", "case_no": "（2025）豫0104民初7743号", "cause": "金融借款合同纠纷", "amount": 1200.0, "unit": "万元", "role": "被告", "filing_date": "2025-08-27", "status": "已判决，败诉" },
+        { "type": "被执行", "case_no": "（2026）豫0104执589号", "cause": "运输合同纠纷执行", "amount": 486.0, "unit": "万元", "filing_date": "2026-01-12", "status": "执行中" },
+        { "type": "被执行", "case_no": "（2026）豫0104执1134号", "cause": "金融借款合同纠纷执行", "amount": 1200.0, "unit": "万元", "filing_date": "2026-04-08", "status": "执行中" },
+        { "type": "失信", "case_no": "（2026）豫0104执1134号之一", "cause": "有履行能力而拒不履行生效法律文书确定义务", "amount": 1200.0, "unit": "万元", "filing_date": "2026-06-15", "status": "失信被执行人" }
+      ],
+      "negative_news": [
+        {
+          "title": "郑州宏川物流供应链有限公司因拖欠承运商运费被集体投诉",
+          "source": "行业媒体报道",
+          "publish_date": "2026-02-20",
+          "severity": "严重",
+          "summary": "多家承运商反映该公司拖欠运费累计超800万元，部分线路已停运。",
+          "subject_confirmed": true
+        }
+      ],
+      "regulatory_penalty": [
+        {
+          "title": "因未按规定投保承运人责任险被交通运输主管部门警告并罚款",
+          "authority": "郑州市交通运输局",
+          "publish_date": "2025-09-30",
+          "amount": 5.0,
+          "unit": "万元",
+          "subject_confirmed": true
+        }
+      ]
+    },
+
+    {
+      "company_id": "EVAL-003",
+      "name": "合肥安芯电子材料有限公司",
+      "credit_code": "91340100MA2RTB6K9E",
+      "_eval_profile": "司法数据源不可用：judicial 相关项全部未查询。用于检验完整度闸门——绝不能因为没查到就判低风险。",
+      "coverage": {
+        "queried": [
+          "registration", "business_scope", "operating_status",
+          "shareholders", "actual_controller",
+          "revenue", "net_profit", "debt_ratio", "cash_flow",
+          "bidding_record", "negative_news"
+        ],
+        "not_queried_reason": {
+          "litigation": "司法数据源接口超时，本次未能查询",
+          "enforcement": "司法数据源接口超时，本次未能查询",
+          "dishonesty": "司法数据源接口超时，本次未能查询",
+          "equity_freeze": "司法数据源接口超时，本次未能查询",
+          "guarantee": "对外担保需查询担保登记，本数据源不覆盖",
+          "guarantee_circle": "需在关联图谱构建完成后推导",
+          "related_party": "需财报附注披露，本数据源不覆盖",
+          "external_investment": "本次未查询对外投资",
+          "regulatory_penalty": "需接入行政处罚公示平台，本数据源不覆盖"
+        }
+      },
+      "registration": {
+        "registered_capital": "6000万元人民币",
+        "paid_in_capital": "6000万元人民币",
+        "established_date": "2016-09-14",
+        "legal_representative": "章敏之",
+        "company_type": "有限责任公司",
+        "registered_address": "安徽省合肥市高新区望江西路与科学大道交口创新产业园A6栋",
+        "operating_status": "存续",
+        "business_scope": "电子级高纯材料、半导体封装材料的研发、生产与销售。",
+        "social_insurance_count": { "2023": 203, "2024": 221, "2025": 234 },
+        "data_source": "工商登记信息"
+      },
+      "actual_controller": {
+        "name": "章敏之",
+        "basis": "通过合肥安芯控股有限公司间接持股 55.2%",
+        "data_source": "工商登记信息"
+      },
+      "shareholders": [
+        { "name": "合肥安芯控股有限公司", "type": "企业", "ratio": 0.552, "subscribed": "3312万元" },
+        { "name": "章敏之", "type": "自然人", "ratio": 0.248, "subscribed": "1488万元" },
+        { "name": "合肥高新创业投资合伙企业（有限合伙）", "type": "企业", "ratio": 0.20, "subscribed": "1200万元" }
+      ],
+      "financials": [
+        { "period": "2023年度", "revenue": 22400.0, "net_profit": 1680.0, "debt_ratio": 0.523, "operating_cash_flow": 1420.0, "audit_status": "已审计" },
+        { "period": "2024年度", "revenue": 25900.0, "net_profit": 1920.0, "debt_ratio": 0.548, "operating_cash_flow": 1610.0, "audit_status": "已审计" },
+        { "period": "2025年度", "revenue": 28300.0, "net_profit": 2050.0, "debt_ratio": 0.561, "operating_cash_flow": 1780.0, "audit_status": "已审计" }
+      ],
+      "bidding_records": [
+        { "project": "某晶圆厂高纯材料年度供应", "amount": 4100.0, "win_date": "2025-06-18", "tenderer": "招标方已脱敏" }
+      ],
+      "negative_news": []
+    },
+
+    {
+      "company_id": "EVAL-004",
+      "name": "深圳市讯联智能科技有限公司",
+      "credit_code": "91440300MA5FYH2Q8T",
+      "_eval_profile": "主体存疑：工商登记已查询但返回空。属性型字段的空结果必须判为异常，绝不能写成「经查询无相关记录」。",
+      "coverage": {
+        "queried": [
+          "registration", "business_scope", "operating_status", "shareholders",
+          "litigation", "enforcement", "dishonesty",
+          "negative_news"
+        ],
+        "not_queried_reason": {
+          "actual_controller": "主体登记信息缺失，无法穿透",
+          "revenue": "无有效主体，未获取财务资料",
+          "net_profit": "无有效主体，未获取财务资料",
+          "debt_ratio": "无有效主体，未获取财务资料",
+          "cash_flow": "无有效主体，未获取财务资料",
+          "guarantee": "本数据源不覆盖",
+          "guarantee_circle": "需关联图谱推导",
+          "related_party": "本数据源不覆盖",
+          "external_investment": "本次未查询",
+          "bidding_record": "本次未查询",
+          "equity_freeze": "本次未查询",
+          "regulatory_penalty": "本数据源不覆盖"
+        }
+      },
+      "_absent_note": "刻意不提供 registration / shareholders 等属性型内容，模拟数据源查询该主体后返回空——这是主体不存在或已注销的信号。",
+      "judicial_records": [],
+      "negative_news": []
+    },
+
+    {
+      "company_id": "EVAL-005",
+      "name": "温州瑞泰阀门制造有限公司",
+      "credit_code": "91330300MA2CJ5L47N",
+      "_eval_profile": "多源数据冲突：工商登记与财报附注对注册资本/实缴资本的记载不一致。用于首次检验 conflicting 状态。",
+      "coverage": {
+        "queried": [
+          "registration", "business_scope", "operating_status",
+          "shareholders", "actual_controller",
+          "revenue", "net_profit", "debt_ratio", "cash_flow",
+          "litigation", "enforcement", "dishonesty", "equity_freeze",
+          "negative_news", "guarantee"
+        ],
+        "not_queried_reason": {
+          "guarantee_circle": "需在关联图谱构建完成后推导",
+          "related_party": "需财报附注披露，本数据源不覆盖",
+          "external_investment": "本次未查询对外投资",
+          "bidding_record": "本次未查询招投标记录",
+          "regulatory_penalty": "需接入行政处罚公示平台，本数据源不覆盖"
+        }
+      },
+      "multi_source": {
+        "_comment": "同一核查项存在多个数据源且取值不一致时，必须判为 conflicting 并披露各方取值，不得单方面采信。",
+        "registration": [
+          { "source": "工商登记信息", "value": "注册资本 5000万元人民币，实缴资本 5000万元人民币", "retrieved_at": "2026-08-08" },
+          { "source": "财务报表附注", "value": "注册资本 5000万元人民币，实缴资本 1500万元人民币", "retrieved_at": "2026-07-15" }
+        ]
+      },
+      "registration": {
+        "registered_capital": "5000万元人民币",
+        "paid_in_capital": "5000万元人民币",
+        "established_date": "2013-04-27",
+        "legal_representative": "叶承宗",
+        "company_type": "有限责任公司（自然人投资或控股）",
+        "registered_address": "浙江省温州市龙湾区永中街道阀门工业园区7号",
+        "operating_status": "存续",
+        "business_scope": "工业阀门、管道配件的设计、制造与销售；进出口业务。",
+        "social_insurance_count": { "2023": 178, "2024": 165, "2025": 152 },
+        "data_source": "工商登记信息"
+      },
+      "actual_controller": {
+        "name": "叶承宗",
+        "basis": "直接持股 58%，担任法定代表人",
+        "data_source": "工商登记信息"
+      },
+      "shareholders": [
+        { "name": "叶承宗", "type": "自然人", "ratio": 0.58, "subscribed": "2900万元" },
+        { "name": "叶思瑶", "type": "自然人", "ratio": 0.22, "subscribed": "1100万元" },
+        { "name": "温州瑞泰企业管理合伙企业（有限合伙）", "type": "企业", "ratio": 0.20, "subscribed": "1000万元" }
+      ],
+      "financials": [
+        { "period": "2023年度", "revenue": 16800.0, "net_profit": 1120.0, "debt_ratio": 0.588, "operating_cash_flow": 890.0, "audit_status": "已审计" },
+        { "period": "2024年度", "revenue": 17300.0, "net_profit": 1040.0, "debt_ratio": 0.634, "operating_cash_flow": 620.0, "audit_status": "已审计" },
+        { "period": "2025年度", "revenue": 16100.0, "net_profit": 680.0, "debt_ratio": 0.697, "operating_cash_flow": -180.0, "audit_status": "企业自报（未经审计）" }
+      ],
+      "judicial_records": [
+        { "type": "涉诉", "case_no": "（2025）浙0303民初3392号", "cause": "买卖合同纠纷", "amount": 218.0, "unit": "万元", "role": "原告", "filing_date": "2025-05-14", "status": "已结案，胜诉" }
+      ],
+      "negative_news": [],
+      "guarantee": [
+        { "guarantee_type": "连带责任保证", "amount": 1800.0, "unit": "万元", "beneficiary": "温州同泰机械有限公司", "period": "2024-06-01 至 2027-05-31", "board_resolution": "已履行股东会决议程序" }
+      ]
+    }
+  ]
+}

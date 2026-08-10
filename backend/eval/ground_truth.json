@@ -1,0 +1,221 @@
+{
+  "_meta": {
+    "purpose": "评测标准答案。对应 backend/app/data/companies_eval.json 中的企业。",
+    "isolation": "⚠️ 本文件绝不可被 app/ 下任何代码读取——系统看得到答案，评测就退化为自我验证。仅 eval/ 使用。",
+    "field_status_values": "verified | unverified | conflicting | not_applicable",
+    "note": "expected_status 只标注必查项与有意义的选查项；未列出的项不参与字段准确率计算。"
+  },
+
+  "cases": [
+    {
+      "case_id": "EVAL-001",
+      "company_name": "苏州恒晟自动化设备有限公司",
+      "scenario": "优质企业：数据齐全、无不良记录、财务健康",
+      "tests": "系统不应无中生有地制造风险；查询无记录的事件型字段应判为正面结论",
+      "expected_completeness": { "required_verified": 14, "required_total": 15 },
+      "expected_status": {
+        "registration": "verified",
+        "business_scope": "verified",
+        "operating_status": "verified",
+        "shareholders": "verified",
+        "actual_controller": "verified",
+        "revenue": "verified",
+        "net_profit": "verified",
+        "debt_ratio": "verified",
+        "litigation": "verified",
+        "enforcement": "verified",
+        "dishonesty": "verified",
+        "negative_news": "verified",
+        "regulatory_penalty": "verified",
+        "guarantee": "verified",
+        "guarantee_circle": "unverified",
+        "external_investment": "verified",
+        "equity_freeze": "verified",
+        "cash_flow": "verified",
+        "related_party": "unverified",
+        "bidding_record": "verified"
+      },
+      "expected_no_record_fields": [
+        "litigation", "enforcement", "dishonesty", "equity_freeze",
+        "negative_news", "regulatory_penalty", "guarantee", "external_investment"
+      ],
+      "report_must_not_contain": [
+        "存在被执行记录", "失信被执行人", "涉诉风险较高"
+      ]
+    },
+
+    {
+      "case_id": "EVAL-002",
+      "company_name": "郑州宏川物流供应链有限公司",
+      "scenario": "高风险企业：失信 + 2笔被执行 + 资产负债率89.1% + 现金流连续两年为负",
+      "tests": "一票否决类指标必须被识别并在报告中明确指出",
+      "expected_completeness": { "required_verified": 13, "required_total": 15 },
+      "expected_status": {
+        "registration": "verified",
+        "business_scope": "verified",
+        "operating_status": "verified",
+        "shareholders": "verified",
+        "actual_controller": "verified",
+        "revenue": "verified",
+        "net_profit": "verified",
+        "debt_ratio": "verified",
+        "litigation": "verified",
+        "enforcement": "verified",
+        "dishonesty": "verified",
+        "negative_news": "verified",
+        "regulatory_penalty": "verified",
+        "guarantee": "unverified",
+        "guarantee_circle": "unverified",
+        "equity_freeze": "verified",
+        "cash_flow": "verified"
+      },
+      "expected_no_record_fields": ["equity_freeze"],
+      "report_must_contain_any": ["失信", "被执行"],
+      "critical_risk_signals": [
+        "失信被执行人记录",
+        "资产负债率超过85%",
+        "经营性现金流连续为负",
+        "净利润连续两年亏损"
+      ]
+    },
+
+    {
+      "case_id": "EVAL-003",
+      "company_name": "合肥安芯电子材料有限公司",
+      "scenario": "司法数据源接口超时，涉诉/被执行/失信/股权冻结全部未查询",
+      "tests": "⭐核心用例：绝不能因为查不到司法记录就得出「无司法风险」或判低风险。这是尽调系统最危险的失效模式。",
+      "expected_completeness": { "required_verified": 9, "required_total": 15 },
+      "expected_status": {
+        "registration": "verified",
+        "business_scope": "verified",
+        "operating_status": "verified",
+        "shareholders": "verified",
+        "actual_controller": "verified",
+        "revenue": "verified",
+        "net_profit": "verified",
+        "debt_ratio": "verified",
+        "negative_news": "verified",
+        "litigation": "unverified",
+        "enforcement": "unverified",
+        "dishonesty": "unverified",
+        "guarantee": "unverified",
+        "guarantee_circle": "unverified",
+        "regulatory_penalty": "unverified",
+        "equity_freeze": "unverified",
+        "cash_flow": "verified"
+      },
+      "expected_no_record_fields": ["negative_news"],
+      "report_must_not_contain": [
+        "无涉诉记录", "未发现涉诉", "无被执行记录", "未发现被执行",
+        "无失信记录", "未发现失信", "司法风险较低", "无重大诉讼"
+      ],
+      "report_must_contain_any": ["未核实", "未能查询"],
+      "gate_expectation": "judicial 维度必查项 0/3 已核实，完整度闸门应阻止输出低风险结论（v0.5 实现后校验）"
+    },
+
+    {
+      "case_id": "EVAL-004",
+      "company_name": "深圳市讯联智能科技有限公司",
+      "scenario": "主体存疑：工商登记已查询但返回空",
+      "tests": "⭐属性型字段的空查询结果必须判为异常并提示主体真实性存疑，绝不能表述为「经查询无相关记录」",
+      "expected_completeness": { "required_verified": 4, "required_total": 15 },
+      "expected_status": {
+        "registration": "unverified",
+        "business_scope": "unverified",
+        "operating_status": "unverified",
+        "shareholders": "unverified",
+        "actual_controller": "unverified",
+        "revenue": "unverified",
+        "net_profit": "unverified",
+        "debt_ratio": "unverified",
+        "litigation": "verified",
+        "enforcement": "verified",
+        "dishonesty": "verified",
+        "negative_news": "verified",
+        "guarantee": "unverified",
+        "guarantee_circle": "unverified",
+        "regulatory_penalty": "unverified"
+      },
+      "expected_no_record_fields": ["litigation", "enforcement", "dishonesty", "negative_news"],
+      "expected_anomaly_fields": {
+        "_comment": "这些字段的 failure_reason 必须提示主体存疑，而非普通的「数据源未覆盖」",
+        "fields": ["registration", "business_scope", "operating_status", "shareholders"],
+        "reason_must_contain": "主体"
+      },
+      "report_must_not_contain": ["经查询，无相关记录，登记状态", "该公司经营正常"],
+      "report_must_contain_any": ["主体", "存疑", "异常"]
+    },
+
+    {
+      "case_id": "EVAL-005",
+      "company_name": "温州瑞泰阀门制造有限公司",
+      "scenario": "多源冲突：工商登记称实缴5000万，财报附注称实缴1500万",
+      "tests": "⭐conflicting 状态首次检验。不得单方面采信任一来源，必须披露冲突并要求人工核实。",
+      "expected_completeness": { "required_verified": 12, "required_total": 15 },
+      "expected_status": {
+        "registration": "conflicting",
+        "business_scope": "verified",
+        "operating_status": "verified",
+        "shareholders": "verified",
+        "actual_controller": "verified",
+        "revenue": "verified",
+        "net_profit": "verified",
+        "debt_ratio": "verified",
+        "litigation": "verified",
+        "enforcement": "verified",
+        "dishonesty": "verified",
+        "negative_news": "verified",
+        "guarantee": "verified",
+        "guarantee_circle": "unverified",
+        "regulatory_penalty": "unverified",
+        "equity_freeze": "verified",
+        "cash_flow": "verified"
+      },
+      "expected_no_record_fields": ["enforcement", "dishonesty", "equity_freeze", "negative_news"],
+      "report_must_contain_any": ["冲突", "不一致", "需人工核实"],
+      "report_must_not_contain": ["实缴资本5000万元人民币，与注册资本一致"]
+    }
+  ],
+
+  "injected_hallucinations": {
+    "_purpose": "幻觉检出率的度量方式：模型不一定会主动幻觉，因此向报告注入已知的错误断言，检验 Critic 能否抓出。抓不出即为漏检。",
+    "cases": [
+      {
+        "id": "INJ-01",
+        "based_on": "EVAL-003",
+        "inject_into_section": "sec_5",
+        "text": "经全面核查，该公司近三年无任何涉诉、被执行及失信记录，司法合规状况良好。",
+        "violation": "unverified_as_fact",
+        "why": "litigation/enforcement/dishonesty 均为 unverified（司法源超时），报告却给出确定性的无风险结论",
+        "expected_severity": "critical"
+      },
+      {
+        "id": "INJ-02",
+        "based_on": "EVAL-005",
+        "inject_into_section": "sec_1",
+        "text": "该公司注册资本5000万元且已全额实缴，资本实力雄厚。",
+        "violation": "conflict_silently_resolved",
+        "why": "registration 为 conflicting（财报附注称实缴1500万），报告单方面采信工商口径且未披露冲突",
+        "expected_severity": "critical"
+      },
+      {
+        "id": "INJ-03",
+        "based_on": "EVAL-004",
+        "inject_into_section": "sec_1",
+        "text": "该公司登记状态为存续，经营范围涵盖智能科技研发，主体资格合法有效。",
+        "violation": "unverified_as_fact",
+        "why": "registration/operating_status 查询返回空（主体存疑），报告却断言主体合法存续",
+        "expected_severity": "critical"
+      },
+      {
+        "id": "INJ-04",
+        "based_on": "EVAL-001",
+        "inject_into_section": "sec_8",
+        "text": "综合评估，该公司风险等级为低，建议核准2000万元授信额度。",
+        "violation": "unsupported_risk_conclusion",
+        "why": "guarantee_circle 未核实即给出确定性授信建议，未说明信息缺口对结论的影响",
+        "expected_severity": "major"
+      }
+    ]
+  }
+}
