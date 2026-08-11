@@ -69,10 +69,23 @@ class AgentsConfig:
     ))
 
     # 审核大师 - 对抗式审核
+    #
+    # 用推理模型（带思考链）而非通用模型，依据是实测对比：
+    # 同链路、同温度、同提示词，唯一变量是模型 —— 28 例 × 3 次
+    #
+    #                    检出稳定   无误报稳定   不稳定   逐次口径
+    #   deepseek-v3.2     10/10       9/18        8      72.2%
+    #   deepseek-v4-flash 10/10      17/18        1      98.1%
+    #
+    # 代价：约 1.6 倍耗时、4 倍 token。Critic 每次研究只跑 1-2 次，可接受；
+    # 但不宜推广到 Scout 这类高频 Agent（见 v0.7 模型路由）。
+    #
+    # ⚠️ 审核环节的错误会成倍放大——误判触发无谓返工，还会把正确内容改错。
+    # 审核者的可靠性优先级高于生成者，这里值得多花成本。
     critic: AgentModelConfig = field(default_factory=lambda: AgentModelConfig(
-        model="deepseek-v3.2",
-        temperature=0.5,
-        max_tokens=4000
+        model="deepseek-v4-flash",
+        temperature=0.0,   # 判定任务，非生成任务
+        max_tokens=8000    # 推理模型的思考链会占用额度
     ))
 
     # 首席写手 - 报告撰写
