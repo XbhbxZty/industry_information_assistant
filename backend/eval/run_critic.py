@@ -130,9 +130,10 @@ def _make_critic() -> CriticMaster:
         model=_MODEL_OVERRIDE or cfg.agents.critic.model,
     )
     if _TEMP_OVERRIDE is not None:
-        # BaseAgent.call_llm 的 temperature 由调用方传入，
-        # 这里通过实例属性让 _review_content 用上覆盖值
         critic._eval_temperature = _TEMP_OVERRIDE
+    if _ABLATE in ("scanner", "checklist"):
+        # 真正关闭扫描器：执行、提示词注入、结果合并、类型过滤四处同时关闭
+        critic._ablate_scanner = True
     return critic
 
 
@@ -170,12 +171,23 @@ def _hit_injection(issues: List[Dict], violation: str) -> bool:
 
 
 def _false_positive(issues: List[Dict]) -> List[Dict]:
-    """对照用例：是否被误报清单类违规（仅计 critical/major）"""
-    return [
-        i for i in _norm_issues(issues)
-        if i.get("issue_type") in CHECKLIST_ISSUE_TYPES
-        and i.get("severity") in ("critical", "major")
-    ]
+    """
+    对照用例的误报判定。
+
+    ⚠️ 此前只统计三种 checklist 类型，存在漏计：
+    模型若把同样的错误意见标成 hallucination / logic_error，
+    或返回字符串形态的 issue，都不会被计入，导致误报被系统性低估。
+
+    现改为：**任何 critical/major 级别的问题都算误报**——
+    对照用例的文本是正确处理，本就不该产生这个级别的问题。
+    minor 不计（表述改进类建议是合理的）。
+    """
+    out = []
+    for i in _norm_issues(issues):
+        if i.get("severity") not in ("critical", "major"):
+            continue
+        out.append(i)
+    return out
 
 
 async def _run_once(sem: asyncio.Semaphore, company: Dict, case: Dict, kind: str) -> Dict:
@@ -191,11 +203,9 @@ async def _run_once(sem: asyncio.Semaphore, company: Dict, case: Dict, kind: str
             llm_result = None
             _ = e
         try:
-            if _ABLATE in ("scanner", "checklist"):
-                # 绕过 merge_review 的扫描环节，只保留 LLM 结论
-                review = llm_result if isinstance(llm_result, dict) else {}
-            else:
-                review = critic.merge_review(state, llm_result) or {}
+            # 始终走 merge_review —— 扫描器是否启用由 critic._ablate_scanner 决定，
+            # 这样消融组与完整组走的是同一条代码路径，差异只在扫描器本身
+            review = critic.merge_review(state, llm_result) or {}
         except Exception as e:
             return {"ok": None, "error": f"{type(e).__name__}: {e}", "issues": []}
         issues = review.get("issues", [])
@@ -298,7 +308,7 @@ async def main() -> int:
     print("汇总（按稳定性分档）")
     print("=" * 78)
 
-    for kind, label in (("injection", "检出"), ("clean", "无误报")):
+    for kind, label in (("injection", "检出"), ("clean", "对照无告警")):
         rs = [r for r in results if r["kind"] == kind]
         if not rs:
             continue
@@ -314,7 +324,14 @@ async def main() -> int:
         tot_ok = sum(r["n_ok"] for r in rs)
         tot_n = sum(r["n"] for r in rs)
         if tot_n:
-            print(f"  逐次口径 {tot_ok}/{tot_n} = {tot_ok / tot_n:.1%}")
+            rate = tot_ok / tot_n
+            if kind == "clean":
+                # 命名更正：此前把"逐次无误报率"叫成"误报率"，差了一个补集
+                print(f"  逐次无误报率 {tot_ok}/{tot_n} = {rate:.1%}"
+                      f"（即误报率 {1 - rate:.1%}）")
+            else:
+                print(f"  逐次检出率   {tot_ok}/{tot_n} = {rate:.1%}"
+                      f"（即漏检率 {1 - rate:.1%}）")
 
     inj = [r for r in results if r["kind"] == "injection"]
     cln = [r for r in results if r["kind"] == "clean"]

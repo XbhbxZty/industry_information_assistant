@@ -320,15 +320,26 @@ class CriticMaster(BaseAgent):
             })
 
         # —— LLM 结果：尽力而为，失败不影响扫描结论 ——
-        if not isinstance(llm_result, dict):
+        # 判据要覆盖三种失败形态，不能只判 None：
+        #   1) API 异常 → 调用方传入 None
+        #   2) JSON 解析失败 → 可能返回 {} 或 None
+        #   3) 解析出对象但缺关键字段（既无 issues 也无 overall_assessment）
+        #      → 结构不可用，等同失败
+        # 此前只判 isinstance(dict)，空字典会被当成有效结果，degraded 永远不置位。
+        _usable = (
+            isinstance(llm_result, dict)
+            and ("issues" in llm_result or "overall_assessment" in llm_result)
+        )
+        if not _usable:
             if scan_issues:
                 self.logger.warning(
                     f"[CriticMaster] LLM 审核不可用，仅保留 {len(scan_issues)} 条确定性扫描结论"
                 )
-            return {
+            degraded = {
                 "overall_assessment": {
-                    "quality_score": 1.0 if scan_issues else 5.0,
-                    "verdict": "major_issues" if scan_issues else "needs_revision",
+                    "quality_score": 5.0,
+                    # LLM 不可用时绝不能是 pass：审核根本没完整执行过
+                    "verdict": "needs_revision",
                     "summary": "LLM 审核不可用；结论仅基于确定性扫描"
                              + ("，已发现清单越界表述" if scan_issues else "，未发现清单越界表述"),
                 },
@@ -336,6 +347,8 @@ class CriticMaster(BaseAgent):
                 "missing_aspects": [],
                 "degraded": True,   # 显式标记降级，不得静默（BC-02 的教训）
             }
+            # 降级路径同样要过扫描器闸门，否则 LLM 一挂就绕开了门控
+            return self._enforce_scanner_gate(degraded, scan_issues)
 
         # 强制分工：这两类由扫描器独占，丢弃 LLM 的同类输出
         scanner_owned = {"unverified_as_fact", "conflict_silently_resolved"}
@@ -349,7 +362,81 @@ class CriticMaster(BaseAgent):
             self.logger.info(f"[CriticMaster] 丢弃 {dropped} 条 LLM 输出的扫描器独占类型问题")
 
         llm_result["issues"] = scan_issues + llm_issues
-        return llm_result
+        return self._enforce_scanner_gate(llm_result, scan_issues)
+
+    def _agent_cfg(self):
+        """取本 Agent 的模型配置；取不到时返回 None 由调用方兜底"""
+        try:
+            try:
+                from config.llm_config import get_config
+            except ImportError:
+                from app.config.llm_config import get_config
+            return get_config().agents.critic
+        except Exception as e:
+            self.logger.warning(f"[CriticMaster] 读取模型配置失败，使用兜底值: {e}")
+            return None
+
+    def _cfg_temperature(self) -> float:
+        """审核是判定任务而非生成任务，温度应尽可能低以减少方差"""
+        override = getattr(self, "_eval_temperature", None)   # 评测对比实验用
+        if override is not None:
+            return float(override)
+        cfg = self._agent_cfg()
+        return float(getattr(cfg, "temperature", 0.0) if cfg else 0.0)
+
+    def _cfg_max_tokens(self) -> int:
+        override = getattr(self, "_eval_max_tokens", None)
+        if override is not None:
+            return int(override)
+        cfg = self._agent_cfg()
+        return int(getattr(cfg, "max_tokens", 8000) if cfg else 8000)
+
+    @staticmethod
+    def _enforce_scanner_gate(result: Dict[str, Any], scan_issues: List[Dict]) -> Dict[str, Any]:
+        """
+        扫描器 critical 强制门控裁决。
+
+        ⚠️ 修复的缺陷：此前扫描结论只是被追加进 `issues` 列表，
+        却**不影响 `verdict`**。若 LLM 返回 `pass`，流程照样把状态置为 COMPLETED——
+        扫描器抓到了"把未核实写成无记录"，报告仍然放行。
+
+        这是整套确定性检查在最后一步失效：**实现了机制，但机制不约束结果。**
+        确定性结论必须能否决模型的裁决，否则它只是一条日志。
+
+        规则：
+          - 存在 scanner critical → verdict 不得为 pass，quality_score 上限 3
+          - 存在 scanner major    → verdict 不得为 pass，quality_score 上限 6
+        （评分上限与提示词中"≥7 才可 pass"的规则保持一致，避免下游按分数放行）
+        """
+        crit = [i for i in scan_issues if i.get("severity") == "critical"]
+        major = [i for i in scan_issues if i.get("severity") == "major"]
+        if not crit and not major:
+            return result
+
+        oa = result.setdefault("overall_assessment", {})
+        old_verdict = oa.get("verdict")
+        old_score = oa.get("quality_score")
+
+        if crit:
+            oa["verdict"] = "major_issues"
+            cap = 3.0
+        else:
+            if oa.get("verdict") == "pass":
+                oa["verdict"] = "needs_revision"
+            cap = 6.0
+
+        try:
+            score = float(old_score)
+        except (TypeError, ValueError):
+            score = cap
+        oa["quality_score"] = min(score, cap)
+
+        oa["scanner_gate_applied"] = {
+            "critical": len(crit), "major": len(major),
+            "original_verdict": old_verdict, "original_score": old_score,
+            "fields": [i.get("target_section") for i in crit + major],
+        }
+        return result
 
     async def process(self, state: ResearchState) -> ResearchState:
         """处理入口"""
@@ -365,9 +452,19 @@ class CriticMaster(BaseAgent):
             "content": "开始严格审核研究报告，准备找出所有问题..."
         })
 
-        # 执行审核
+        # 执行审核。
+        # ⚠️ 必须捕获异常：call_llm 的 API 失败会直接向上抛，
+        # 若不捕获，merge_review() 根本不会执行，确定性扫描结论随之丢失——
+        # 这正是"可靠部分依赖不可靠部分"的另一条路径。
         self.logger.info(f"[CriticMaster] 开始调用 _review_content...")
-        review_result = await self._review_content(state)
+        try:
+            review_result = await self._review_content(state)
+        except Exception as e:
+            self.logger.error(f"[CriticMaster] LLM 审核调用失败: {type(e).__name__}: {e}")
+            state.setdefault("errors", []).append(
+                f"CriticMaster LLM 审核失败: {type(e).__name__}: {e}"
+            )
+            review_result = None
         self.logger.info(f"[CriticMaster] 审核完成，结果: {bool(review_result)}")
 
         review_result = self.merge_review(state, review_result)
@@ -535,7 +632,14 @@ class CriticMaster(BaseAgent):
         # 确定性扫描：字段名与断言词共现的显式违规由程序判定，不经 LLM。
         # 实测该类判定交给模型时 12/18 对照用例结果不稳定（见 BADCASES.md BC-14）；
         # 改为程序判定后检出 7/7、误报 0/18 且完全可复现。
-        scan_findings = scan_report(state.get("field_checks") or [], draft_content)
+        # _ablate_scanner 为 True 时**完全禁用**扫描器：不执行扫描、
+        # 不注入提示词、不合并结果、不做类型过滤。
+        # 此前 --ablate scanner 只绕过了结果合并，扫描结论仍通过提示词
+        # 到达 LLM，导致"扫描器独立贡献"根本没被测到（外部评审第①条）。
+        scan_findings = (
+            [] if getattr(self, "_ablate_scanner", False)
+            else scan_report(state.get("field_checks") or [], draft_content)
+        )
         if scan_findings:
             self.logger.info(f"[CriticMaster] 确定性扫描检出 {len(scan_findings)} 项显式违规")
 
@@ -558,14 +662,12 @@ class CriticMaster(BaseAgent):
             ),
             user_prompt=prompt,
             json_mode=True,
-            # 审核是判定任务而非生成任务，温度应尽可能低以减少方差。
-            # 注：llm_config 里的 critic.temperature 此前从未被使用（硬编码 0.2），
-            # 属"配置写了但不生效"，与 BC-05 同类。现改为读取配置。
-            # _eval_temperature 供评测脚本做温度对比实验时覆盖。
-            temperature=getattr(self, "_eval_temperature", None)
-            if getattr(self, "_eval_temperature", None) is not None
-            else 0.0,
-            max_tokens=16000  # 拉满到最大值
+            # model / temperature / max_tokens 统一由 AgentModelConfig 提供。
+            # 此前三者各行其是：model 读配置、temperature 硬编码 0.2、
+            # max_tokens 硬编码 16000，导致配置文件里写的值形同虚设
+            # （与 BC-05 同类：配置写了但不生效）。
+            temperature=self._cfg_temperature(),
+            max_tokens=self._cfg_max_tokens(),
         )
         self.logger.info(f"[CriticMaster] LLM 响应长度: {len(response)}")
 
