@@ -106,13 +106,23 @@ def _build_state(company: Dict, section_id: str, text: str) -> Dict:
     return state
 
 
+# 由 --model / --temperature 覆盖，None 表示用 llm_config 的默认值
+_MODEL_OVERRIDE: Optional[str] = None
+_TEMP_OVERRIDE: Optional[float] = None
+
+
 def _make_critic() -> CriticMaster:
     cfg = get_config()
-    return CriticMaster(
+    critic = CriticMaster(
         llm_api_key=cfg.api_key,
         llm_base_url=cfg.base_url,
-        model=cfg.agents.critic.model,
+        model=_MODEL_OVERRIDE or cfg.agents.critic.model,
     )
+    if _TEMP_OVERRIDE is not None:
+        # BaseAgent.call_llm 的 temperature 由调用方传入，
+        # 这里通过实例属性让 _review_content 用上覆盖值
+        critic._eval_temperature = _TEMP_OVERRIDE
+    return critic
 
 
 def _hit_injection(issues: List[Dict], violation: str) -> bool:
@@ -141,8 +151,17 @@ def _false_positive(issues: List[Dict]) -> List[Dict]:
 async def _run_once(sem: asyncio.Semaphore, company: Dict, case: Dict, kind: str) -> Dict:
     async with sem:
         state = _build_state(company, case["section"], case["text"])
+        critic = _make_critic()
+        # 走与生产完全相同的路径：确定性扫描 + LLM + 强制分工过滤。
+        # 此前这里直接调 _review_content()，只测到 LLM 单独表现，
+        # 却被当作系统整体表现解读，导致归因错误。
         try:
-            review = await _make_critic()._review_content(state) or {}
+            llm_result = await critic._review_content(state)
+        except Exception as e:
+            llm_result = None
+            _ = e
+        try:
+            review = critic.merge_review(state, llm_result) or {}
         except Exception as e:
             return {"ok": None, "error": f"{type(e).__name__}: {e}", "issues": []}
         issues = review.get("issues", [])
@@ -181,7 +200,14 @@ async def main() -> int:
     ap.add_argument("--concurrency", type=int, default=5)
     ap.add_argument("--only", help="只跑指定用例 id")
     ap.add_argument("--kind", choices=["injection", "clean"], help="只跑某一类")
+    ap.add_argument("--model", help="覆盖 Critic 模型，用于模型对比实验")
+    ap.add_argument("--temperature", type=float, help="覆盖温度，用于方差实验")
+    ap.add_argument("--label", default="", help="本次实验的标签，打印在标题里")
     args = ap.parse_args()
+
+    global _MODEL_OVERRIDE, _TEMP_OVERRIDE
+    _MODEL_OVERRIDE = args.model
+    _TEMP_OVERRIDE = args.temperature
 
     data = _load(EVAL_DATA)
     cases = _load(CASES)
@@ -199,8 +225,12 @@ async def main() -> int:
         return 2
 
     print("=" * 78)
+    from config.llm_config import get_config as _gc
+    _m = _MODEL_OVERRIDE or _gc().agents.critic.model
+    _t = _TEMP_OVERRIDE if _TEMP_OVERRIDE is not None else 0.0
     print(f"Critic 清单交叉校验评测 ｜ {len(todo)} 例 × {args.repeat} 次 = "
           f"{len(todo) * args.repeat} 次调用，并发 {args.concurrency}")
+    print(f"模型 {_m} ｜ 温度 {_t}" + (f" ｜ {args.label}" if args.label else ""))
     print("=" * 78)
 
     sem = asyncio.Semaphore(args.concurrency)

@@ -284,6 +284,73 @@ class CriticMaster(BaseAgent):
             model=model
         )
 
+    def merge_review(self, state: ResearchState, llm_result: Any) -> Dict[str, Any]:
+        """
+        合并确定性扫描与 LLM 审核结果。
+
+        ⚠️ 两条设计原则，都来自实测教训：
+
+        1. **扫描器无条件执行，不受 LLM 成败影响。**
+           此前扫描代码被包在 `if review_result is not None:` 里，
+           LLM 调用失败或 JSON 解析失败时，确定性检出会**全部丢失**——
+           可靠的部分依赖了不可靠的部分，方向是反的。
+
+        2. **本方法必须同时被生产流程与评测调用。**
+           此前扫描与过滤只存在于 process()，而评测直接调 _review_content()，
+           导致评测测的是"LLM 单独表现"，却被当成"系统整体表现"来解读，
+           进而把提示词带来的改善错误归因给代码过滤。
+           把合并逻辑收敛到一处，两边走同一路径，评测才对得上生产。
+        """
+        # —— 确定性扫描：始终执行 ——
+        text = state.get("final_report") or "\n".join(
+            (state.get("draft_sections") or {}).values()
+        )
+        scan_issues = []
+        for f in scan_report(state.get("field_checks") or [], text):
+            scan_issues.append({
+                "target_section": f.get("field_id", ""),
+                "issue_type": f["issue_type"],
+                "severity": f["severity"],
+                "location": f.get("sentence", "")[:60],
+                "description": f["description"],
+                "evidence": f"清单状态={f['status']}；命中断言词「{f['matched_claim']}」",
+                "suggestion": "改写为如实披露该项状态的表述",
+                "requires_new_search": False,
+                "detected_by": "scanner",
+            })
+
+        # —— LLM 结果：尽力而为，失败不影响扫描结论 ——
+        if not isinstance(llm_result, dict):
+            if scan_issues:
+                self.logger.warning(
+                    f"[CriticMaster] LLM 审核不可用，仅保留 {len(scan_issues)} 条确定性扫描结论"
+                )
+            return {
+                "overall_assessment": {
+                    "quality_score": 1.0 if scan_issues else 5.0,
+                    "verdict": "major_issues" if scan_issues else "needs_revision",
+                    "summary": "LLM 审核不可用；结论仅基于确定性扫描"
+                             + ("，已发现清单越界表述" if scan_issues else "，未发现清单越界表述"),
+                },
+                "issues": scan_issues,
+                "missing_aspects": [],
+                "degraded": True,   # 显式标记降级，不得静默（BC-02 的教训）
+            }
+
+        # 强制分工：这两类由扫描器独占，丢弃 LLM 的同类输出
+        scanner_owned = {"unverified_as_fact", "conflict_silently_resolved"}
+        llm_issues, dropped = [], 0
+        for issue in llm_result.get("issues", []):
+            if issue.get("issue_type") in scanner_owned:
+                dropped += 1
+                continue
+            llm_issues.append(issue)
+        if dropped:
+            self.logger.info(f"[CriticMaster] 丢弃 {dropped} 条 LLM 输出的扫描器独占类型问题")
+
+        llm_result["issues"] = scan_issues + llm_issues
+        return llm_result
+
     async def process(self, state: ResearchState) -> ResearchState:
         """处理入口"""
         self.logger.info(f"[CriticMaster] ========== process 开始 ==========")
@@ -303,44 +370,9 @@ class CriticMaster(BaseAgent):
         review_result = await self._review_content(state)
         self.logger.info(f"[CriticMaster] 审核完成，结果: {bool(review_result)}")
 
-        if review_result is not None:
-            # 确定性扫描的结论直接并入 issues。
-            # 这类判定不依赖模型，必须无条件保留——若仅写进提示词由 LLM 转述，
-            # 模型可能遗漏或改写，等于把已经可靠的结果又变回不可靠。
-            scan_issues = []
-            _text = state.get("final_report") or "\n".join(
-                (state.get("draft_sections") or {}).values()
-            )
-            for f in scan_report(state.get("field_checks") or [], _text):
-                scan_issues.append({
-                    "target_section": f.get("field_id", ""),
-                    "issue_type": f["issue_type"],
-                    "severity": f["severity"],
-                    "location": f.get("sentence", "")[:60],
-                    "description": f["description"],
-                    "evidence": f"清单状态={f['status']}；命中断言词「{f['matched_claim']}」",
-                    "suggestion": "改写为如实披露该项状态的表述",
-                    "requires_new_search": False,
-                    "detected_by": "scanner",
-                })
-            # 强制分工：这两类由扫描器独占，丢弃 LLM 的同类输出。
-            # 提示词已声明禁止，但模型不保证遵守——实测它仍会重复报告且判错
-            # （把扫描器已放行的正确表述判为违规）。可靠性不能只靠模型自觉，
-            # 必须在代码层兜底。
-            scanner_owned = {"unverified_as_fact", "conflict_silently_resolved"}
-            llm_issues = []
-            dropped = 0
-            for issue in review_result.get("issues", []):
-                if issue.get("issue_type") in scanner_owned:
-                    dropped += 1
-                    continue
-                llm_issues.append(issue)
-            if dropped:
-                self.logger.info(
-                    f"[CriticMaster] 丢弃 {dropped} 条 LLM 输出的扫描器独占类型问题"
-                )
-            review_result["issues"] = scan_issues + llm_issues
+        review_result = self.merge_review(state, review_result)
 
+        if review_result is not None:
             # 记录反馈
             for issue in review_result.get("issues", []):
                 issue["id"] = f"issue_{uuid.uuid4().hex[:8]}"
@@ -526,7 +558,13 @@ class CriticMaster(BaseAgent):
             ),
             user_prompt=prompt,
             json_mode=True,
-            temperature=0.2,
+            # 审核是判定任务而非生成任务，温度应尽可能低以减少方差。
+            # 注：llm_config 里的 critic.temperature 此前从未被使用（硬编码 0.2），
+            # 属"配置写了但不生效"，与 BC-05 同类。现改为读取配置。
+            # _eval_temperature 供评测脚本做温度对比实验时覆盖。
+            temperature=getattr(self, "_eval_temperature", None)
+            if getattr(self, "_eval_temperature", None) is not None
+            else 0.0,
             max_tokens=16000  # 拉满到最大值
         )
         self.logger.info(f"[CriticMaster] LLM 响应长度: {len(response)}")
