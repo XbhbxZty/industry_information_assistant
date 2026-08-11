@@ -32,7 +32,10 @@ from typing import Dict, List, Optional
 
 # 字段 → 正文中可能出现的称谓。命中任一即认为该句在谈这个字段。
 FIELD_ALIASES: Dict[str, List[str]] = {
-    "registration": ["工商登记", "注册资本", "实缴资本", "统一社会信用代码", "法定代表人", "成立日期"],
+    "registration": [
+        "工商登记", "注册资本", "实缴资本", "到位资本",
+        "统一社会信用代码", "法定代表人", "成立日期",
+    ],
     "business_scope": ["经营范围"],
     "operating_status": ["登记状态", "存续", "注销", "吊销", "主体资格"],
     "shareholders": ["股东", "持股", "股权结构"],
@@ -60,14 +63,18 @@ COMPLIANT_MARKERS = [
     "未核实", "未能核实", "无法核实", "尚未核实", "待核实",
     "未查询", "未能查询", "未获取", "未覆盖", "不覆盖",
     "信息缺口", "数据源", "接口超时", "建议补充", "补充核查",
+    "人工核实", "核实主体", "真实性存疑", "异常信号",
+]
+
+# 冲突状态必须明确披露“来源之间存在分歧”；只写成一般性的“待核实”仍会
+# 隐去更重要的 conflict 事实。该词表因此与普通未核实白名单分开，避免
+# “不同口径但最终无风险”之类句子借冲突词绕过 unverified 断言检查（BC-26）。
+CONFLICT_DISCLOSURE_MARKERS = [
     # 「冲突」单独成词即可作为披露标记——只要报告在谈该字段时提到冲突，
     # 就说明它没有掩盖分歧。写成「存在冲突」这类长串会漏掉
     # 「待实缴资本冲突澄清」之类的合规表述（CLN-05 曾因此误报）。
-    "冲突", "不一致", "并列披露", "各来源", "两者",
-    # 注意用「人工核实」而非「需人工核实」——实测因只写了「需」
-    # 而漏掉「须人工核实」，一字之差造成误报（CLN-06）。
-    # 白名单宁可宽一点：漏放行只是误报，错拦截才是漏检。
-    "人工核实", "核实主体", "真实性存疑", "异常信号",
+    "冲突", "不一致", "互不相容", "不同口径", "不同记载",
+    "并列披露", "各来源", "两者",
 ]
 
 # 断言词：对字段实质内容下了结论
@@ -126,11 +133,9 @@ def scan_report(field_checks: List[Dict], report_text: str) -> List[Dict]:
             if not alias:
                 continue
 
-            # 先看是否为正确处理——必须先于断言判定
-            if any(m in sent for m in COMPLIANT_MARKERS):
-                continue
-
             if status == "conflicting":
+                if any(m in sent for m in CONFLICT_DISCLOSURE_MARKERS):
+                    continue
                 # 冲突字段的规则比未核实更严：**只要谈到它而没披露冲突，就是违规**。
                 # 无论采信哪一方都一样——问题不在选了哪个值，而在没告诉读者存在分歧。
                 # （早先版本要求"引用了冲突取值"才算，导致 INJ-07 这类
@@ -148,6 +153,10 @@ def scan_report(field_checks: List[Dict], report_text: str) -> List[Dict]:
                     ),
                 })
                 break
+
+            # 普通未核实项先看是否如实披露数据缺口——必须先于断言判定。
+            if any(m in sent for m in COMPLIANT_MARKERS):
+                continue
 
             claim = _claim_in(sent)
             if claim:

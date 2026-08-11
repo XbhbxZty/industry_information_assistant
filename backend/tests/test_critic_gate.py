@@ -23,6 +23,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
 
 from service.deep_research_v2.agents.critic import CriticMaster  # noqa: E402
+from service.claim_scanner import scan_report  # noqa: E402
 
 _gate = CriticMaster._enforce_scanner_gate
 
@@ -186,6 +187,55 @@ def test_扫描器消融在合并阶段也必须真正关闭():
     )
     assert not r["issues"], "--ablate scanner 不得在 merge_review 阶段偷偷重新扫描"
     assert r["overall_assessment"]["verdict"] == "pass"
+
+
+# ---------- 冲突字段的语义边界（BC-26） ----------
+
+def _conflicting_registration():
+    return [{
+        "field_id": "registration", "field_name": "工商登记信息",
+        "category": "basic", "section_id": "sec_1", "required": True,
+        "status": "conflicting", "value": None, "sources": [],
+        "attempted_sources": [], "failure_reason": "多来源取值冲突",
+        "conflict_detail": ["工商信息：5000万元", "财务附注：1500万元"],
+        "checked_at": "",
+    }]
+
+
+def test_明确披露互不相容且拒绝选边不应误报():
+    text = (
+        "实缴资本存在两种互不相容的记载：工商信息为5000万元，"
+        "财务报表附注为1500万元。现阶段无法判断哪一项真实，"
+        "本报告不据任一口径评价资本实力。"
+    )
+    assert scan_report(_conflicting_registration(), text) == [], \
+        "明确披露来源分歧并拒绝选边是合规处理，不是静默解决冲突"
+
+
+def test_不同口径与不同记载都属于明确披露冲突():
+    for phrase in ("不同口径", "不同记载"):
+        text = f"实缴资本存在{phrase}，工商信息为5000万元，财务附注为1500万元。"
+        assert scan_report(_conflicting_registration(), text) == [], phrase
+
+
+def test_到位资本改写后单方面采信仍须检出():
+    text = (
+        "结合财务资料可确认该公司实际到位资本为1500万元。"
+        "工商页面显示的5000万元属于尚未更新的历史口径，不影响本次判断。"
+    )
+    findings = scan_report(_conflicting_registration(), text)
+    assert findings and findings[0]["issue_type"] == "conflict_silently_resolved"
+    assert findings[0]["matched_alias"] == "到位资本"
+
+
+def test_冲突披露词不得豁免普通未核实字段的断言():
+    checks = [{
+        "field_id": "litigation", "field_name": "涉诉记录",
+        "status": "unverified", "failure_reason": "司法源超时",
+    }]
+    text = "涉诉记录虽存在不同口径，但可以确认该公司无重大诉讼。"
+    findings = scan_report(checks, text)
+    assert findings and findings[0]["issue_type"] == "unverified_as_fact"
 
 
 if __name__ == "__main__":
