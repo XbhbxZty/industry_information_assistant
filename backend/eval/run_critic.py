@@ -26,6 +26,7 @@ Critic 清单交叉校验评测（含方差分离）
 """
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import sys
@@ -202,11 +203,12 @@ async def _run_once(sem: asyncio.Semaphore, company: Dict, case: Dict, kind: str
         # 走与生产完全相同的路径：确定性扫描 + LLM + 强制分工过滤。
         # 此前这里直接调 _review_content()，只测到 LLM 单独表现，
         # 却被当作系统整体表现解读，导致归因错误。
+        llm_error = ""
         try:
             llm_result = await critic._review_content(state)
         except Exception as e:
             llm_result = None
-            _ = e
+            llm_error = f"{type(e).__name__}: {e}"
         try:
             # 始终走 merge_review —— 扫描器是否启用由 critic._ablate_scanner 决定，
             # 这样消融组与完整组走的是同一条代码路径，差异只在扫描器本身
@@ -220,6 +222,7 @@ async def _run_once(sem: asyncio.Semaphore, company: Dict, case: Dict, kind: str
             "case_id": case["id"], "kind": kind,
             "elapsed_s": round(time.time() - t0, 2),
             "llm_ok": isinstance(llm_result, dict),
+            "llm_error": llm_error,
             "degraded": review.get("degraded", False),
             "verdict": (review.get("overall_assessment") or {}).get("verdict"),
             "quality_score": (review.get("overall_assessment") or {}).get("quality_score"),
@@ -231,6 +234,18 @@ async def _run_once(sem: asyncio.Semaphore, company: Dict, case: Dict, kind: str
                 for i in _norm_issues(issues)
             ],
         }
+        # 消融比较必须建立在 LLM 调用成功的共同前提上。否则完整组可由扫描器
+        # 在模型断线时命中，而关闭扫描器组必然漏检，网络故障就会被误算成
+        # 扫描器贡献（BC-25）。生产降级能力由 test_critic_gate 单独验证；
+        # 评测装置在这里 fail-fast，并把失败调用保留进 JSONL 供审计。
+        if review.get("degraded") or not isinstance(llm_result, dict):
+            raw["ok"] = None
+            _RAW_LOG.append(raw)
+            return {
+                "ok": None,
+                "error": llm_error or "LLM 返回不可用结构，审核已降级",
+                "issues": issues,
+            }
         if kind == "injection":
             ok = _hit_injection(issues, case["violation"])
             raw["ok"] = ok
@@ -274,6 +289,10 @@ async def main() -> int:
     ap.add_argument("--model", help="覆盖 Critic 模型，用于模型对比实验")
     ap.add_argument("--temperature", type=float, help="覆盖温度，用于方差实验")
     ap.add_argument("--label", default="", help="本次实验的标签，打印在标题里")
+    ap.add_argument(
+        "--cases-file", default=CASES,
+        help="评测用例 JSON；相对路径按 eval/ 解析（默认 critic_cases.json）",
+    )
     ap.add_argument("--ablate", choices=["none", "scanner", "checklist"], default="none",
                     help="消融实验：关掉扫描器或同时关掉清单，用于区分模型能力与架构贡献")
     args = ap.parse_args()
@@ -285,7 +304,13 @@ async def main() -> int:
     _ABLATE = args.ablate
 
     data = _load(EVAL_DATA)
-    cases = _load(CASES)
+    cases_path = args.cases_file
+    if not os.path.isabs(cases_path):
+        cases_path = os.path.join(_HERE, cases_path)
+    cases_path = os.path.abspath(cases_path)
+    cases = _load(cases_path)
+    with open(cases_path, "rb") as f:
+        cases_sha256 = hashlib.sha256(f.read()).hexdigest()
     companies = {c["company_id"]: c for c in data["companies"]}
 
     todo = []
@@ -308,6 +333,7 @@ async def main() -> int:
     _abl = {"none": "完整架构", "scanner": "消融:关扫描器",
             "checklist": "消融:关清单+扫描器"}[_ABLATE]
     print(f"模型 {_m} ｜ 温度 {_t} ｜ {_abl}" + (f" ｜ {args.label}" if args.label else ""))
+    print(f"用例 {os.path.basename(cases_path)} ｜ SHA256 {cases_sha256[:12]}")
     print("=" * 78)
 
     sem = asyncio.Semaphore(args.concurrency)
@@ -373,6 +399,7 @@ async def main() -> int:
         "model": _MODEL_OVERRIDE or _gc2().agents.critic.model,
         "temperature": _TEMP_OVERRIDE if _TEMP_OVERRIDE is not None else "config",
         "ablate": _ABLATE, "repeat": args.repeat, "cases": len(todo),
+        "cases_file": os.path.basename(cases_path), "cases_sha256": cases_sha256,
         "fp_definition": "任何 critical/major 级问题均计入误报（不限 checklist 三类）",
     }
     with open(out_path, "w", encoding="utf-8") as f:
@@ -386,6 +413,7 @@ async def main() -> int:
     cln = [r for r in results if r["kind"] == "clean"]
     stable_fail = [r["id"] for r in results if r["verdict"] == "STABLE_FAIL"]
     unstable = [r["id"] for r in results if r["verdict"] == "UNSTABLE"]
+    errored = [r["id"] for r in results if r["verdict"] == "ERROR" or r["errors"]]
 
     print("\n" + "-" * 78)
     if stable_fail:
@@ -394,6 +422,9 @@ async def main() -> int:
         print("无稳定缺陷")
     if unstable:
         print(f"存在方差的用例（先不动，样本再大些再看）：{', '.join(unstable)}")
+    if errored:
+        print(f"存在调用错误，结果不可用于消融归因：{', '.join(sorted(set(errored)))}")
+        return 2
     return 0 if not stable_fail else 1
 
 

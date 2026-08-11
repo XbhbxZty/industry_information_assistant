@@ -14,6 +14,7 @@ python eval/run_fast.py                   # 每次改判定逻辑后都跑
 python eval/run_critic.py                 # 改 Critic 提示词后跑
 python eval/run_critic.py --repeat 1      # 快速冒烟
 python eval/run_critic.py --kind clean    # 只看误报
+python eval/run_critic.py --cases-file critic_holdout.json  # 独立留出集（只用于封板）
 python tests/test_dd_checklist.py         # 状态机单元测试
 ```
 
@@ -24,6 +25,7 @@ python tests/test_dd_checklist.py         # 状态机单元测试
 | `app/data/companies_eval.json` | 5 家评测企业档案 | 系统 |
 | `eval/ground_truth.json` | 字段级标准答案 | **仅 eval/** |
 | `eval/critic_cases.json` | 10 注入 + 18 对照用例 | **仅 eval/** |
+| `eval/critic_holdout.json` | 6 注入 + 8 对照的冻结留出集 | **仅 eval/**；不得用于调提示词 |
 
 ⚠️ 标准答案必须与数据文件分离。系统能看到答案，评测就退化成自我验证。
 
@@ -55,6 +57,10 @@ python tests/test_dd_checklist.py         # 状态机单元测试
 这不是过度设计。BC-13 记录了教训：在 3 个对照用例上按单次结果调提示词，
 出现了"改完失败用例换人而总数不变"的打地鼠现象——那是在拟合噪声。
 **LLM 参与判定的评测必须把方差纳入指标，单次运行的百分比不足以支撑"改进了"的结论。**
+
+模型 API 异常、JSON 不可用等降级运行不进入检出率/误报率分母，并使整轮命令
+非零退出。生产链路中「模型失败时扫描器仍工作」由 `tests/test_critic_gate.py`
+验证；消融实验若把模型失败算作关闭扫描器组的漏检，会把可用性差异误当成算法贡献。
 
 ## 已知局限
 
