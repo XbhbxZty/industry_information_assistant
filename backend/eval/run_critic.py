@@ -95,7 +95,7 @@ def _build_state(company: Dict, section_id: str, text: str) -> Dict:
     else:
         scoped = [c for c in all_checks if c.get("section_id") == section_id]
 
-    state["field_checks"] = scoped
+    state["field_checks"] = [] if _ABLATE == "checklist" else scoped
     # 完整度统计始终按全量计算——报告引述"核实 9/15"时应能对上
     state["completeness"] = compute_completeness(all_checks)
     state["company_name"] = company["name"]
@@ -109,6 +109,17 @@ def _build_state(company: Dict, section_id: str, text: str) -> Dict:
 # 由 --model / --temperature 覆盖，None 表示用 llm_config 的默认值
 _MODEL_OVERRIDE: Optional[str] = None
 _TEMP_OVERRIDE: Optional[float] = None
+
+# 消融实验开关。用于回答："高分是模型能力还是架构贡献？"
+#   none      完整架构（扫描器 + 结构化清单）
+#   scanner   关掉确定性扫描器，保留清单 —— 测扫描器的独立贡献
+#   checklist 同时关掉清单与扫描器 —— 测强模型能否只凭报告+事实自行判断
+#
+# checklist 这一组是决定性的：清单里"已查询但无记录"与"未查询"的区别，
+# **只存在于结构化数据中**，报告正文与原始事实里都没有这个信息。
+# 若模型没有清单也能判对，说明架构多余；若判不对，说明架构提供了
+# 不可从文本恢复的信息。
+_ABLATE: str = "none"
 
 
 def _make_critic() -> CriticMaster:
@@ -125,10 +136,29 @@ def _make_critic() -> CriticMaster:
     return critic
 
 
+def _norm_issues(issues) -> List[Dict]:
+    """
+    规范化 issues。
+
+    消融实验中发现：去掉结构化清单后，模型返回的 issues 里会混入**字符串**
+    而非对象（如 ["报告存在幻觉", ...]）。这本身是个信号——
+    结构化输入不仅提供信息，也在约束输出形状。
+    评测必须容错，否则会被一次格式退化打断整轮实验。
+    """
+    out = []
+    for i in issues or []:
+        if isinstance(i, dict):
+            out.append(i)
+        elif isinstance(i, str):
+            # 字符串形态无法判定 issue_type，退化为仅含描述的条目
+            out.append({"issue_type": "", "severity": "major", "description": i})
+    return out
+
+
 def _hit_injection(issues: List[Dict], violation: str) -> bool:
     """注入用例：是否检出目标违规"""
     kw = EQUIV_KEYWORDS.get(violation, [])
-    for i in issues:
+    for i in _norm_issues(issues):
         if i.get("issue_type") == violation:
             return True
         if i.get("severity") not in ("critical", "major"):
@@ -142,7 +172,7 @@ def _hit_injection(issues: List[Dict], violation: str) -> bool:
 def _false_positive(issues: List[Dict]) -> List[Dict]:
     """对照用例：是否被误报清单类违规（仅计 critical/major）"""
     return [
-        i for i in issues
+        i for i in _norm_issues(issues)
         if i.get("issue_type") in CHECKLIST_ISSUE_TYPES
         and i.get("severity") in ("critical", "major")
     ]
@@ -161,7 +191,11 @@ async def _run_once(sem: asyncio.Semaphore, company: Dict, case: Dict, kind: str
             llm_result = None
             _ = e
         try:
-            review = critic.merge_review(state, llm_result) or {}
+            if _ABLATE in ("scanner", "checklist"):
+                # 绕过 merge_review 的扫描环节，只保留 LLM 结论
+                review = llm_result if isinstance(llm_result, dict) else {}
+            else:
+                review = critic.merge_review(state, llm_result) or {}
         except Exception as e:
             return {"ok": None, "error": f"{type(e).__name__}: {e}", "issues": []}
         issues = review.get("issues", [])
@@ -203,11 +237,15 @@ async def main() -> int:
     ap.add_argument("--model", help="覆盖 Critic 模型，用于模型对比实验")
     ap.add_argument("--temperature", type=float, help="覆盖温度，用于方差实验")
     ap.add_argument("--label", default="", help="本次实验的标签，打印在标题里")
+    ap.add_argument("--ablate", choices=["none", "scanner", "checklist"], default="none",
+                    help="消融实验：关掉扫描器或同时关掉清单，用于区分模型能力与架构贡献")
     args = ap.parse_args()
 
     global _MODEL_OVERRIDE, _TEMP_OVERRIDE
+    global _ABLATE
     _MODEL_OVERRIDE = args.model
     _TEMP_OVERRIDE = args.temperature
+    _ABLATE = args.ablate
 
     data = _load(EVAL_DATA)
     cases = _load(CASES)
@@ -230,7 +268,9 @@ async def main() -> int:
     _t = _TEMP_OVERRIDE if _TEMP_OVERRIDE is not None else 0.0
     print(f"Critic 清单交叉校验评测 ｜ {len(todo)} 例 × {args.repeat} 次 = "
           f"{len(todo) * args.repeat} 次调用，并发 {args.concurrency}")
-    print(f"模型 {_m} ｜ 温度 {_t}" + (f" ｜ {args.label}" if args.label else ""))
+    _abl = {"none": "完整架构", "scanner": "消融:关扫描器",
+            "checklist": "消融:关清单+扫描器"}[_ABLATE]
+    print(f"模型 {_m} ｜ 温度 {_t} ｜ {_abl}" + (f" ｜ {args.label}" if args.label else ""))
     print("=" * 78)
 
     sem = asyncio.Semaphore(args.concurrency)
