@@ -121,6 +121,9 @@ _TEMP_OVERRIDE: Optional[float] = None
 # 不可从文本恢复的信息。
 _ABLATE: str = "none"
 
+# 逐次运行的原始记录，落盘为 JSONL 供事后复算
+_RAW_LOG: List[Dict] = []
+
 
 def _make_critic() -> CriticMaster:
     cfg = get_config()
@@ -192,6 +195,8 @@ def _false_positive(issues: List[Dict]) -> List[Dict]:
 
 async def _run_once(sem: asyncio.Semaphore, company: Dict, case: Dict, kind: str) -> Dict:
     async with sem:
+        import time
+        t0 = time.time()
         state = _build_state(company, case["section"], case["text"])
         critic = _make_critic()
         # 走与生产完全相同的路径：确定性扫描 + LLM + 强制分工过滤。
@@ -209,9 +214,31 @@ async def _run_once(sem: asyncio.Semaphore, company: Dict, case: Dict, kind: str
         except Exception as e:
             return {"ok": None, "error": f"{type(e).__name__}: {e}", "issues": []}
         issues = review.get("issues", [])
+        # 逐次原始产物：确保结论可复算、可审计（外部评审第⑧条）。
+        # 只保存汇总数字的话，事后无法验证任何一个百分比是怎么来的。
+        raw = {
+            "case_id": case["id"], "kind": kind,
+            "elapsed_s": round(time.time() - t0, 2),
+            "llm_ok": isinstance(llm_result, dict),
+            "degraded": review.get("degraded", False),
+            "verdict": (review.get("overall_assessment") or {}).get("verdict"),
+            "quality_score": (review.get("overall_assessment") or {}).get("quality_score"),
+            "gate": (review.get("overall_assessment") or {}).get("scanner_gate_applied"),
+            "issues": [
+                {"issue_type": i.get("issue_type"), "severity": i.get("severity"),
+                 "detected_by": i.get("detected_by", "llm"),
+                 "description": str(i.get("description", ""))[:300]}
+                for i in _norm_issues(issues)
+            ],
+        }
         if kind == "injection":
-            return {"ok": _hit_injection(issues, case["violation"]), "issues": issues}
+            ok = _hit_injection(issues, case["violation"])
+            raw["ok"] = ok
+            _RAW_LOG.append(raw)
+            return {"ok": ok, "issues": issues}
         fps = _false_positive(issues)
+        raw["ok"] = not fps
+        _RAW_LOG.append(raw)
         return {"ok": not fps, "issues": issues, "fps": fps}
 
 
@@ -332,6 +359,28 @@ async def main() -> int:
             else:
                 print(f"  逐次检出率   {tot_ok}/{tot_n} = {rate:.1%}"
                       f"（即漏检率 {1 - rate:.1%}）")
+
+    # —— 落盘原始产物 ——
+    import time as _time
+    from config.llm_config import get_config as _gc2
+    run_dir = os.path.join(_HERE, "runs")
+    os.makedirs(run_dir, exist_ok=True)
+    stamp = _time.strftime("%Y%m%d-%H%M%S")
+    tag = (args.label or args.ablate or "run").replace(" ", "_").replace(":", "")[:40]
+    out_path = os.path.join(run_dir, f"{stamp}_{tag}.jsonl")
+    meta = {
+        "_type": "run_meta", "timestamp": stamp, "label": args.label,
+        "model": _MODEL_OVERRIDE or _gc2().agents.critic.model,
+        "temperature": _TEMP_OVERRIDE if _TEMP_OVERRIDE is not None else "config",
+        "ablate": _ABLATE, "repeat": args.repeat, "cases": len(todo),
+        "fp_definition": "任何 critical/major 级问题均计入误报（不限 checklist 三类）",
+    }
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(json.dumps(meta, ensure_ascii=False) + "\n")
+        for r in _RAW_LOG:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    print(f"\n原始产物已保存：eval/runs/{os.path.basename(out_path)}"
+          f"（{len(_RAW_LOG)} 次调用记录）")
 
     inj = [r for r in results if r["kind"] == "injection"]
     cln = [r for r in results if r["kind"] == "clean"]
