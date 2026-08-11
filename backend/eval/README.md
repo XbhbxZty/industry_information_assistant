@@ -25,7 +25,7 @@ python tests/test_dd_checklist.py         # 状态机单元测试
 | `app/data/companies_eval.json` | 5 家评测企业档案 | 系统 |
 | `eval/ground_truth.json` | 字段级标准答案 | **仅 eval/** |
 | `eval/critic_cases.json` | 10 注入 + 18 对照用例 | **仅 eval/** |
-| `eval/critic_holdout.json` | 6 注入 + 8 对照的冻结留出集 | **仅 eval/**；不得用于调提示词 |
+| `eval/critic_holdout.json` | 6 注入 + 8 对照；首次运行后暴露 BC-26，现已退役为回归集 | **仅 eval/**；不得再作为盲测证据 |
 
 ⚠️ 标准答案必须与数据文件分离。系统能看到答案，评测就退化成自我验证。
 
@@ -67,3 +67,7 @@ python tests/test_dd_checklist.py         # 状态机单元测试
 - 对照用例 18 个仍不算多，覆盖的"正确表述形态"有限
 - 注入用例是人工构造的典型违规，真实报告的违规可能更隐蔽
 - 端到端层（完整跑一次尽调约 10 分钟）尚未纳入自动评测
+- 原 `critic_holdout.json` 已用于定位并修复 BC-26，封板前需要新的未见盲测集
+
+v3 四组消融的完整结果与原始文件索引见
+[`ABLATION_V3.md`](ABLATION_V3.md)，指标可由 `summarize_runs.py` 从 JSONL 复算。

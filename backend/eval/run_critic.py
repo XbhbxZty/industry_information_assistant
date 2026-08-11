@@ -220,12 +220,18 @@ async def _run_once(sem: asyncio.Semaphore, company: Dict, case: Dict, kind: str
         # 只保存汇总数字的话，事后无法验证任何一个百分比是怎么来的。
         raw = {
             "case_id": case["id"], "kind": kind,
+            "target_violation": case.get("violation"),
             "elapsed_s": round(time.time() - t0, 2),
             "llm_ok": isinstance(llm_result, dict),
             "llm_error": llm_error,
             "degraded": review.get("degraded", False),
             "verdict": (review.get("overall_assessment") or {}).get("verdict"),
             "quality_score": (review.get("overall_assessment") or {}).get("quality_score"),
+            # “是否命中指定违规”与“报告是否被挡住”是两个指标：
+            # 模型可能用另一种理由打回报告。前者测分类/归因，后者测生产安全结果。
+            "operational_blocked": (
+                (review.get("overall_assessment") or {}).get("verdict") != "pass"
+            ),
             "gate": (review.get("overall_assessment") or {}).get("scanner_gate_applied"),
             "issues": [
                 {"issue_type": i.get("issue_type"), "severity": i.get("severity"),

@@ -329,7 +329,8 @@ service/datasource/
 | `tests/test_risk_integration.py` | 20 条**行为断言**（区别于 `test_risk_scorecard.py` 的规则正确性断言） |
 
 关键设计与踩坑见 [`DESIGN_CORE_MECHANISMS.md`](DESIGN_CORE_MECHANISMS.md) 第四节、
-[`BADCASES.md`](BADCASES.md) BC-19～BC-24。
+[`BADCASES.md`](BADCASES.md) BC-19～BC-26；v3 消融实验见
+[`backend/eval/ABLATION_V3.md`](../backend/eval/ABLATION_V3.md)。
 
 > 关联图谱与 Text2SQL 两项仍未做，属 v0.6 范围。
 
