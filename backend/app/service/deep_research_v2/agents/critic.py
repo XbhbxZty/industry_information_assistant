@@ -16,6 +16,10 @@ from typing import Dict, Any, List
 from datetime import datetime
 
 from .base import BaseAgent
+try:
+    from service.claim_scanner import scan_report, format_findings
+except ImportError:  # 兼容以 app 为包根的导入方式
+    from app.service.claim_scanner import scan_report, format_findings
 from ..state import ResearchState, ResearchPhase
 
 
@@ -47,7 +51,25 @@ class CriticMaster(BaseAgent):
 
 {field_checks}
 
-请逐项比对报告正文与上述状态，重点检出以下三类问题：
+### 机械校验已由程序完成
+
+{scanner_findings}
+
+### ⛔ 分工：这两类问题**禁止**你报告
+
+`unverified_as_fact` 与 `conflict_silently_resolved` 已由程序确定性判定完毕，
+**你不得输出这两个 issue_type**。实测表明你在这两类上的判定不稳定
+（同一份报告三次给出不同结论，且会误读清单状态），而程序判定零方差。
+重复报告只会制造噪音并与程序结论冲突。
+
+**你唯一需要判定的清单类问题是 `unsupported_risk_conclusion`**：
+风险评级或授信建议是否建立在已核实的字段之上。
+这需要通盘理解报告的论证链条，程序做不到，是你的价值所在。
+
+典型场景：报告写"该公司资信良好、经营合规、风险可控，综合评定风险等级为低"，
+未提任何具体字段名，但多项必查项未核实——这种整体性评价缺乏清单支撑。
+
+请按此分工检出问题：
 
 **A. `unverified_as_fact`（把未核实字段当作事实断言）**
    对每一个状态为 `未核实` 的字段，检查报告中是否出现了针对该字段的实质性结论。
@@ -281,7 +303,44 @@ class CriticMaster(BaseAgent):
         review_result = await self._review_content(state)
         self.logger.info(f"[CriticMaster] 审核完成，结果: {bool(review_result)}")
 
-        if review_result:
+        if review_result is not None:
+            # 确定性扫描的结论直接并入 issues。
+            # 这类判定不依赖模型，必须无条件保留——若仅写进提示词由 LLM 转述，
+            # 模型可能遗漏或改写，等于把已经可靠的结果又变回不可靠。
+            scan_issues = []
+            _text = state.get("final_report") or "\n".join(
+                (state.get("draft_sections") or {}).values()
+            )
+            for f in scan_report(state.get("field_checks") or [], _text):
+                scan_issues.append({
+                    "target_section": f.get("field_id", ""),
+                    "issue_type": f["issue_type"],
+                    "severity": f["severity"],
+                    "location": f.get("sentence", "")[:60],
+                    "description": f["description"],
+                    "evidence": f"清单状态={f['status']}；命中断言词「{f['matched_claim']}」",
+                    "suggestion": "改写为如实披露该项状态的表述",
+                    "requires_new_search": False,
+                    "detected_by": "scanner",
+                })
+            # 强制分工：这两类由扫描器独占，丢弃 LLM 的同类输出。
+            # 提示词已声明禁止，但模型不保证遵守——实测它仍会重复报告且判错
+            # （把扫描器已放行的正确表述判为违规）。可靠性不能只靠模型自觉，
+            # 必须在代码层兜底。
+            scanner_owned = {"unverified_as_fact", "conflict_silently_resolved"}
+            llm_issues = []
+            dropped = 0
+            for issue in review_result.get("issues", []):
+                if issue.get("issue_type") in scanner_owned:
+                    dropped += 1
+                    continue
+                llm_issues.append(issue)
+            if dropped:
+                self.logger.info(
+                    f"[CriticMaster] 丢弃 {dropped} 条 LLM 输出的扫描器独占类型问题"
+                )
+            review_result["issues"] = scan_issues + llm_issues
+
             # 记录反馈
             for issue in review_result.get("issues", []):
                 issue["id"] = f"issue_{uuid.uuid4().hex[:8]}"
@@ -441,13 +500,21 @@ class CriticMaster(BaseAgent):
         for section in state["outline"]:
             outline_summary.append(f"- {section.get('id')}: {section.get('title')} ({section.get('status', 'pending')})")
 
+        # 确定性扫描：字段名与断言词共现的显式违规由程序判定，不经 LLM。
+        # 实测该类判定交给模型时 12/18 对照用例结果不稳定（见 BADCASES.md BC-14）；
+        # 改为程序判定后检出 7/7、误报 0/18 且完全可复现。
+        scan_findings = scan_report(state.get("field_checks") or [], draft_content)
+        if scan_findings:
+            self.logger.info(f"[CriticMaster] 确定性扫描检出 {len(scan_findings)} 项显式违规")
+
         prompt = self.REVIEW_PROMPT.format(
             query=state["query"],
             outline="\n".join(outline_summary),
             draft_content=draft_content[:8000],  # 限制长度
             facts="\n".join(facts_summary) if facts_summary else "（暂无事实记录）",
             data_points="\n".join(data_summary) if data_summary else "（暂无数据点）",
-            field_checks=self._format_checklist_for_review(state)
+            field_checks=self._format_checklist_for_review(state),
+            scanner_findings=format_findings(scan_findings)
         )
 
         self.logger.info(f"[CriticMaster] 调用 LLM 进行审核...")
