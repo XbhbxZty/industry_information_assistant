@@ -14,6 +14,7 @@
 import json
 import logging
 import uuid
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -434,6 +435,50 @@ def fill_field_checks(
             )
 
     return field_checks
+
+
+def verified_profile_mismatches(
+    company: Dict[str, Any],
+    field_checks: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    校验「清单已核实」能否由当前结构化档案重新推出。
+
+    评分卡同时消费 company_profile 与 field_checks。两者若来自不同时间的
+    检查点，可能出现清单仍是 verified、档案字段已经缺失的情况；此时空列表
+    会被评分器误读成「已查询且无记录」。这里复用 fill_field_checks 作为唯一
+    字段映射口径，重放一次填充并比较状态和值，避免另写第二套路径规则。
+    """
+    expected = deepcopy(field_checks)
+    for check in expected:
+        if check.get("status") == "not_applicable":
+            continue
+        check["status"] = "unverified"
+        check["value"] = None
+        check["sources"] = []
+        check["attempted_sources"] = []
+        check["failure_reason"] = "尚未核查"
+        check["conflict_detail"] = []
+
+    fill_field_checks(company, profile_to_facts(company), expected)
+    expected_by_id = {c.get("field_id"): c for c in expected}
+    mismatches = []
+    for actual in field_checks:
+        if actual.get("status") != "verified":
+            continue
+        predicted = expected_by_id.get(actual.get("field_id"), {})
+        if (
+            predicted.get("status") != "verified"
+            or predicted.get("value") != actual.get("value")
+        ):
+            mismatches.append({
+                "field_id": actual.get("field_id"),
+                "field_name": actual.get("field_name", actual.get("field_id", "")),
+                "check_value": actual.get("value"),
+                "profile_status": predicted.get("status", "missing"),
+                "profile_value": predicted.get("value"),
+            })
+    return mismatches
 
 
 def build_credit_context(company: Dict[str, Any]) -> str:

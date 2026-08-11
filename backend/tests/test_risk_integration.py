@@ -33,12 +33,31 @@ from service.deep_research_v2.state import ResearchPhase, create_initial_state  
 # 便于断言"报告里的等级确实来自规则引擎"
 _COMPANY = {
     "name": "测试科技有限公司",
-    "registration": {"operating_status": "存续"},
+    "credit_code": "91440000TEST000001",
+    "coverage": {"queried": [
+        "registration", "business_scope", "operating_status", "shareholders",
+        "actual_controller", "external_investment", "bidding_record", "revenue",
+        "net_profit", "debt_ratio", "cash_flow", "litigation", "enforcement",
+        "dishonesty", "equity_freeze", "guarantee", "guarantee_circle",
+        "related_party", "negative_news", "regulatory_penalty",
+    ]},
+    "registration": {
+        "registered_capital": "3000万元人民币", "paid_in_capital": "1200万元人民币",
+        "established_date": "2018-11-05", "legal_representative": "测试人",
+        "company_type": "有限责任公司", "registered_address": "测试地址",
+        "operating_status": "存续", "business_scope": "供应链管理与技术服务",
+    },
+    "shareholders": [{"name": "测试人", "type": "自然人", "ratio": 1.0}],
+    "actual_controller": {"name": "测试人", "basis": "直接持股100%"},
     "financials": [{"period": "2025年度", "revenue": 9800.0, "net_profit": -2150.0,
-                    "debt_ratio": 0.891, "operating_cash_flow": -2870.0}],
-    "judicial_records": [{"type": "失信", "amount": 1200},
-                         {"type": "被执行", "amount": 486}],
-    "negative_news": [], "guarantee": [],
+                     "debt_ratio": 0.891, "operating_cash_flow": -2870.0}],
+    "judicial_records": [
+        {"type": "失信", "case_no": "（2026）测执1号", "cause": "拒不履行",
+         "amount": 1200, "status": "失信被执行人"},
+        {"type": "被执行", "case_no": "（2026）测执2号", "cause": "合同纠纷",
+         "amount": 486, "status": "执行中"},
+    ],
+    "negative_news": [], "regulatory_penalty": [], "guarantee": [],
     "bidding_records": [{"project": "x", "amount": 100.0, "win_date": "2025-01-01"}],
 }
 
@@ -60,7 +79,14 @@ def _dd_state(company=_COMPANY, status_map=None):
     # facts 必须有内容：DataAnalyst 的三个 LLM 步骤在无素材时会直接返回，
     # 空 facts 会让"LLM 失败"用例根本走不到 LLM
     state["facts"] = profile_to_facts(company)
-    state["field_checks"] = _checks(status_map)
+    state["field_checks"] = build_field_checks(checked_at="2026-08-11T00:00:00")
+    fill_field_checks(company, state["facts"], state["field_checks"])
+    for check in state["field_checks"]:
+        override = (status_map or {}).get(check["field_id"])
+        if override:
+            check["status"] = override
+            if override != "verified":
+                check["value"] = None
     state["completeness"] = compute_completeness(state["field_checks"])
     state["phase"] = ResearchPhase.ANALYZING.value
     return state
@@ -162,6 +188,36 @@ def test_档案缺失时不得判为低风险():
     assert r["requires_human_review"] is True
     assert any("档案" in g for g in r["gates_applied"]), "必须说明为什么不予评级"
     assert state["errors"], "链路缺陷不得静默"
+
+
+def test_单个已核实字段在档案中缺失也必须fail_closed():
+    """
+    整份档案非空不代表评分前置条件成立。模拟检查点错配：清单中的
+    debt_ratio 仍为 verified，但当前档案已丢失该字段。
+    """
+    company = json.loads(json.dumps(_COMPANY))
+    state = _dd_state(company=company)
+    assert next(c for c in state["field_checks"] if c["field_id"] == "debt_ratio")["status"] == "verified"
+    del company["financials"][0]["debt_ratio"]
+
+    r = _analyst().assess_risk(state)
+
+    assert r["level"] == INSUFFICIENT
+    assert any("debt_ratio" in g for g in r["gates_applied"])
+    assert state["errors"], "字段级链路错配不得静默"
+
+
+def test_五家真实评测档案通过字段一致性重放():
+    """新增收口不能误伤由同一档案正常生成的清单。"""
+    path = os.path.join(os.path.dirname(__file__), "..", "app", "data", "companies_eval.json")
+    with open(path, encoding="utf-8") as f:
+        companies = json.load(f)["companies"]
+
+    for company in companies:
+        state = _dd_state(company=company)
+        r = _analyst().assess_risk(state)
+        assert not any("清单与结构化档案不一致" in g for g in r["gates_applied"]), company["company_id"]
+        assert not any("字段级不一致" in e for e in state["errors"]), company["company_id"]
 
 
 def test_评分执行失败时fail_closed():
@@ -270,6 +326,28 @@ def test_整合时模型丢弃评级由代码补回():
 
     assert RISK_BLOCK_MARKER in state["final_report"], "评级被丢弃时必须由代码补回"
     assert state["risk_assessment"]["level"] in state["final_report"]
+
+
+def test_整合时模型保留标记但篡改等级也会被纠正():
+    """
+    只检查 marker 是否存在并不等于保护了评级：模型可以保留锚点，
+    同时把规则引擎的高风险改写成低风险。最终正文必须重建权威块。
+    """
+    state = _dd_state()
+    _analyst().assess_risk(state)
+    assert state["risk_assessment"]["level"] != "低风险", "前提：规则等级不能是低风险"
+    state["final_report"] = (
+        f"报告正文\n\n**{RISK_BLOCK_MARKER}**\n\n"
+        "| 风险等级 | **低风险** |\n<!-- /risk-assessment -->\n\n后续正文"
+    )
+
+    changed = _writer("{}")._ensure_risk_block(state)
+
+    canonical = risk_scorecard.render_markdown(state["risk_assessment"])
+    assert changed is True
+    assert state["final_report"].count(RISK_BLOCK_MARKER) == 1
+    assert canonical in state["final_report"]
+    assert "后续正文" in state["final_report"]
 
 
 def test_修订后评级仍在报告中():

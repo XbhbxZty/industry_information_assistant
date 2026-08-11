@@ -46,6 +46,30 @@ def _excise_risk_block(text: str) -> str:
     tail = text[end + len(RISK_BLOCK_END):].strip() if end >= 0 else ""
     return "\n\n".join(p for p in (head, tail) if p)
 
+
+def _canonicalize_risk_block(text: str, block: str) -> str:
+    """把正文中的评级块收敛为一份规则引擎原文。"""
+    start = text.find(RISK_BLOCK_MARKER)
+    if start < 0:
+        return (text.rstrip() + "\n\n---\n\n" + block).lstrip()
+
+    line_start = text.rfind("\n", 0, start) + 1
+    head = text[:line_start].rstrip()
+    end = text.find(RISK_BLOCK_END, start)
+    if end < 0:
+        # 起始标记存在但块已被模型截断，无法辨认其尾部。沿用
+        # _excise_risk_block 的 fail-closed 策略：不保留可被误读的残块。
+        return "\n\n".join(p for p in (head, block) if p)
+
+    tail = text[end + len(RISK_BLOCK_END):].strip()
+    # 模型可能复制出多份评级；逐份切除后只放回一份权威版本。
+    while RISK_BLOCK_MARKER in tail:
+        new_tail = _excise_risk_block(tail)
+        if new_tail == tail:
+            break
+        tail = new_tail
+    return "\n\n".join(p for p in (head, block, tail) if p)
+
 # 风险汇总与授信建议章节。提纲固定 8 章（见 architect.PLANNING_PROMPT），
 # 但模型偶尔会改标题，因此再留一条按标题识别的兜底。
 RISK_SECTION_ID = "sec_8"
@@ -672,13 +696,15 @@ class LeadWriter(BaseAgent):
         if not assessment:
             return False
         report = state.get("final_report") or ""
-        if RISK_BLOCK_MARKER in report:
-            return False
-        state["final_report"] = (report + "\n\n---\n\n" + render_markdown(assessment)).lstrip()
-        self.logger.warning(
-            f"[LeadWriter] 报告正文缺失风险评级块，已由代码补回（等级：{assessment.get('level')}）"
-        )
-        return True
+        canonical = _canonicalize_risk_block(report, render_markdown(assessment))
+        changed = canonical != report
+        state["final_report"] = canonical
+        if changed:
+            action = "替换为规则引擎版本" if RISK_BLOCK_MARKER in report else "由代码补回"
+            self.logger.warning(
+                f"[LeadWriter] 报告正文风险评级块已{action}（等级：{assessment.get('level')}）"
+            )
+        return changed
 
     async def _revise_report(self, state: ResearchState) -> ResearchState:
         """根据反馈修订报告"""

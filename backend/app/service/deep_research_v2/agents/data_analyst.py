@@ -20,9 +20,11 @@ from ..state import ResearchState, ResearchPhase
 
 try:
     from service.risk_scorecard import score as score_risk, unratable
+    from service.company_profile import verified_profile_mismatches
     from config.dd_checklist import compute_completeness
 except ImportError:  # 兼容以 app 为包根的导入方式
     from app.service.risk_scorecard import score as score_risk, unratable
+    from app.service.company_profile import verified_profile_mismatches
     from app.config.dd_checklist import compute_completeness
 
 
@@ -310,7 +312,21 @@ class DataAnalyst(BaseAgent):
             state.setdefault("errors", []).append("风险评分：company_profile 缺失，已按不可评级处理")
         else:
             try:
-                result = score_risk(profile, checks, completeness)
+                mismatches = verified_profile_mismatches(profile, checks)
+                if mismatches:
+                    fields = "、".join(m["field_id"] for m in mismatches)
+                    result = unratable(
+                        f"核查清单与结构化档案不一致（清单标记已核实但档案无法复现：{fields}），不予评级",
+                        completeness,
+                    )
+                    self.logger.error(
+                        f"[DataAnalyst] field_checks/company_profile 字段级不一致，评级 fail-closed: {fields}"
+                    )
+                    state.setdefault("errors", []).append(
+                        f"风险评分：清单与档案字段级不一致（{fields}），已按不可评级处理"
+                    )
+                else:
+                    result = score_risk(profile, checks, completeness)
             except Exception as e:
                 # 打分本身出错同样不得静默：没有评级 ≠ 没有风险
                 result = unratable(f"风险评分执行失败（{type(e).__name__}: {e}），不予评级", completeness)

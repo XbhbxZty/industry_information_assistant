@@ -154,6 +154,40 @@ def test_降级且有扫描critical时走门控():
         assert r["overall_assessment"]["quality_score"] <= 3.0
 
 
+# ---------- 审核文本同源 + 真消融 ----------
+
+def test_扫描器与LLM统一优先审核最终报告():
+    state = _state(text="最终报告中的新断言")
+    state["draft_sections"] = {"sec_1": "整合前草稿"}
+    state["outline"] = [{"id": "sec_1", "title": "基本情况"}]
+    assert _Stub()._content_for_review(state) == "最终报告中的新断言"
+
+
+def test_最终报告为空时才回退章节草稿():
+    state = _state(text="")
+    state["draft_sections"] = {"sec_1": "整合前草稿"}
+    state["outline"] = [{"id": "sec_1", "title": "基本情况"}]
+    text = _Stub()._content_for_review(state)
+    assert "基本情况" in text and "整合前草稿" in text
+
+
+def test_扫描器消融在合并阶段也必须真正关闭():
+    checks = [{
+        "field_id": "guarantee", "field_name": "对外担保", "category": "relation",
+        "section_id": "sec_6", "required": True, "status": "unverified",
+        "value": None, "sources": [], "attempted_sources": [],
+        "failure_reason": "数据源不覆盖", "conflict_detail": [], "checked_at": "",
+    }]
+    critic = _Stub()
+    critic._ablate_scanner = True
+    r = critic.merge_review(
+        _state(checks, "经核查，该公司不存在对外担保事项。"),
+        _result("pass", 9.0),
+    )
+    assert not r["issues"], "--ablate scanner 不得在 merge_review 阶段偷偷重新扫描"
+    assert r["overall_assessment"]["verdict"] == "pass"
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items())
            if n.startswith("test_") and callable(f)]

@@ -251,12 +251,20 @@ def score(
     # —— 加权：核实率过低的维度不参与 ——
     by_cat = completeness.get("by_category") or {}
     usable = {}
-    for dim, sc in dim_scores.items():
+    # 必须遍历「应评估的维度」，不能只遍历已经算出分数的维度。
+    # 整个维度都没有 verified 字段时，dim_scores 恰好没有该键；若从
+    # dim_scores 出发，最严重的 0% 核实率反而不会进入 skipped，完整度
+    # 闸门就会失效（BC-21）。完全不适用于当前主体、因而不在 by_category
+    # 出现的维度则不强行施加闸门。
+    for dim in WEIGHTS:
+        if dim not in by_cat:
+            continue
         rate = (by_cat.get(dim) or {}).get("rate", 0.0)
         if rate < MIN_CATEGORY_RATE:
             skipped.append(dim)
             continue
-        usable[dim] = sc
+        if dim in dim_scores:
+            usable[dim] = dim_scores[dim]
 
     if usable:
         wsum = sum(WEIGHTS[d] for d in usable)

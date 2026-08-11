@@ -73,6 +73,23 @@ def test_未核实字段不得贡献无风险信号():
     assert not jud_rules, "未核实的司法项不应产生任何评分规则"
 
 
+def test_整个非司法维度缺失也必须触发闸门():
+    """
+    BC-21：旧实现只遍历已经产生 dim_scores 的维度。
+    relation 三项全部 unverified 时恰好没有 relation 分数，导致 0% 核实率
+    反而绕过闸门。最严重的信息缺口不能比部分缺失更容易获批。
+    """
+    r = _run(_CLEAN, {
+        "guarantee": "unverified",
+        "guarantee_circle": "unverified",
+        "related_party": "unverified",
+    })
+    assert "relation" in r["dimensions_excluded"]
+    assert any("relation" in g for g in r["gates_applied"])
+    assert r["level"] != "低风险"
+    assert r["requires_human_review"] is True
+
+
 # ---------- 一票否决 ----------
 
 def test_失信记录至少高风险():

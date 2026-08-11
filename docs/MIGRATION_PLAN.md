@@ -319,15 +319,17 @@ service/datasource/
 
 | 文件 | 改动 |
 |---|---|
-| `service/risk_scorecard.py` | 新增 `unratable()`（fail-closed 结果构造）、`render_markdown()`（报告块唯一渲染入口）、`RISK_BLOCK_MARKER` |
+| `service/risk_scorecard.py` | 新增 `unratable()`（fail-closed 结果构造）、`render_markdown()`（报告块唯一渲染入口）、`RISK_BLOCK_MARKER`；维度闸门按预期维度全集枚举 |
+| `service/company_profile.py` | `verified_profile_mismatches()` 重放清单映射，做字段级清单/档案一致性校验 |
 | `service/deep_research_v2/state.py` | `ResearchState` 增 `company_profile`、`risk_assessment` 两个字段 |
 | `service/deep_research_v2/graph.py` | `_load_company_profile()` 把原始档案写入 state；`research_complete` 事件抽成 `build_complete_event()` 并携带 `risk_assessment` |
 | `agents/data_analyst.py` | 新增 `assess_risk()`：评分 + 写 state + 推 SSE，在 `_analyze_data` 的**所有 LLM 步骤之前**调用 |
-| `agents/writer.py` | `SECTION_WRITING_PROMPT` 增 `{risk_scorecard}` 段；`_pin_risk_block()` / `_ensure_risk_block()` 两处代码层兜底；`SYNTHESIS_PROMPT` 增"评级块原样保留"规则 |
-| `tests/test_risk_integration.py` | 新增 14 条**行为断言**（区别于 `test_risk_scorecard.py` 的规则正确性断言） |
+| `agents/writer.py` | `SECTION_WRITING_PROMPT` 增 `{risk_scorecard}` 段；`_pin_risk_block()` / `_ensure_risk_block()` 两处代码层收口，最终块始终以规则引擎版本重建；`SYNTHESIS_PROMPT` 增"评级块原样保留"规则 |
+| `agents/critic.py` | 扫描器与 LLM 统一审核 `final_report`；扫描器消融开关贯穿执行/注入/合并/过滤 |
+| `tests/test_risk_integration.py` | 20 条**行为断言**（区别于 `test_risk_scorecard.py` 的规则正确性断言） |
 
 关键设计与踩坑见 [`DESIGN_CORE_MECHANISMS.md`](DESIGN_CORE_MECHANISMS.md) 第四节、
-[`BADCASES.md`](BADCASES.md) BC-19。
+[`BADCASES.md`](BADCASES.md) BC-19～BC-24。
 
 > 关联图谱与 Text2SQL 两项仍未做，属 v0.6 范围。
 

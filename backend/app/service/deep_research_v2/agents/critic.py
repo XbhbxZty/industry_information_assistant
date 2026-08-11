@@ -301,12 +301,16 @@ class CriticMaster(BaseAgent):
            进而把提示词带来的改善错误归因给代码过滤。
            把合并逻辑收敛到一处，两边走同一路径，评测才对得上生产。
         """
-        # —— 确定性扫描：始终执行 ——
-        text = state.get("final_report") or "\n".join(
-            (state.get("draft_sections") or {}).values()
-        )
+        # —— 确定性扫描：生产中始终执行；仅显式消融时关闭 ——
+        # 扫描器与 LLM 必须审核同一份文本，否则 final_report 中由整合步骤
+        # 新增的断言可能只被扫描器看见，而草稿中的旧句子只被 LLM 看见。
+        text = self._content_for_review(state)
         scan_issues = []
-        for f in scan_report(state.get("field_checks") or [], text):
+        scan_findings = (
+            [] if getattr(self, "_ablate_scanner", False)
+            else scan_report(state.get("field_checks") or [], text)
+        )
+        for f in scan_findings:
             scan_issues.append({
                 "target_section": f.get("field_id", ""),
                 "issue_type": f["issue_type"],
@@ -351,7 +355,10 @@ class CriticMaster(BaseAgent):
             return self._enforce_scanner_gate(degraded, scan_issues)
 
         # 强制分工：这两类由扫描器独占，丢弃 LLM 的同类输出
-        scanner_owned = {"unverified_as_fact", "conflict_silently_resolved"}
+        scanner_owned = (
+            set() if getattr(self, "_ablate_scanner", False)
+            else {"unverified_as_fact", "conflict_silently_resolved"}
+        )
         llm_issues, dropped = [], 0
         for issue in llm_result.get("issues", []):
             if issue.get("issue_type") in scanner_owned:
@@ -363,6 +370,26 @@ class CriticMaster(BaseAgent):
 
         llm_result["issues"] = scan_issues + llm_issues
         return self._enforce_scanner_gate(llm_result, scan_issues)
+
+    @staticmethod
+    def _content_for_review(state: ResearchState) -> str:
+        """
+        返回 Critic 唯一的待审核文本。
+
+        Writer 整合/修订后，final_report 才是最终交付物，也可能包含草稿中
+        从未出现的新断言，因此优先审核它；仅在最终报告尚未生成时退回章节草稿。
+        确定性扫描、LLM 提示词和评测必须共用本入口。
+        """
+        final_report = state.get("final_report") or ""
+        if final_report.strip():
+            return final_report
+
+        parts = []
+        outline = state.get("outline") or []
+        for section_id, content in (state.get("draft_sections") or {}).items():
+            section = next((s for s in outline if s.get("id") == section_id), {})
+            parts.append(f"## {section.get('title', section_id)}\n{content}")
+        return "\n\n".join(parts) if parts else "（暂无内容）"
 
     def _agent_cfg(self):
         """取本 Agent 的模型配置；取不到时返回 None 由调用方兜底"""
@@ -603,14 +630,8 @@ class CriticMaster(BaseAgent):
         """审核内容"""
         self.logger.info(f"[CriticMaster] _review_content 开始")
 
-        # 准备草稿内容
-        draft_content = ""
-        for section_id, content in state["draft_sections"].items():
-            section = next((s for s in state["outline"] if s.get("id") == section_id), {})
-            draft_content += f"\n## {section.get('title', section_id)}\n{content}\n"
-
-        if not draft_content:
-            draft_content = state.get("final_report", "（暂无内容）")
+        # 最终报告是实际交付物；扫描器与 LLM 共用同一文本入口。
+        draft_content = self._content_for_review(state)
 
         self.logger.info(f"[CriticMaster] 待审核内容长度: {len(draft_content)}")
 
