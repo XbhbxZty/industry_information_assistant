@@ -312,6 +312,25 @@ service/datasource/
 - 关联图谱重点识别**担保圈**（环状担保关系检测）
 - 接入 Text2SQL 工具调用
 
+#### ✅ 评分卡接入主流程（v0.5，2026-08-11 完成）
+
+评分规则本身见 `service/risk_scorecard.py`（v0.5 早前已完成）。本次是接线，
+涉及文件：
+
+| 文件 | 改动 |
+|---|---|
+| `service/risk_scorecard.py` | 新增 `unratable()`（fail-closed 结果构造）、`render_markdown()`（报告块唯一渲染入口）、`RISK_BLOCK_MARKER` |
+| `service/deep_research_v2/state.py` | `ResearchState` 增 `company_profile`、`risk_assessment` 两个字段 |
+| `service/deep_research_v2/graph.py` | `_load_company_profile()` 把原始档案写入 state；`research_complete` 事件抽成 `build_complete_event()` 并携带 `risk_assessment` |
+| `agents/data_analyst.py` | 新增 `assess_risk()`：评分 + 写 state + 推 SSE，在 `_analyze_data` 的**所有 LLM 步骤之前**调用 |
+| `agents/writer.py` | `SECTION_WRITING_PROMPT` 增 `{risk_scorecard}` 段；`_pin_risk_block()` / `_ensure_risk_block()` 两处代码层兜底；`SYNTHESIS_PROMPT` 增"评级块原样保留"规则 |
+| `tests/test_risk_integration.py` | 新增 14 条**行为断言**（区别于 `test_risk_scorecard.py` 的规则正确性断言） |
+
+关键设计与踩坑见 [`DESIGN_CORE_MECHANISMS.md`](DESIGN_CORE_MECHANISMS.md) 第四节、
+[`BADCASES.md`](BADCASES.md) BC-19。
+
+> 关联图谱与 Text2SQL 两项仍未做，属 v0.6 范围。
+
 ### 2.4 Wizard → 财务图表
 替换 122 行的"市场规模趋势"示例为资产负债率趋势、同业对比。matplotlib 规范部分保留。
 

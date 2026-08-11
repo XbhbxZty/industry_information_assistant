@@ -12,11 +12,18 @@ DeepResearch V2.0 - 数据分析师 Agent (DataAnalyst)
 """
 
 import uuid
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 from .base import BaseAgent
 from ..state import ResearchState, ResearchPhase
+
+try:
+    from service.risk_scorecard import score as score_risk, unratable
+    from config.dd_checklist import compute_completeness
+except ImportError:  # 兼容以 app 为包根的导入方式
+    from app.service.risk_scorecard import score as score_risk, unratable
+    from app.config.dd_checklist import compute_completeness
 
 
 class DataAnalyst(BaseAgent):
@@ -259,6 +266,78 @@ class DataAnalyst(BaseAgent):
             return await self._analyze_data(state)
         return state
 
+    def assess_risk(self, state: ResearchState) -> Optional[Dict[str, Any]]:
+        """
+        风险评分（纯规则，无 LLM）。写入 state 并推送 SSE 事件。
+
+        ⚠️ 三条约束，都来自本项目踩过的坑：
+
+        1. **不得被 LLM 成败门控**（BC-17）。本方法在 _analyze_data 的最前面调用，
+           且不依赖任何 LLM 产物；后续数据提取/知识图谱/图表任何一步抛异常，
+           评级都已经产出。确定性组件依赖不确定组件，方向是反的。
+
+        2. **评测与生产走同一入口**（BC-15）。评分 + 事件推送收敛在这一个方法里，
+           评测直接调它，测到的就是生产行为。
+
+        3. **前置条件不满足时 fail-closed**。清单说 verified 但档案没进 state，
+           score() 会把"档案里没有被执行记录"读成"未发现被执行记录"——
+           一个纯粹由链路缺陷制造的正面结论。这是评分卡最危险的失效方向，
+           必须落到「数据不足，无法评级」而不是低分。
+
+        Returns: 评分结果；非尽调流程（无核查清单）返回 None
+        """
+        checks = state.get("field_checks") or []
+        if not checks:
+            # 未识别到尽调对象，退化为普通研究流程，没有清单可评——
+            # 这里不做 fail-closed，因为根本不存在"授信结论"这个产物
+            self.logger.info("[DataAnalyst] 无核查清单，跳过风险评分（非尽调流程）")
+            return None
+
+        # 完整度按当前清单重算：闸门的判据必须与被评分的清单同源，
+        # 不能用可能已过期的 state["completeness"]
+        completeness = compute_completeness(checks)
+        state["completeness"] = completeness
+
+        profile = state.get("company_profile") or {}
+        if not profile:
+            result = unratable(
+                "结构化企业档案缺失，无法执行风险评分（清单状态无法映射到具体数值）",
+                completeness,
+            )
+            self.logger.error("[DataAnalyst] 有核查清单但无 company_profile，评级 fail-closed")
+            # 用 setdefault：从旧检查点恢复的 state 可能没有这个键，
+            # 而 fail-closed 分支自己再抛异常就彻底失去意义了
+            state.setdefault("errors", []).append("风险评分：company_profile 缺失，已按不可评级处理")
+        else:
+            try:
+                result = score_risk(profile, checks, completeness)
+            except Exception as e:
+                # 打分本身出错同样不得静默：没有评级 ≠ 没有风险
+                result = unratable(f"风险评分执行失败（{type(e).__name__}: {e}），不予评级", completeness)
+                self.logger.error(f"[DataAnalyst] 风险评分异常，已 fail-closed: {e}", exc_info=True)
+                state.setdefault("errors", []).append(f"风险评分执行失败: {e}")
+
+        state["risk_assessment"] = result
+        self.logger.info(
+            f"[DataAnalyst] 风险评级：{result['level']}"
+            f"（综合分 {result['composite_score']}，闸门 {len(result['gates_applied'])} 条，"
+            f"人工复核 {'必须' if result['requires_human_review'] else '非强制'}）"
+        )
+
+        self.add_message(state, "risk_assessment", {
+            "level": result["level"],
+            "composite_score": result["composite_score"],
+            # 等级往往由闸门而非分数决定，前端与下游必须能看到是哪条闸门起的作用
+            "gates_applied": result["gates_applied"],
+            "triggered_rules": result["triggered_rules"],
+            "dimension_scores": result["dimension_scores"],
+            "dimensions_excluded": result["dimensions_excluded"],
+            "requires_human_review": result["requires_human_review"],
+            "credit_advice": result["credit_advice"],
+            "completeness": result["completeness"],
+        })
+        return result
+
     async def _analyze_data(self, state: ResearchState) -> ResearchState:
         """执行数据分析"""
         self.logger.info("Starting data analysis...")
@@ -272,6 +351,10 @@ class DataAnalyst(BaseAgent):
             "status": "running",
             "stats": {"results_count": 0, "charts_count": 0, "entities_count": 0}
         })
+
+        # 0. 风险评分（纯规则）。刻意放在所有 LLM 调用之前——
+        #    下面任何一步失败都不能影响评级的产出（BC-17）
+        self.assess_risk(state)
 
         # 1. 提取结构化数据
         extracted_data = await self._extract_data(state)

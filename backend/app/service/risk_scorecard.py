@@ -337,3 +337,102 @@ def _advice(level: str) -> str:
         "高风险": "审慎，建议降额或追加担保；需人工复核",
         "拒绝": "不建议授信",
     }.get(level, "需人工判断")
+
+
+def unratable(reason: str, completeness: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    构造「无法评级」结果，用于评分前置条件不满足时。
+
+    **算不出 ≠ 没风险**，与「查不到 ≠ 没问题」是同一条原则。
+    评分链路任何一环失效（档案缺失、打分抛异常），都必须落到不可评级 +
+    强制人工复核，绝不能因为拿不到扣分项而输出一个低分。
+
+    返回结构与 score() 完全一致，下游无需区分两条路径。
+    """
+    return {
+        "composite_score": 0.0,
+        "level": INSUFFICIENT,
+        "dimension_scores": {},
+        "dimensions_excluded": [],
+        "triggered_rules": [],
+        "gates_applied": [reason],
+        "requires_human_review": True,
+        "completeness": completeness or {},
+        "credit_advice": _advice(INSUFFICIENT),
+    }
+
+
+# ---------------------------------------------------------------- 渲染
+
+# 报告正文中的评级块锚点。Writer 的代码层兜底据此判断评级是否被模型丢弃，
+# 因此这个字符串一旦改动，兜底检测与测试断言必须同步。
+RISK_BLOCK_MARKER = "风险评级（规则引擎判定"
+
+# 评级块的结束边界。提示词要求模型原样保留整块，因此模型照抄时会连同它一起复制，
+# 使得该块成为**可精确切除的区域**——Writer 据此把模型版本换成规则引擎版本，
+# 而不是简单前置一份造成"两个等级"并列。
+# 用 HTML 注释：Markdown 渲染后不可见，也不会被 claim_scanner 当作断言句扫到。
+RISK_BLOCK_END = "<!-- /risk-assessment -->"
+
+
+def render_markdown(assessment: Dict[str, Any], max_rules: int = 10) -> str:
+    """
+    把评分结果渲染成可直接嵌入报告的 Markdown 块。
+
+    ⚠️ 单一渲染入口：Writer 的提示词与代码层兜底用的是同一份文本。
+       若两处各写一套，模型看到的评级与最终落进报告的评级就可能不一致。
+
+    渲染时必须同时呈现 level 与 gates_applied——composite_score 会被
+    "表现好"的维度稀释（见 tests/test_risk_scorecard.py 中的稀释效应测试），
+    单看分数会得出与等级相反的结论。
+    """
+    if not assessment:
+        return ""
+
+    level = assessment.get("level", "未知")
+    comp = assessment.get("completeness") or {}
+    rate = comp.get("verified_rate")
+    rate_txt = (
+        f"{comp.get('required_verified', '?')}/{comp.get('required_total', '?')}"
+        f"（{rate:.0%}）" if isinstance(rate, (int, float)) else "未统计"
+    )
+
+    lines = [
+        f"**{RISK_BLOCK_MARKER}，不得由撰写环节改写）**",
+        "",
+        "| 项目 | 结论 |",
+        "|---|---|",
+        f"| 风险等级 | **{level}** |",
+        f"| 综合评分 | {assessment.get('composite_score', 0.0)} / 100"
+        f"（⚠️ 分数会被表现好的维度稀释，不可单独使用，以等级与闸门为准） |",
+        f"| 必查项核实率 | {rate_txt} |",
+        f"| 人工复核 | {'必须' if assessment.get('requires_human_review') else '非强制'} |",
+        f"| 授信建议 | {assessment.get('credit_advice', '')} |",
+    ]
+
+    gates = assessment.get("gates_applied") or []
+    lines += ["", "**触发的完整度闸门**"]
+    if gates:
+        lines += [f"- {g}" for g in gates]
+    else:
+        lines.append("- 无。本次评级完全由维度评分决定，未触发任何闸门")
+
+    rules = sorted(
+        assessment.get("triggered_rules") or [],
+        key=lambda r: r.get("score", 0), reverse=True
+    )
+    scored = [r for r in rules if r.get("score", 0) > 0]
+    clean = len(rules) - len(scored)
+    lines += ["", "**触发的评分规则**"]
+    if scored:
+        for r in scored[:max_rules]:
+            lines.append(f"- [{r.get('dimension')}] {r.get('detail')}（{r.get('field_id')}，{r.get('score')} 分）")
+        if len(scored) > max_rules:
+            lines.append(f"- （另有 {len(scored) - max_rules} 条扣分规则未列出）")
+    else:
+        lines.append("- 无扣分规则触发")
+    if clean:
+        lines.append(f"- 另有 {clean} 项已核实但未构成扣分（属正面结论，不是信息缺失）")
+
+    lines += ["", RISK_BLOCK_END]
+    return "\n".join(lines)

@@ -158,6 +158,16 @@ class ResearchState(TypedDict):
     field_checks: List[FieldCheck]          # 20 项固定清单及其核查状态
     completeness: Dict[str, Any]            # 核实率统计，由 compute_completeness 产出
 
+    # 结构化企业档案（v0.5 接入评分卡时引入）
+    # 风险评分卡需要的是结构化数值（负债率、被执行笔数…），不是 facts 里的自然语言，
+    # 因此原始档案必须留在 state 中。缺失时评分卡走 fail-closed，不得当作"无风险"。
+    company_profile: Dict[str, Any]
+
+    # 风险评分结果（v0.5）——由 DataAnalyst 阶段的纯规则评分卡产出
+    # 结构见 service/risk_scorecard.py::score()。
+    # ⚠️ 消费方必须同时读 level 与 gates_applied，只看 composite_score 会误判
+    risk_assessment: Dict[str, Any]
+
     # 规划输出
     outline: List[Dict[str, Any]]           # 动态大纲 (Section序列化)
     mind_map: Dict[str, Any]                # 知识图谱/思维导图
@@ -219,6 +229,8 @@ def create_initial_state(
         credit_context="",
         field_checks=[],
         completeness={},
+        company_profile={},
+        risk_assessment={},
         outline=[],
         mind_map={},
         key_entities=[],

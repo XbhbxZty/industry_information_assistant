@@ -18,6 +18,38 @@ from datetime import datetime
 from .base import BaseAgent
 from ..state import ResearchState, ResearchPhase
 
+try:
+    from service.risk_scorecard import RISK_BLOCK_END, RISK_BLOCK_MARKER, render_markdown
+except ImportError:  # 兼容以 app 为包根的导入方式
+    from app.service.risk_scorecard import RISK_BLOCK_END, RISK_BLOCK_MARKER, render_markdown
+
+
+def _excise_risk_block(text: str) -> str:
+    """
+    从文本中切除评级块，保留其余正文。
+
+    评级块以 `RISK_BLOCK_MARKER` 开头、`RISK_BLOCK_END` 结尾。
+    模型被要求原样保留整块，因此正常情况下两个标记会成对出现，可精确切除。
+
+    若只找到起始标记（模型把结尾注释删了），无法确定块在何处结束——
+    此时只保留起始标记之前的内容并接受尾部损失，**不能保留残块**：
+    一段被截断的评级表格比丢掉几句正文危险得多，读者会当它是完整结论。
+    """
+    start = text.find(RISK_BLOCK_MARKER)
+    if start < 0:
+        return text.strip()
+    # 锚点位于 `**…**` 之内，需回退到该行行首才能整行切除
+    line_start = text.rfind("\n", 0, start) + 1
+    head = text[:line_start].rstrip()
+
+    end = text.find(RISK_BLOCK_END, start)
+    tail = text[end + len(RISK_BLOCK_END):].strip() if end >= 0 else ""
+    return "\n\n".join(p for p in (head, tail) if p)
+
+# 风险汇总与授信建议章节。提纲固定 8 章（见 architect.PLANNING_PROMPT），
+# 但模型偶尔会改标题，因此再留一条按标题识别的兜底。
+RISK_SECTION_ID = "sec_8"
+
 
 class LeadWriter(BaseAgent):
     """
@@ -57,6 +89,17 @@ class LeadWriter(BaseAgent):
 ⚠️ 最易犯的致命错误：把「未核实」写成「无」。
 「经查询无失信记录」是可支持授信的结论；「失信记录未核实」是必须补查的缺口。
 二者混淆会直接误导信贷审批。
+
+## 🔒 风险评级（由规则引擎判定，不是你的判断）
+
+{risk_scorecard}
+
+如上方为具体评级内容，则本章必须遵守：
+1. **等级、授信建议、闸门结论一律原样采用**，不得上调、下调或改写为"综合来看…"
+2. **不得只引用综合评分**。分数会被表现好的维度稀释（例如已列入失信名单的企业
+   综合分仍可能落在中风险区间），真正决定等级的往往是闸门。
+   必须把触发的闸门逐条写出来，说明等级为何是这个结果
+3. 你的任务是**解释评级依据**并归纳各维度发现，不是重新评级
 
 ## 可用素材（这是你唯一可以依据的信息）
 
@@ -142,6 +185,9 @@ class LeadWriter(BaseAgent):
 3. **摘要中必须包含"信息缺口"部分**，列出所有未核实的关键事项
 4. **授信意见必须与已核实的证据一致**。若关键信息大量缺失，
    结论应为"信息不足，建议补充尽调后再议"，而不是给出乐观或悲观的倾向性判断
+5. **第 8 章中的「风险评级（规则引擎判定）」整块内容必须原样保留**，
+   包括等级、闸门列表与授信建议。该块由规则引擎产出，不是可以润色或概括的行文；
+   摘要中给出的风险结论也必须与它一致，不得出现两个不同的等级
 
 ## 关键要求
 
@@ -319,6 +365,35 @@ class LeadWriter(BaseAgent):
         return state
 
     @staticmethod
+    def _is_risk_section(section: Dict) -> bool:
+        """是否为风险汇总章节（评级结果的归属章节）"""
+        if section.get("id") == RISK_SECTION_ID:
+            return True
+        title = section.get("title") or ""
+        return "风险汇总" in title or "授信建议" in title
+
+    @staticmethod
+    def _format_risk_scorecard(state: ResearchState, section: Dict) -> str:
+        """
+        渲染供撰写使用的评级块。非风险章节返回占位说明。
+
+        评级来自规则引擎，Writer 只负责表述——与核查清单的分工完全一致：
+        判断由规则做，模型只把结构化结论写成人话。
+        """
+        if not LeadWriter._is_risk_section(section):
+            return "（本章节不涉及风险评级，无需引用等级结论）"
+        assessment = state.get("risk_assessment") or {}
+        if not assessment:
+            # 评分卡未产出（非尽调流程，或分析阶段未执行）。
+            # 不得让模型自行补一个等级——那正是规则化评分要消除的东西。
+            return (
+                "（⚠️ 本次未产出规则评级。**不得自行给出风险等级或授信结论**，"
+                "本章只归纳各维度已核实发现与信息缺口，并写明"
+                "「风险评级未生成，需人工评定」）"
+            )
+        return render_markdown(assessment)
+
+    @staticmethod
     def _format_field_checks(state: ResearchState, section_id: str) -> str:
         """
         渲染本章节的核查清单（v0.2）。
@@ -412,7 +487,8 @@ class LeadWriter(BaseAgent):
             data_points="\n".join(data_text) if data_text else "（暂无数据点）",
             insights="\n".join([f"- {i}" for i in state["insights"][:5]]) if state["insights"] else "（暂无洞察）",
             charts_info="\n".join(charts_info) if charts_info else "（暂无图表）",
-            field_checks=self._format_field_checks(state, section_id)
+            field_checks=self._format_field_checks(state, section_id),
+            risk_scorecard=self._format_risk_scorecard(state, section)
         )
 
         response = await self.call_llm(
@@ -457,6 +533,46 @@ class LeadWriter(BaseAgent):
                 "agent": self.name,
                 "content": f"章节「{section.get('title')}」撰写完成\n字数: {len(section_content)}\n要点: {', '.join(result.get('key_points', [])[:2]) if result.get('key_points') else '无'}"
             })
+
+        # 风险章节：评级块由代码写入，不依赖模型是否照抄，也不依赖本次调用是否成功
+        if self._is_risk_section(section):
+            self._pin_risk_block(state, section)
+
+    def _pin_risk_block(self, state: ResearchState, section: Dict) -> None:
+        """
+        把规则引擎的评级块钉进风险章节草稿。
+
+        为什么不能只靠提示词：提示词能可靠表达"要什么"，但表达"不要改写什么"
+        不可靠——模型会概括、会换词、会在整合时把等级抹平成"总体风险可控"。
+        评级是规则产出的结论，必须由代码保证它原文进入报告。
+
+        同时它不依赖模型是否产出可用内容：JSON 解析失败或返回空时，
+        草稿里至少仍有评级，而不是既没有正文也没有等级。
+        （注意边界：若 `call_llm` 直接抛异常，异常会先于本方法逃逸出 _write_section，
+        此时整个撰写阶段都没有产物，不属于本兜底的覆盖范围。）
+        """
+        assessment = state.get("risk_assessment") or {}
+        if not assessment:
+            return
+        section_id = section["id"]
+        draft = state["draft_sections"].get(section_id, "")
+        block = render_markdown(assessment)
+
+        if RISK_BLOCK_MARKER in draft:
+            # 模型照抄了评级块——提示词正是这么要求的，所以这是**预期路径而非边界情况**。
+            # 必须**替换**而非前置：直接前置会让报告出现两个评级块；
+            # 若模型顺手改了措辞，就成了"正确等级 + 被改写的等级"并列，
+            # 恰恰是提示词自己警告的「不得出现两个不同的等级」。
+            rest = _excise_risk_block(draft)
+            state["draft_sections"][section_id] = (block + "\n\n" + rest) if rest else block
+            self.logger.warning(
+                f"[LeadWriter] {section_id} 草稿中已含评级块，已替换为规则引擎版本"
+            )
+        else:
+            state["draft_sections"][section_id] = (block + "\n\n" + draft) if draft else block
+
+        section["status"] = "drafted"
+        self.logger.info(f"[LeadWriter] 已将风险评级（{assessment.get('level')}）写入 {section_id}")
 
     async def _synthesize_report(self, state: ResearchState) -> None:
         """整合完整报告"""
@@ -529,6 +645,9 @@ class LeadWriter(BaseAgent):
             state["final_report"] = fallback_report
             self.logger.info(f"[LeadWriter] 使用备选报告，长度: {len(state['final_report'])}")
 
+        # 整合是 LLM 步骤，可能把评级抹平或丢弃——代码层兜底补回
+        self._ensure_risk_block(state)
+
         # 发送报告完成事件 - 包含完整报告内容用于前端流式显示
         self.add_message(state, "report_draft", {
             "agent": self.name,
@@ -538,6 +657,28 @@ class LeadWriter(BaseAgent):
             "word_count": len(state["final_report"]),
             "references_count": len(state["references"])
         })
+
+    def _ensure_risk_block(self, state: ResearchState) -> bool:
+        """
+        保证最终报告正文带有评级块，模型丢弃时由代码补回。
+
+        整合与修订都是 LLM 步骤，都会重写全文。若评级只存在于章节草稿，
+        它随时可能在这两步中消失——而一份没有等级的尽调报告，
+        读者会自行按行文语气脑补一个结论，那正是这套规则化评分要消除的。
+
+        Returns: 是否触发了兜底（用于观测模型丢弃评级的频次）
+        """
+        assessment = state.get("risk_assessment") or {}
+        if not assessment:
+            return False
+        report = state.get("final_report") or ""
+        if RISK_BLOCK_MARKER in report:
+            return False
+        state["final_report"] = (report + "\n\n---\n\n" + render_markdown(assessment)).lstrip()
+        self.logger.warning(
+            f"[LeadWriter] 报告正文缺失风险评级块，已由代码补回（等级：{assessment.get('level')}）"
+        )
+        return True
 
     async def _revise_report(self, state: ResearchState) -> ResearchState:
         """根据反馈修订报告"""
@@ -577,6 +718,8 @@ class LeadWriter(BaseAgent):
 
         if result and result.get("revised_content"):
             state["final_report"] = result["revised_content"]
+            # 修订同样会重写全文，评级块可能在这一步被抹掉
+            self._ensure_risk_block(state)
 
             # 标记已解决的问题
             for issue_id in result.get("addressed_issues", []):

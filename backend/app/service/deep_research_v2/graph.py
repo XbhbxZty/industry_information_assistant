@@ -67,6 +67,31 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("DeepResearchGraph")
 
 
+def build_complete_event(state: Dict[str, Any], references: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    构造 research_complete 事件。
+
+    独立成函数是为了能被断言：终局事件必须携带风险评级——
+    评级只推在中途的流式事件里是不够的，调用方若只等最终结果就会拿不到，
+    而"拿不到评级"在这个业务里不能表现为"没有风险"。
+    """
+    return {
+        "type": "research_complete",
+        "final_report": state.get("final_report", ""),
+        "quality_score": state.get("quality_score", 0.0),
+        "facts_count": len(state.get("facts", [])),
+        "charts_count": len(state.get("charts", [])),
+        "iterations": state.get("iteration", 0),
+        "references": references,
+        # 核查清单结果（v0.2）：核实率是该轮唯一的可验收产出
+        "completeness": state.get("completeness", {}),
+        "field_checks": state.get("field_checks", []),
+        # 风险评级（v0.5）：level 与 gates_applied 必须同时给出，
+        # 只给 composite_score 会让下游得出与等级相反的结论
+        "risk_assessment": state.get("risk_assessment", {}),
+    }
+
+
 class DeepResearchGraph:
     """
     DeepResearch V2.0 工作流图
@@ -403,6 +428,9 @@ class DeepResearchGraph:
 
         state["company_name"] = company["name"]
         state["credit_context"] = build_credit_context(company)
+        # 原始档案要留在 state 里：风险评分卡消费的是结构化数值（负债率、被执行笔数…），
+        # facts 里的自然语言无法还原这些字段
+        state["company_profile"] = company
 
         facts = profile_to_facts(company)
         state["facts"].extend(facts)
@@ -786,18 +814,7 @@ class DeepResearchGraph:
                     "source": "web"
                 })
 
-            yield {
-                "type": "research_complete",
-                "final_report": state.get("final_report", ""),
-                "quality_score": state.get("quality_score", 0.0),
-                "facts_count": len(state.get("facts", [])),
-                "charts_count": len(state.get("charts", [])),
-                "iterations": state.get("iteration", 0),
-                "references": final_ui_refs,
-                # 核查清单结果（v0.2）：核实率是本轮唯一的可验收产出
-                "completeness": state.get("completeness", {}),
-                "field_checks": state.get("field_checks", [])
-            }
+            yield build_complete_event(state, final_ui_refs)
 
         except Exception as e:
             logger.error(f"Simplified execution error: {e}")
