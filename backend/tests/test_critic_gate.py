@@ -238,6 +238,31 @@ def test_冲突披露词不得豁免普通未核实字段的断言():
     assert findings and findings[0]["issue_type"] == "unverified_as_fact"
 
 
+def test_分歧并存两种也属于明确披露冲突():
+    """
+    BC-26 的同类延续：留出集修完后仍能构造出正确披露却被误判的句子。
+    词表是人工维护的，穷举不可能完备——补的是自然中文里表达
+    "来源之间对不上"最常用的几个说法。
+    """
+    for phrase, text in (
+        ("分歧", "实缴资本在工商登记与财务附注之间存在分歧，需人工核实。"),
+        ("并存", "实缴资本5000万元与1500万元两个记载并存，暂不采信任一方。"),
+        ("两种", "实缴资本存在两种记载：工商5000万元、财报1500万元。"),
+    ):
+        assert scan_report(_conflicting_registration(), text) == [], phrase
+
+
+def test_存疑不作为冲突披露标记():
+    """
+    刻意不收「存疑」：它是弱披露，可以与"但现已确认为 X"共存。
+    收进白名单会让单方面采信借它绕过检查——
+    宁可让这类句子误报一次，也不能给单边采信开口子。
+    """
+    text = "实缴资本曾存疑，但结合财务资料现已确认为1500万元，据此评估资本实力。"
+    findings = scan_report(_conflicting_registration(), text)
+    assert findings, "「存疑」+ 单方面采信必须被检出，不得因弱披露词豁免"
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items())
            if n.startswith("test_") and callable(f)]
