@@ -41,6 +41,23 @@ WEIGHTS = {
 MIN_OVERALL_RATE = 0.60      # 总体核实率低于此值 → 不予评级
 MIN_CATEGORY_RATE = 0.50     # 维度核实率低于此值 → 该维度不参与加权
 
+# 风险分**从结构化档案取值**计算的核查项。
+#
+# 这些项的 `_ok()` 只决定"要不要评"，具体扣多少分完全由 `company` 里的
+# 结构化数据决定。因此结构化适配器若只把清单改成 verified、数据没进 company，
+# 评分卡会照常运行并得出「未发现 XX」——一条负面证据被翻译成正面结论（BC-31）。
+#
+# `verification.build_scoring_view()` 用这个集合判定哪些证据必须能合并进档案；
+# 合并不了就不予评级。**新增会读档案的规则时必须同步登记在此**，
+# 否则那条规则会重新打开同一个洞。
+PROFILE_BACKED_FIELDS = frozenset({
+    "debt_ratio", "net_profit", "revenue", "cash_flow",
+    "litigation", "enforcement", "dishonesty",
+    "guarantee", "guarantee_circle",
+    "operating_status", "bidding_record",
+    "negative_news", "regulatory_penalty",
+})
+
 
 def _level_at_least(current: str, floor: str) -> str:
     """取更严的等级。INSUFFICIENT 不参与比较，由调用方单独处理"""
@@ -216,7 +233,18 @@ def score(
             s = 70.0 if amt >= 1000 else 40.0
             rel_items.append(s); _add_rule("relation", s, f"对外担保 {len(g)} 笔，合计 {amt:.0f} 万元", "guarantee")
     if _ok("guarantee_circle"):
-        rel_items.append(0.0); _add_rule("relation", 0.0, "未发现担保圈涉入情况", "guarantee_circle")
+        # 必须读实际数据。此前这里硬编码 0.0 —— 一旦 guarantee_circle 变成
+        # verified（v0.6 图谱推导上线后就会），无论查到什么都会记成
+        # "未发现担保圈"，与 BC-31 同形：核实状态被当成了结论本身。
+        circle = company.get("guarantee_circle") or []
+        if circle:
+            s = 100.0 if len(circle) >= 2 else 70.0
+            rel_items.append(s)
+            _add_rule("relation", s, f"涉入担保圈 {len(circle)} 条互保/连环担保关系",
+                      "guarantee_circle")
+        else:
+            rel_items.append(0.0)
+            _add_rule("relation", 0.0, "未发现担保圈涉入情况", "guarantee_circle")
     if rel_items:
         dim_scores["relation"] = sum(rel_items) / len(rel_items)
 
@@ -345,6 +373,43 @@ def _advice(level: str) -> str:
         "高风险": "审慎，建议降额或追加担保；需人工复核",
         "拒绝": "不建议授信",
     }.get(level, "需人工判断")
+
+
+def apply_provenance_gate(
+    result: Dict[str, Any],
+    degradations: List[Dict[str, Any]],
+    floor: str = "中风险",
+) -> Dict[str, Any]:
+    """
+    来源降级闸门：证据来源不明或取证时间不明时，不得输出最宽松的结论。
+
+    ## 为什么披露不够
+
+    v0.6a 首版把 degradations 写进 `state["errors"]` 就算完事。实测一份
+    全部 verified、但全部缺来源标记的旧检查点，得到 20 条 degradation、
+    `replay_ok=True`、等级「低风险」、`requires_human_review=False`、
+    `gates_applied=[]`——降级信息一条都没进入定级，终局事件里也看不到。
+    等于用一行日志换一个可能错误的放款决定（BC-33）。
+
+    与其它闸门一致：**在综合评分之后强制施加，不可被评分覆盖**。
+
+    Args:
+        floor: 存在降级时允许达到的最优等级。默认「中风险」。
+    """
+    if not degradations:
+        return result
+    if result.get("level") != INSUFFICIENT:
+        result["level"] = _level_at_least(result.get("level", "低风险"), floor)
+    result["requires_human_review"] = True
+    fields = sorted({d.get("field_id") for d in degradations if d.get("field_id")})
+    shown = "、".join(fields[:6]) + ("…" if len(fields) > 6 else "")
+    result["gates_applied"] = list(result.get("gates_applied") or []) + [
+        f"{len(degradations)} 项核实来源或取证时间不明（{shown}），"
+        f"等级下限提升至{floor}并强制人工复核；完成来源迁移后方可重新评级"
+    ]
+    result["provenance_degradations"] = degradations
+    result["credit_advice"] = _advice(result["level"])
+    return result
 
 
 def unratable(reason: str, completeness: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

@@ -583,73 +583,161 @@ score({}, 全部 verified 的清单, completeness) → 低风险   # 实测，�
 
 ---
 
-## 四、核实来源与结构化证据链（v0.6）
+## 五、核实来源与结构化证据链（v0.6a）
 
 > 实现见 `backend/app/service/verification.py`，断言见
-> `backend/tests/test_verification_chain.py`（22 例）。
+> `backend/tests/test_verification_chain.py`（44 例）。
 > **本轮只建模型与边界，不接入任何真实外部数据源，也不让 Scout 升级字段状态。**
+>
+> ⚠️ 本节曾按首版实现描述过两条并不成立的性质，已在 5.5 / 5.8 就地更正。
+> 更正来源：v0.6a 完成后的只读复核（BC-31～BC-35）。
 
-### 4.1 为什么需要来源模型
+### 5.1 为什么需要来源模型
 
 `FieldCheck` 此前记录了"核实到了什么"，却没记录"**这条结论从哪来**"。
 一致性校验因此只有单一重放依据（初始档案），却要校验多来源的核实结果——
 接入结构化适配器那天，新查到的合法证据会被判成状态漂移并全面 fail-closed
-（BC-28）。
+（BC-30）。
 
-### 4.2 来源是闭集
+### 5.2 来源与适配器都是闭集
 
 ```python
-VALID_ORIGINS = {"initial_profile", "structured_adapter"}
+VALID_ORIGINS    = {"initial_profile", "structured_adapter"}
+_TRUSTED_ADAPTERS = {}          # 需 register_adapter() 登记，本轮为空
 ```
 
 **通用网页检索刻意不在其中。** 自然语言事实没有稳定的字段映射，
 也无法在重放时做等值比对——`facts` 是给 LLM 读的素材，
 `evidence` 是给程序做比对的记录，两者不可互相替代。
-出现 `web_search` / `llm_inference` 等来源一律 fail-closed。
+
+> **两层闭集缺一不可。** 首版只有 `VALID_ORIGINS`，而写入口接受任意
+> `source_adapter` 字符串并无条件盖上 `structured_adapter` 身份——
+> 传 `source_adapter="web_search"` 就能绕过闭集。**建了白名单，
+> 就要同时管住"谁能签发凭证"**（BC-32）。
 
 旧检查点缺来源标记时，用单独的 `legacy_unknown` 识别，**不并入合法来源**——
 把历史数据当成 `initial_profile` 处理就是静默猜测。
 
-### 4.3 证据结构与重放分发
+### 5.3 证据结构与重放分发
 
 | origin | 重放依据 | 失败条件 |
 |---|---|---|
 | `initial_profile` | `company_profile` 重放（复用 `fill_field_checks`） | 状态或取值对不上 |
-| `structured_adapter` | `evidence_store[evidence_id]` | 无 evidence_ids／证据不存在／取值不一致 |
-| 缺失（旧） | 档案兜底 + **显式降级记录** | 兜底也对不上，或严格模式关闭兜底 |
+| `structured_adapter` | `evidence_store[evidence_id]` | 见下表 |
+| 缺失（旧） | 默认不予采信；显式开启兜底时走档案重放 + **强制降级记录** | 兜底也对不上 |
 
-共同要求：`retrieved_at` 缺失一律 fail-closed——不知道证据何时到手，
-就无法判断时效。
+结构化证据的绑定校验（每一条都对应一种曾能通过的构造）：
 
-### 4.4 conflicting 同样要求完整证据
+| 校验 | 拦住的构造 |
+|---|---|
+| `evidence.field_id == check.field_id` | 担保项借用关联方的证据，只要取值相同 |
+| `evidence.source_adapter == check.source_adapter` | 清单声称来源 A、证据实际来自 B |
+| 适配器已注册（写入侧 + 重放侧） | `web_search` 伪装成结构化适配器 |
+| 证据本体 `retrieved_at` 存在且合法 ISO | 只在 check 副本上留时间戳 |
+| `check.retrieved_at == max(证据时间)` | 清单声称比证据更新 |
+| `raw` 非空 | 无法人工追溯原始返回 |
+| verified 时证据取值唯一 | 5000万/1500万并存却单方面标 verified |
+
+最后一条就是 `conflict_silently_resolved`——系统从 v0.3 起防的模型错误，
+**这次先出现在我自己写的校验器里**。
+
+### 5.4 conflicting 同样要求完整证据
 
 冲突状态会抬高风险等级并强制人工复核。若冲突取值无法追溯到具体来源，
 复核人无从判断该信谁——**一个没有出处的"冲突"与编造的冲突无法区分**。
-因此要求证据中至少保留 2 条来源取值，少于 2 条即 fail-closed。
 
-### 4.5 ⭐ 写证据与改状态必须绑定
+要求：≥2 个**不同来源**的 ≥2 个**不同取值**，且 `conflict_detail`
+必须与证据一致。只要求"≥2 条记录"是不够的——两条同源同值凑不出分歧。
 
-`record_structured_evidence()` 是适配器核实字段的**唯一入口**，
-它同时做两件事：往 `evidence_store` 落证据、给 `field_check` 打来源戳。
+### 5.5 ⭐ 写证据与改状态必须是同一次调用
 
-分成两个函数就总会有人只调第一个——而"只改状态不写证据"正是这套校验
-要拦的东西。绑定之后，那条路径在代码层走不通。
+`record_structured_evidence()` 是适配器核实字段的**唯一原子入口**，
+一次调用写完 evidence_store 与 check 的 status / value / conflict_detail /
+verification_origin / evidence_ids / source_adapter / retrieved_at，
+非法组合直接抛 `ValueError`。
 
-### 4.6 ReplayReport：mismatches 与 degradations 分开
+> **📌 更正**：本节首版写着"绑定之后那条路径在代码层走不通"，
+> 但当时的实现只写来源字段，状态与取值仍要调用方自己改——**这句话是
+> 设计意图，不是已实现的属性**。测试也没能证伪，因为测试自己在调用前
+> 手工改了状态，等于替被测对象补齐了缺的那半件事（BC-34）。
+>
+> 教训：**注释不是断言，描述性文字不会失败。** 任何"这条路走不通"的说法，
+> 都要有一条走它并失败的测试。
+
+### 5.6 ⭐ 通过校验 ≠ 进入评分
+
+这是本轮最危险的一条。评分卡有两份输入：
+
+| 用途 | 来源 |
+|---|---|
+| 要不要评这一项 | `field_checks[i].status` |
+| 扣多少分 | `company_profile` 的结构化数据 |
+
+适配器只写前者时，`_ok("guarantee")` 为真而 `company["guarantee"]` 为空 →
+输出「未发现对外担保」。**一条新增的负面证据被翻译成了有利于放款的结论**，
+而证据链校验全程 `ok=True`（BC-31）。
+
+解决：`build_scoring_view()` 把证据的 `profile_patch` 合并进评分卡真正读的
+那份数据；`PROFILE_BACKED_FIELDS` 登记哪些字段的风险分来自档案；
+**合并不了就不予评级**。合并采用追加而非替换——追加最多重复计数（偏保守），
+替换会抹掉档案已有的负面记录（偏冒进）。
+
+> 这是 BC-19 的同形复发，入口从"档案没进 state"换成"证据没进档案"。
+> **修一个缺陷时要问：这个形态还有哪些别的入口？**
+
+### 5.7 ReplayReport：mismatches 与 degradations 分开
 
 ```python
 report.mismatches    # 证据链断了 → 必须 fail-closed
-report.degradations  # 旧检查点缺来源 → 必须披露，但不必然阻断
+report.degradations  # 来源或取证时间不明 → 必须披露，且必须约束等级
 ```
 
-合成一个列表会逼调用方靠字符串匹配去猜是哪种。DataAnalyst 把
-degradations 写进 `state["errors"]`，保证降级不会只在日志里一闪而过
-（BC-02 的教训）。
+合成一个列表会逼调用方靠字符串匹配去猜是哪种。
 
-### 4.7 本轮明确未做
+### 5.8 降级必须约束结果，不能只披露
 
-- 未实现任何真实外部适配器（结构化适配器路径只有模型与测试替身）
+> **📌 更正**：首版把 degradations 写进 `state["errors"]` 就收工，并把
+> "默认允许旧检查点兜底重放"藏在函数签名的默认值里。实测一份全部 verified、
+> 全部缺来源标记的旧检查点：20 条降级、`replay_ok=True`、等级**低风险**、
+> `requires_human_review=False`、`gates_applied=[]`、终局事件不带 errors。
+> **降级信息一条都没进入定级**（BC-33）。
+
+现在的口径：
+
+| 层 | 措施 |
+|---|---|
+| 默认 | `POLICY.allow_legacy_profile_replay = False`，决策路径直接 fail-closed |
+| 配置 | 开关移入 `config/verification_policy.py`，不留在函数默认值里 |
+| 闸门 | `apply_provenance_gate()`：降级 → 等级下限提升至中风险 + 强制人工复核 + 写入 gate |
+| 事件 | 降级明细进 `risk_assessment` SSE 与 `research_complete` |
+
+判断一个机制是否生效，只看**它能否改变最终结果**——这是 BC-17 的原话。
+
+### 5.9 取证时间必须来自证据自身
+
+`retrieved_at` 取档案声明的时间（记录级 → `coverage.retrieved_at` 快照级），
+取不到就留空并记为降级。**绝不用 `datetime.now()` 兜底**——那记录的是程序
+读档案的时刻，会让报告显示"本次核查于今日完成"而数据可能是三个月前的（BC-35）。
+
+### 5.10 断言必须落在最终产出上
+
+首版 22 条断言全绿，却漏掉了上面三个洞——因为它们全部停在
+`verify_field_checks().ok`，没有一条走到最终评级。
+
+现在核心用例一律断言到 `DataAnalyst.assess_risk()` 与 `research_complete`：
+
+```
+适配器写入「担保1800万」→ assess_risk() → triggered_rules 必须体现该担保
+                                        → 不得出现「未发现对外担保」
+```
+
+**中间报告为真，不代表最终决定为真。**
+
+### 5.11 本轮明确未做
+
+- 未实现任何真实外部适配器（`_TRUSTED_ADAPTERS` 为空，只有测试替身登记）
 - 未让 Scout 把任何字段升级为 verified
 - 未把 evidence_store 接入检查点持久化与 SSE
-- 未处理证据时效性策略（只校验 `retrieved_at` 存在，未校验是否过期）
-
+- 未处理证据时效性策略（校验时间戳存在且合法，未校验是否过期）
+- `profile_patch` 的合并语义只有"追加"一种，真实适配器上线时可能需要
+  可声明的替换语义

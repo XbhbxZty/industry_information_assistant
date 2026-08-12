@@ -13,11 +13,20 @@
       "coverage": {
         "_comment": "本数据源实际查询到的核查项。列在此处但档案中无对应数据 = 查过且无记录（已核实）；未列出 = 未查询（信息缺口）。",
         "queried": [
-          "registration", "business_scope", "operating_status",
-          "shareholders", "external_investment",
+          "registration",
+          "business_scope",
+          "operating_status",
+          "shareholders",
+          "external_investment",
           "bidding_record",
-          "revenue", "net_profit", "debt_ratio", "cash_flow",
-          "litigation", "enforcement", "dishonesty", "equity_freeze",
+          "revenue",
+          "net_profit",
+          "debt_ratio",
+          "cash_flow",
+          "litigation",
+          "enforcement",
+          "dishonesty",
+          "equity_freeze",
           "negative_news"
         ],
         "not_queried_reason": {
@@ -26,7 +35,9 @@
           "guarantee_circle": "需在关联图谱构建完成后推导，当前无关联方数据",
           "related_party": "需财报附注披露，本数据源不覆盖",
           "regulatory_penalty": "需接入行政处罚公示平台，本数据源不覆盖"
-        }
+        },
+        "retrieved_at": "2026-08-09",
+        "_retrieved_at_comment": "本数据源快照的取证时间。核查项没有自带时间时以此为准；缺失则记为证据链降级，不得用运行时间冒充取证时间。"
       },
       "registration": {
         "registered_capital": "5000万元人民币",
@@ -46,9 +57,24 @@
         "retrieved_at": "2026-08-09"
       },
       "shareholders": [
-        { "name": "周立群", "type": "自然人", "ratio": 0.52, "subscribed_capital": "2600万元" },
-        { "name": "东莞泰盈投资合伙企业（有限合伙）", "type": "企业", "ratio": 0.31, "subscribed_capital": "1550万元" },
-        { "name": "陈慧敏", "type": "自然人", "ratio": 0.17, "subscribed_capital": "850万元" }
+        {
+          "name": "周立群",
+          "type": "自然人",
+          "ratio": 0.52,
+          "subscribed_capital": "2600万元"
+        },
+        {
+          "name": "东莞泰盈投资合伙企业（有限合伙）",
+          "type": "企业",
+          "ratio": 0.31,
+          "subscribed_capital": "1550万元"
+        },
+        {
+          "name": "陈慧敏",
+          "type": "自然人",
+          "ratio": 0.17,
+          "subscribed_capital": "850万元"
+        }
       ],
       "financials": [
         {

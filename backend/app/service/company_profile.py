@@ -21,13 +21,15 @@ from typing import Any, Dict, List, Optional
 
 try:
     from config.dd_checklist import CHECKLIST_BY_ID
+    from config.verification_policy import POLICY
     from service.verification import (
-        stamp_initial_profile_origin, verify_evidence_chain,
+        parse_iso, stamp_initial_profile_origin, verify_evidence_chain,
     )
 except ImportError:  # 兼容以 app 为包根的导入方式
     from app.config.dd_checklist import CHECKLIST_BY_ID
+    from app.config.verification_policy import POLICY
     from app.service.verification import (
-        stamp_initial_profile_origin, verify_evidence_chain,
+        parse_iso, stamp_initial_profile_origin, verify_evidence_chain,
     )
 
 logger = logging.getLogger(__name__)
@@ -205,6 +207,73 @@ def profile_to_facts(company: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     logger.info(f"[company_profile] {name} 生成 {len(facts)} 条事实")
     return facts
+
+
+# field_id → 档案中承载该项数据的键。用于取**证据自身声明的获取时间**。
+# 不在表内的项（如 guarantee_circle 需图谱推导）没有档案载体，取不到时间。
+_FIELD_PROFILE_KEY: Dict[str, str] = {
+    "registration": "registration", "business_scope": "registration",
+    "operating_status": "registration",
+    "shareholders": "shareholders", "actual_controller": "actual_controller",
+    "external_investment": "external_investment",
+    "bidding_record": "bidding_records",
+    "revenue": "financials", "net_profit": "financials",
+    "debt_ratio": "financials", "cash_flow": "financials",
+    "litigation": "judicial_records", "enforcement": "judicial_records",
+    "dishonesty": "judicial_records", "equity_freeze": "judicial_records",
+    "guarantee": "guarantee", "related_party": "related_party",
+    "negative_news": "negative_news", "regulatory_penalty": "regulatory_penalty",
+}
+
+
+def _latest_ts(node: Any) -> Optional[str]:
+    """从档案节点（dict 或 list）里取最新的 retrieved_at。"""
+    if isinstance(node, dict):
+        node = [node]
+    if not isinstance(node, list):
+        return None
+    stamps = [x.get("retrieved_at") for x in node
+              if isinstance(x, dict) and parse_iso(x.get("retrieved_at"))]
+    return max(stamps) if stamps else None
+
+
+def profile_retrieved_at(company: Dict[str, Any]) -> Dict[str, str]:
+    """
+    解析档案中每个核查项的**取证时间**。
+
+    ⚠️ 绝不能退化成 `datetime.now()`。那记录的是程序读取档案的时刻，
+       把它当成证据获取时间，就是拿运行时间冒充取证时间——报告会显示
+       "本次核查于今日完成"，而数据可能是三个月前抓的（BC-35）。
+
+    取不到时留空：由重放校验记为降级并触发来源闸门，不伪造。
+    """
+    # 数据源级兜底：coverage/顶层声明的整批抓取时间
+    fallback = (
+        (company.get("coverage") or {}).get("retrieved_at")
+        or company.get("retrieved_at")
+        or company.get("as_of")
+    )
+    if parse_iso(fallback) is None:
+        fallback = None
+
+    # 必须遍历**整张清单**，不能只遍历有档案载体的字段：
+    # guarantee_circle 这类靠推导得出、没有对应档案键的项会整个缺席，
+    # 于是拿不到快照时间而被误记为"取证时间不明"。与 BC-21 同形——
+    # 从"已有数据"出发遍历，最缺数据的那一项反而漏掉。
+    out: Dict[str, str] = {}
+    for fid in CHECKLIST_BY_ID:
+        key = _FIELD_PROFILE_KEY.get(fid)
+        # 事件型字段查到空列表时没有记录可取时间，退到数据源级声明
+        ts = _latest_ts(company.get(key)) if key else None
+        out[fid] = ts or fallback or ""
+
+    # 冲突项：以各来源声明的取证时间为准
+    for fid, entries in (company.get("multi_source") or {}).items():
+        if isinstance(entries, list):
+            ts = _latest_ts(entries)
+            if ts:
+                out[fid] = ts
+    return out
 
 
 def fill_field_checks(
@@ -443,7 +512,14 @@ def fill_field_checks(
     # 打上来源标记：本函数产出的每一条 verified/conflicting 都来自初始档案。
     # 必须在这里标，而不是交给调用方——漏标一次，该清单在重放校验里
     # 就会被当成"来源不明的旧检查点"，走降级路径。
-    stamp_initial_profile_origin(field_checks, now)
+    #
+    # 时间戳取档案自身声明的取证时间（见 profile_retrieved_at），不是 now。
+    undated = stamp_initial_profile_origin(field_checks, profile_retrieved_at(company))
+    if undated:
+        logger.warning(
+            f"[company_profile] {company.get('name')} 有 {len(undated)} 项未声明取证时间，"
+            f"将记为证据链降级：{undated}"
+        )
 
     return field_checks
 
@@ -498,7 +574,7 @@ def verify_field_checks(
     field_checks: List[Dict[str, Any]],
     evidence_store: Optional[Dict[str, Dict]] = None,
     *,
-    allow_legacy_profile_replay: bool = True,
+    allow_legacy_profile_replay: Optional[bool] = None,
 ):
     """
     完整的证据链校验入口（v0.6）。
@@ -506,11 +582,16 @@ def verify_field_checks(
     与 `verified_profile_mismatches()` 的区别：后者只返回 mismatches，
     丢掉了 degradations——而旧检查点的降级必须被调用方看到并披露，
     不能只在日志里一闪而过。新代码一律用本函数。
+
+    `allow_legacy_profile_replay` 不传时取 `config.verification_policy.POLICY`，
+    而不是就地写一个默认值：这是授信口径开关，必须在统一配置里可见（BC-33）。
     """
+    legacy = (POLICY.allow_legacy_profile_replay
+              if allow_legacy_profile_replay is None else allow_legacy_profile_replay)
     return verify_evidence_chain(
         company, field_checks, evidence_store,
         profile_replay_fn=replay_from_profile,
-        allow_legacy_profile_replay=allow_legacy_profile_replay,
+        allow_legacy_profile_replay=legacy,
     )
 
 

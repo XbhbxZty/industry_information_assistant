@@ -89,6 +89,9 @@ def build_complete_event(state: Dict[str, Any], references: List[Dict[str, Any]]
         # 风险评级（v0.5）：level 与 gates_applied 必须同时给出，
         # 只给 composite_score 会让下游得出与等级相反的结论
         "risk_assessment": state.get("risk_assessment", {}),
+        # 证据链降级与执行错误（v0.6a 复核补充）：终局事件此前不带这些，
+        # 调用方只等最终结果就看不到"这份评级建立在来源不明的数据上"（BC-33）
+        "errors": state.get("errors", []),
     }
 
 

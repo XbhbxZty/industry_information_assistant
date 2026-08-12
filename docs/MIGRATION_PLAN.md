@@ -485,21 +485,32 @@ git 历史按 Stage 分组；README 如实说明基于课程项目二次开发�
 
 ---
 
-## v0.6a 进度：核实来源与结构化证据链（2026-08-11）
+## v0.6a 进度：核实来源与结构化证据链（2026-08-11，经一轮只读复核返工）
 
 | 项 | 状态 |
 |---|---|
 | 来源模型（闭集 + legacy 识别） | ✅ `service/verification.py` |
-| 结构化证据结构与写入口 | ✅ `record_structured_evidence()` |
-| 按来源分发重放 | ✅ `verify_evidence_chain()` |
+| 受信任适配器注册表 | ✅ `register_adapter()`，写入侧+重放侧双向校验 |
+| 结构化证据与**原子**写入口 | ✅ `record_structured_evidence()`（返工重写） |
+| 按来源分发重放 + 证据绑定校验 | ✅ `verify_evidence_chain()` |
+| 评分数据视图合并 | ✅ `build_scoring_view()` + `PROFILE_BACKED_FIELDS` |
+| 来源降级闸门 | ✅ `apply_provenance_gate()` |
+| 授信口径配置 | ✅ `config/verification_policy.py` |
 | `FieldCheck` 溯源字段 | ✅ `state.py` |
 | `ResearchState.evidence_store` | ✅ |
-| DataAnalyst 接入 + 降级披露 | ✅ |
-| 行为断言 | ✅ 22 例 |
-| 真实外部适配器 | ⬜ **本轮明确不做** |
+| DataAnalyst 接入 + 降级约束等级 | ✅ |
+| 取证时间取自档案声明 | ✅ `profile_retrieved_at()` |
+| 行为断言（含端到端评级） | ✅ 44 例 |
+| 真实外部适配器 | ⬜ **本轮明确不做**（注册表为空） |
 | Scout 升级字段状态 | ⬜ **本轮明确不做** |
 | evidence_store 持久化/SSE | ⬜ 待后续 |
-| 证据时效性策略 | ⬜ 待后续（当前只校验时间戳存在） |
+| 证据时效性策略 | ⬜ 待后续（校验时间戳合法，未校验过期） |
+| `profile_patch` 可声明替换语义 | ⬜ 待真实适配器接入时决策 |
 
-相关：`BADCASES.md` BC-28、`DESIGN_CORE_MECHANISMS.md` 第四节。
+**首版曾以 22 例全绿交付，只读复核推翻了该结论**：断言全部停在
+`verify_field_checks().ok`，未走到最终评级，因而漏掉 BC-31（证据通过校验
+却没进评分数据）等 5 个缺陷。详见 `BADCASES.md` BC-30～BC-35、
+`DESIGN_CORE_MECHANISMS.md` 第五节、`ITERATION_ROADMAP.md` v0.6a。
+
+**返工后尚未再次提交 Critic 只读复审。**
 

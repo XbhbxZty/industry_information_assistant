@@ -19,13 +19,21 @@ from .base import BaseAgent
 from ..state import ResearchState, ResearchPhase
 
 try:
-    from service.risk_scorecard import score as score_risk, unratable
+    from service.risk_scorecard import (
+        score as score_risk, unratable, apply_provenance_gate, PROFILE_BACKED_FIELDS,
+    )
     from service.company_profile import verify_field_checks
+    from service.verification import build_scoring_view
     from config.dd_checklist import compute_completeness
+    from config.verification_policy import POLICY
 except ImportError:  # 兼容以 app 为包根的导入方式
-    from app.service.risk_scorecard import score as score_risk, unratable
+    from app.service.risk_scorecard import (
+        score as score_risk, unratable, apply_provenance_gate, PROFILE_BACKED_FIELDS,
+    )
     from app.service.company_profile import verify_field_checks
+    from app.service.verification import build_scoring_view
     from app.config.dd_checklist import compute_completeness
+    from app.config.verification_policy import POLICY
 
 
 class DataAnalyst(BaseAgent):
@@ -311,13 +319,12 @@ class DataAnalyst(BaseAgent):
             # 而 fail-closed 分支自己再抛异常就彻底失去意义了
             state.setdefault("errors", []).append("风险评分：company_profile 缺失，已按不可评级处理")
         else:
+            evidence_store = state.get("evidence_store") or {}
             try:
                 # v0.6：按 verification_origin 分发重放依据，而非一律用初始档案。
                 # 结构化适配器核实的字段本就无法由初始档案重放，旧实现会把
                 # 合法增量证据误判为不一致并全面 fail-closed。
-                report = verify_field_checks(
-                    profile, checks, state.get("evidence_store") or {}
-                )
+                report = verify_field_checks(profile, checks, evidence_store)
                 # 降级必须显式披露，不能只进日志（BC-02 的教训）
                 for d in report.degradations:
                     state.setdefault("errors", []).append(
@@ -341,7 +348,32 @@ class DataAnalyst(BaseAgent):
                         f"风险评分：证据链校验失败（{fields}），已按不可评级处理"
                     )
                 else:
-                    result = score_risk(profile, checks, completeness)
+                    # 校验通过 ≠ 可以评分。评分卡读的是结构化档案，不是清单状态；
+                    # 适配器证据必须先合并进这份数据，否则新增的负面证据会被
+                    # 读成"未发现 XX"（BC-31）。合并不了就不予评级。
+                    view, unmergeable = build_scoring_view(
+                        profile, checks, evidence_store,
+                        profile_backed_fields=PROFILE_BACKED_FIELDS,
+                    )
+                    if unmergeable:
+                        fields = "、".join(m["field_id"] for m in unmergeable)
+                        result = unratable(
+                            f"结构化证据无法并入评分数据视图（{fields}），"
+                            f"评分卡会读到旧档案并可能得出相反结论，不予评级",
+                            completeness,
+                        )
+                        self.logger.error(
+                            f"[DataAnalyst] 证据无法并入评分视图，fail-closed: {fields}"
+                        )
+                        state.setdefault("errors", []).append(
+                            f"风险评分：证据未提供 profile_patch（{fields}），已按不可评级处理"
+                        )
+                    else:
+                        result = score_risk(view, checks, completeness)
+                    # 来源降级必须约束等级，不能只写进 errors（BC-33）
+                    result = apply_provenance_gate(
+                        result, report.degradations, POLICY.degraded_level_floor
+                    )
             except Exception as e:
                 # 打分本身出错同样不得静默：没有评级 ≠ 没有风险
                 result = unratable(f"风险评分执行失败（{type(e).__name__}: {e}），不予评级", completeness)
@@ -366,6 +398,9 @@ class DataAnalyst(BaseAgent):
             "requires_human_review": result["requires_human_review"],
             "credit_advice": result["credit_advice"],
             "completeness": result["completeness"],
+            # 来源降级必须随评级一起推给前端：只在 errors 里出现的话，
+            # 只看评级卡片的复核人根本不知道这份结论建立在来源不明的数据上
+            "provenance_degradations": result.get("provenance_degradations", []),
         })
         return result
 
