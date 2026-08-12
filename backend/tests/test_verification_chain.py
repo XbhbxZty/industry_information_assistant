@@ -50,6 +50,7 @@ from service.verification import (  # noqa: E402
     REASON_EVIDENCE_ADAPTER_MISMATCH, REASON_EVIDENCE_FIELD_MISMATCH,
     REASON_EVIDENCE_MISSING_TIMESTAMP, REASON_EVIDENCE_NOT_FOUND,
     REASON_EVIDENCE_NOT_MERGEABLE, REASON_EVIDENCE_VALUE_MISMATCH,
+    REASON_PATCH_FIELD_MISMATCH, REASON_PATCH_RAW_MISMATCH, REASON_PATCH_VALUE_MISMATCH,
     REASON_INVALID_ORIGIN, REASON_MISSING_CONFLICT_VALUES, REASON_MISSING_ORIGIN,
     REASON_MISSING_TIMESTAMP, REASON_NO_EVIDENCE_IDS, REASON_PROFILE_REPLAY_MISMATCH,
     REASON_TIMESTAMP_MISMATCH, REASON_UNTRUSTED_ADAPTER,
@@ -66,9 +67,26 @@ _SNAPSHOT = "2026-08-09"
 
 # 本轮没有任何真实适配器，注册表初始为空——这本身就是"闭集生效"的证据。
 # 测试自己登记两个替身，正是真实适配器上线时必须走的同一道手续。
-register_adapter("guarantee_registry", "测试替身：担保登记")
+def _guarantee_projector(field_id, raw):
+    if field_id != "guarantee" or "guarantees" not in raw:
+        return None
+    return {"guarantee": raw["guarantees"]}
+
+
+def _test_patch_projector(field_id, raw):
+    """测试专用：模拟适配器自己的确定性转换器，而不是调用方自由传 patch。"""
+    return raw.get("profile_patch")
+
+
+register_adapter(
+    "guarantee_registry", "测试替身：担保登记",
+    project_profile_patch=_guarantee_projector,
+)
 register_adapter("registry_vs_audit", "测试替身：工商 vs 审计交叉核对")
-register_adapter("other_adapter", "测试替身：另一个来源")
+register_adapter(
+    "other_adapter", "测试替身：另一个来源",
+    project_profile_patch=_test_patch_projector,
+)
 
 # 全部 20 项都已查询：核实率足够高，等级不会被总体完整度闸门吃掉，
 # 这样"评级是否反映了适配器证据"才是可观测的。
@@ -230,18 +248,20 @@ def test_档案取值被改动时fail_closed():
 # ============================== 必测 3：适配器增量证据不被错杀
 
 def _record_guarantee(store, check, *, amount=1800.0, adapter="guarantee_registry",
-                      retrieved_at=_TS):
+                      retrieved_at=_TS, supersedes=None,
+                      supersede_reason=""):
     """一次原子写入：状态、取值、证据、来源、时间全部由入口写"""
     return record_structured_evidence(
         store, check,
         source_adapter=adapter, status="verified",
-        value=f"为关联方提供连带责任保证{amount:.0f}万元",
-        profile_patch={"guarantee": [
-            {"beneficiary": "关联方甲", "guarantee_type": "连带责任保证",
-             "amount": amount, "unit": "万元"}
-        ]},
-        raw={"api": "mock_guarantee_registry", "hit": 1},
+        value=(f"为关联方甲提供连带责任保证{amount:.0f}万元"
+               "（期限未载明，内部决议情况未载明）"),
+        raw={"api": "mock_guarantee_registry", "hit": 1,
+             "guarantees": [{"beneficiary": "关联方甲", "guarantee_type": "连带责任保证",
+                              "amount": amount, "unit": "万元"}]},
         retrieved_at=retrieved_at,
+        supersedes_evidence_ids=supersedes,
+        supersede_reason=supersede_reason,
     )
 
 
@@ -303,7 +323,7 @@ def test_原子入口一次性写完状态与证据():
 
     assert (before_status, before_value) != (g["status"], g["value"]), "前提：调用前未手工改状态"
     assert g["status"] == "verified"
-    assert g["value"] == "为关联方提供连带责任保证1800万元"
+    assert g["value"] == "为关联方甲提供连带责任保证1800万元（期限未载明，内部决议情况未载明）"
     assert g["verification_origin"] == ORIGIN_STRUCTURED_ADAPTER
     assert g["source_adapter"] == "guarantee_registry"
     assert g["retrieved_at"] == _TS
@@ -403,7 +423,7 @@ def test_跨字段借用证据被拦():
     rp = _pick(checks, "related_party")
     ev = record_structured_evidence(
         store, rp, source_adapter="guarantee_registry", status="verified",
-        value="同一个取值", profile_patch={"related_party": [{"name": "甲", "relation": "同一实控人"}]},
+        value="同一个取值",
         raw={"x": 1}, retrieved_at=_TS)
 
     g = _pick(checks, "guarantee")
@@ -471,7 +491,7 @@ def test_网页来源伪装成结构化适配器被拦():
     assert REASON_UNTRUSTED_ADAPTER in _reasons(report)
 
 
-def test_同字段两个不同取值标verified被拦():
+def test_同字段新证据明确替代旧证据():
     """
     这正是系统一直防范的 conflict_silently_resolved，只是发生在证据层：
     5000万和1500万同时存在，却单方面采信其一标成已核实。
@@ -479,13 +499,35 @@ def test_同字段两个不同取值标verified被拦():
     checks = _filled_checks()
     store = {}
     g = _pick(checks, "guarantee")
-    _record_guarantee(store, g, amount=5000.0)
-    _record_guarantee(store, g, amount=1500.0)
-    g["value"] = "为关联方提供连带责任保证5000万元"
+    first = _record_guarantee(store, g, amount=5000.0)
+    second = _record_guarantee(
+        store, g, amount=1500.0, supersedes=[first],
+        supersede_reason="登记接口返回了更新后的有效记录",
+    )
 
     report = verify_field_checks(_COMPANY, checks, store)
-    assert not report.ok
-    assert REASON_CONFLICT_SILENTLY_RESOLVED in _reasons(report)
+    assert report.ok, "新结论明确替代旧结论时，历史证据不应被误当成当前多源冲突"
+    assert g["evidence_ids"] == [second]
+    assert store[first]["active"] is False
+    assert store[first]["superseded_by"] == second
+    assert store[second]["supersedes"] == [first]
+    assert store[second]["supersede_reason"]
+
+
+def test_已有当前证据时不得隐式覆盖():
+    checks = _filled_checks()
+    store = {}
+    g = _pick(checks, "guarantee")
+    first = _record_guarantee(store, g, amount=5000.0)
+    before_check = dict(g)
+    before_store = {k: dict(v) for k, v in store.items()}
+
+    msg = _raises(_record_guarantee, store, g, amount=1500.0)
+
+    assert "supersedes_evidence_ids" in msg
+    assert g == before_check
+    assert store == before_store
+    assert g["evidence_ids"] == [first]
 
 
 def test_conflict_detail与证据不一致被拦():
@@ -708,7 +750,8 @@ def test_证据无法并入评分视图时不予评级():
         raw={"x": 1}, retrieved_at=_TS)          # 刻意不给 profile_patch
 
     view, unmergeable = build_scoring_view(
-        _COMPANY, checks, store, profile_backed_fields=PROFILE_BACKED_FIELDS)
+        _COMPANY, checks, store, profile_backed_fields=PROFILE_BACKED_FIELDS,
+        profile_replay_fn=replay_from_profile)
     assert unmergeable and unmergeable[0]["reason"] == REASON_EVIDENCE_NOT_MERGEABLE
     assert not view.get("guarantee"), "前提：证据确实没能进档案"
 
@@ -717,6 +760,139 @@ def test_证据无法并入评分视图时不予评级():
     assert result["level"] == INSUFFICIENT
     assert result["requires_human_review"]
     assert any("profile_patch" in e for e in state["errors"])
+
+
+def test_profile_patch声称有担保却写空列表时不予评级():
+    """BC-36：patch 非空不等于内容可信，必须与清单 value 重放一致。"""
+    checks = _filled_checks()
+    store = {}
+    g = _pick(checks, "guarantee")
+    record_structured_evidence(
+        store, g, source_adapter="guarantee_registry", status="verified",
+        value="存在1800万元对外担保",
+        raw={"guarantees": []}, retrieved_at=_TS,
+    )
+
+    view, unmergeable = build_scoring_view(
+        _COMPANY, checks, store, profile_backed_fields=PROFILE_BACKED_FIELDS,
+        profile_replay_fn=replay_from_profile,
+    )
+    assert any(m["reason"] == REASON_PATCH_VALUE_MISMATCH for m in unmergeable)
+    assert not view.get("guarantee")
+    result = _analyst().assess_risk(_dd_state(checks=checks, evidence_store=store))
+    assert result["level"] == INSUFFICIENT
+    assert all("未发现对外担保" not in r["detail"] for r in result["triggered_rules"])
+
+
+def test_证据库patch事后偏离raw时重放失败():
+    checks = _filled_checks()
+    store = {}
+    g = _pick(checks, "guarantee")
+    ev_id = _record_guarantee(store, g)
+    store[ev_id]["profile_patch"] = {"guarantee": []}
+    report = verify_field_checks(_COMPANY, checks, store)
+    assert not report.ok
+    assert REASON_PATCH_RAW_MISMATCH in _reasons(report)
+
+
+def test_担保证据不得借patch修改财务数据():
+    """BC-36：字段级证据只能修改登记过的对应档案切片。"""
+    checks = _filled_checks()
+    store = {}
+    g = _pick(checks, "guarantee")
+    msg = _raises(
+        record_structured_evidence, store, g,
+        source_adapter="other_adapter", status="verified",
+        value="经查询，无相关记录",
+        profile_patch={"guarantee": [], "financials": [{"period": "2099", "debt_ratio": 0.01}]},
+        raw={"profile_patch": {"guarantee": [],
+                                "financials": [{"period": "2099", "debt_ratio": 0.01}]}},
+        retrieved_at=_TS,
+    )
+    assert "只能修改" in msg
+    assert not store, "越权 patch 必须在写入共享状态前失败"
+
+
+def test_财务patch不得夹带其他财务指标():
+    checks = _filled_checks()
+    store = {}
+    debt = _pick(checks, "debt_ratio")
+    msg = _raises(
+        record_structured_evidence, store, debt,
+        source_adapter="other_adapter", status="verified", value="2025 20.0%",
+        profile_patch={"financials": [{"period": "2025", "debt_ratio": 0.2,
+                                        "net_profit": 9999.0}]},
+        raw={"profile_patch": {"financials": [{"period": "2025", "debt_ratio": 0.2,
+                                                  "net_profit": 9999.0}]}},
+        retrieved_at=_TS,
+    )
+    assert "不得借 financials" in msg
+    assert not store
+
+
+def test_混合时区异常不留下半提交状态():
+    """BC-37：合法 ISO 的 naive/aware 混用不得在写到一半后炸掉。"""
+    checks = _filled_checks()
+    store = {}
+    g = _pick(checks, "guarantee")
+    first = _record_guarantee(store, g, retrieved_at="2026-08-11T00:00:00")
+    second = _record_guarantee(
+        store, g, amount=1900.0,
+        retrieved_at="2026-08-11T01:00:00+00:00",
+        supersedes=[first], supersede_reason="同一接口的后续查询结果",
+    )
+    assert g["evidence_ids"] == [second]
+    assert store[first]["superseded_by"] == second
+    assert verify_field_checks(_COMPANY, checks, store).ok
+
+
+def test_过期证据覆盖失败时保持原状态不变():
+    checks = _filled_checks()
+    store = {}
+    g = _pick(checks, "guarantee")
+    first = _record_guarantee(store, g, retrieved_at="2026-08-11T12:00:00Z")
+    before_check = dict(g)
+    before_store = {k: dict(v) for k, v in store.items()}
+    msg = _raises(_record_guarantee, store, g, amount=100.0,
+                  retrieved_at="2026-08-11T11:59:59+00:00",
+                  supersedes=[first], supersede_reason="尝试用旧快照更新")
+    assert "旧数据覆盖新结论" in msg
+    assert g == before_check
+    assert store == before_store
+    assert g["evidence_ids"] == [first]
+
+
+def test_当前证据链损坏时不得借新写入静默修复():
+    checks = _filled_checks()
+    store = {}
+    g = _pick(checks, "guarantee")
+    missing_id = "ev_missing"
+    g["evidence_ids"] = [missing_id]
+    before_check = dict(g)
+
+    msg = _raises(
+        _record_guarantee, store, g, amount=1900.0,
+        supersedes=[missing_id], supersede_reason="错误的修复尝试",
+    )
+
+    assert "静默修复断链" in msg
+    assert g == before_check
+    assert not store
+
+
+def test_结构化规则引用证据且终局可解引用():
+    """BC-39：扣分规则不能只给一个无法在终局载荷中找到的悬空 ID。"""
+    checks = _filled_checks()
+    store = {}
+    ev_id = _record_guarantee(store, _pick(checks, "guarantee"))
+    state = _dd_state(checks=checks, evidence_store=store)
+    result = _analyst().assess_risk(state)
+    rule = _rule(result, "guarantee")[0]
+    assert rule["evidence"] == [ev_id]
+
+    complete = build_complete_event(state, [])
+    assert ev_id in complete["evidence_store"]
+    assert complete["evidence_store"][ev_id]["raw"]
 
 
 def test_来源降级不得自动落到低风险():
@@ -800,7 +976,8 @@ def test_评分视图合并采用追加而非替换():
     store = {}
     _record_guarantee(store, _pick(checks, "guarantee"), amount=1800.0)
     view, unmergeable = build_scoring_view(
-        company, checks, store, profile_backed_fields=PROFILE_BACKED_FIELDS)
+        company, checks, store, profile_backed_fields=PROFILE_BACKED_FIELDS,
+        profile_replay_fn=replay_from_profile)
     assert not unmergeable
     assert len(view["guarantee"]) == 2, "档案原有记录不得被适配器覆盖"
     assert company["guarantee"] and len(company["guarantee"]) == 1, "不得就地修改入参档案"

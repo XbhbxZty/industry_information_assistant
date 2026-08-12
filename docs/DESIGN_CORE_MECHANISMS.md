@@ -682,6 +682,14 @@ verification_origin / evidence_ids / source_adapter / retrieved_at，
 **合并不了就不予评级**。合并采用追加而非替换——追加最多重复计数（偏保守），
 替换会抹掉档案已有的负面记录（偏冒进）。
 
+> **📌 第二次更正（BC-36）**：`profile_patch` 非空仍不足以证明内容可信。
+> patch 由注册适配器的纯函数从 raw 确定性投影，调用方不得自由决定评分数据；
+> 写入侧按字段限制允许修改的档案路径，并对 financials / judicial_records 等
+> 共享容器限制子字段；评分前在仅含 patch 的最小档案上复用生产清单映射重放，
+> 重放状态与值必须等于当前 check。否则“存在1800万担保”的 value 仍可搭配
+> `guarantee=[]`，或者借担保证据注入虚假财务数据。证据链重放还会再次从 raw
+> 投影 patch，防止检查点恢复后两者漂移。
+
 > 这是 BC-19 的同形复发，入口从"档案没进 state"换成"证据没进档案"。
 > **修一个缺陷时要问：这个形态还有哪些别的入口？**
 
@@ -733,11 +741,24 @@ report.degradations  # 来源或取证时间不明 → 必须披露，且必须�
 
 **中间报告为真，不代表最终决定为真。**
 
-### 5.11 本轮明确未做
+### 5.11 证据写入的原子性、版本与终局引用
+
+- 写入口先完成时间规范化、patch 边界、状态组合等全部校验，再提交共享对象；
+  “同一个函数写两个对象”不是原子性的充分条件，异常后对象不变才是（BC-37）
+- `field_check.evidence_ids` 只表示当前结论使用的证据；旧证据留在 evidence_store，
+  以 `active=False / superseded_by / supersedes` 保存审计历史（BC-38）
+- 已有当前证据时，后续写入必须显式声明完整 `supersedes_evidence_ids` 和
+  `supersede_reason`；“再次调用”本身不构成替代授权，断链也不得靠新写入掩盖（BC-40）
+- `triggered_rules[].evidence` 对结构化来源引用 evidence_id；终局事件同载
+  evidence_store，保证从规则能一路追到 raw（BC-39）
+
+### 5.12 本轮明确未做
 
 - 未实现任何真实外部适配器（`_TRUSTED_ADAPTERS` 为空，只有测试替身登记）
 - 未让 Scout 把任何字段升级为 verified
-- 未把 evidence_store 接入检查点持久化与 SSE
+- evidence_store 已进入终局 `research_complete`；未实现独立的增量 SSE 证据事件
+- evidence_store 随 `ResearchState` 进入通用检查点 `state_json`；尚无针对证据版本
+  迁移与恢复的独立回归用例
 - 未处理证据时效性策略（校验时间戳存在且合法，未校验是否过期）
-- `profile_patch` 的合并语义只有"追加"一种，真实适配器上线时可能需要
+- `profile_patch` 已限制字段路径并重放校验；合并语义仍只有"追加"一种，真实适配器上线时可能需要
   可声明的替换语义

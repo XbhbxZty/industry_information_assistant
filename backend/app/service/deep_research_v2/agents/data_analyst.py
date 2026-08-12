@@ -22,7 +22,7 @@ try:
     from service.risk_scorecard import (
         score as score_risk, unratable, apply_provenance_gate, PROFILE_BACKED_FIELDS,
     )
-    from service.company_profile import verify_field_checks
+    from service.company_profile import replay_from_profile, verify_field_checks
     from service.verification import build_scoring_view
     from config.dd_checklist import compute_completeness
     from config.verification_policy import POLICY
@@ -30,7 +30,7 @@ except ImportError:  # 兼容以 app 为包根的导入方式
     from app.service.risk_scorecard import (
         score as score_risk, unratable, apply_provenance_gate, PROFILE_BACKED_FIELDS,
     )
-    from app.service.company_profile import verify_field_checks
+    from app.service.company_profile import replay_from_profile, verify_field_checks
     from app.service.verification import build_scoring_view
     from app.config.dd_checklist import compute_completeness
     from app.config.verification_policy import POLICY
@@ -354,6 +354,7 @@ class DataAnalyst(BaseAgent):
                     view, unmergeable = build_scoring_view(
                         profile, checks, evidence_store,
                         profile_backed_fields=PROFILE_BACKED_FIELDS,
+                        profile_replay_fn=replay_from_profile,
                     )
                     if unmergeable:
                         fields = "、".join(m["field_id"] for m in unmergeable)

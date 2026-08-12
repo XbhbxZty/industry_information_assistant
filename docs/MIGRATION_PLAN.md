@@ -493,17 +493,19 @@ git 历史按 Stage 分组；README 如实说明基于课程项目二次开发�
 | 受信任适配器注册表 | ✅ `register_adapter()`，写入侧+重放侧双向校验 |
 | 结构化证据与**原子**写入口 | ✅ `record_structured_evidence()`（返工重写） |
 | 按来源分发重放 + 证据绑定校验 | ✅ `verify_evidence_chain()` |
-| 评分数据视图合并 | ✅ `build_scoring_view()` + `PROFILE_BACKED_FIELDS` |
+| 评分数据视图合并 | ✅ raw→patch 注册投影器 + 字段/子路径白名单 + patch 生产映射重放 |
 | 来源降级闸门 | ✅ `apply_provenance_gate()` |
 | 授信口径配置 | ✅ `config/verification_policy.py` |
 | `FieldCheck` 溯源字段 | ✅ `state.py` |
 | `ResearchState.evidence_store` | ✅ |
 | DataAnalyst 接入 + 降级约束等级 | ✅ |
 | 取证时间取自档案声明 | ✅ `profile_retrieved_at()` |
-| 行为断言（含端到端评级） | ✅ 44 例 |
+| 行为断言（含端到端评级） | ✅ 53 例 |
 | 真实外部适配器 | ⬜ **本轮明确不做**（注册表为空） |
 | Scout 升级字段状态 | ⬜ **本轮明确不做** |
-| evidence_store 持久化/SSE | ⬜ 待后续 |
+| evidence_store 终局输出 | ✅ `research_complete` 可解引用规则中的 evidence_id |
+| evidence_store 检查点 | ✅ 随 `ResearchState` 通用持久化；独立迁移/恢复回归待补 |
+| evidence_store 独立增量 SSE | ⬜ 待后续 |
 | 证据时效性策略 | ⬜ 待后续（校验时间戳合法，未校验过期） |
 | `profile_patch` 可声明替换语义 | ⬜ 待真实适配器接入时决策 |
 
@@ -512,5 +514,7 @@ git 历史按 Stage 分组；README 如实说明基于课程项目二次开发�
 却没进评分数据）等 5 个缺陷。详见 `BADCASES.md` BC-30～BC-35、
 `DESIGN_CORE_MECHANISMS.md` 第五节、`ITERATION_ROADMAP.md` v0.6a。
 
-**返工后尚未再次提交 Critic 只读复审。**
+第二轮复审继续暴露 BC-36～BC-40，现已由 Codex 接手修复：patch 与证据内容及
+字段路径绑定、异常原子性、显式且可审计的证据替代关系、规则到 raw 的终局可追溯性。
+当前专项 53/53 及既有确定性回归全绿，**仍待另一个 Agent 独立复审，不自行封板**。
 

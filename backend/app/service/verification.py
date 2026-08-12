@@ -37,8 +37,9 @@
 - 只建立来源模型、证据结构、重放分发、评分视图与行为断言
 """
 from copy import deepcopy
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, TypedDict
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypedDict
+import re
 import uuid
 
 
@@ -74,19 +75,29 @@ EVIDENCE_REQUIRED_STATUSES = frozenset({STATUS_VERIFIED, STATUS_CONFLICTING})
 # 为什么必须是注册表而不是"调用方传什么就是什么"：写入口一旦接受任意字符串，
 # 调用方传 `source_adapter="web_search"` 就能让网页检索获得结构化核实身份——
 # 规则 2 的闭集会被绕过。这不是假想：v0.6a 首版就有这个洞（BC-32）。
-_TRUSTED_ADAPTERS: Dict[str, str] = {}
+_TRUSTED_ADAPTERS: Dict[str, Dict[str, Any]] = {}
 
 
-def register_adapter(adapter_id: str, description: str) -> None:
+def register_adapter(
+    adapter_id: str,
+    description: str,
+    *,
+    project_profile_patch: Optional[Callable[[str, Dict[str, Any]], Optional[Dict[str, Any]]]] = None,
+) -> None:
     """
     登记一个受信任的结构化数据源适配器。
 
     只有真正返回**结构化字段**、且能在重放时做等值比对的数据源才可登记。
+    会影响评分档案的适配器必须同时登记 `project_profile_patch` 纯函数，
+    由它从 raw 确定性生成 patch；调用方不能自由决定进入评分的数据。
     通用网页检索、LLM 抽取一律不得登记——它们产出的是自然语言。
     """
     if not adapter_id or not isinstance(adapter_id, str):
         raise ValueError("adapter_id 必须是非空字符串")
-    _TRUSTED_ADAPTERS[adapter_id] = description
+    _TRUSTED_ADAPTERS[adapter_id] = {
+        "description": description,
+        "project_profile_patch": project_profile_patch,
+    }
 
 
 def unregister_adapter(adapter_id: str) -> None:
@@ -99,7 +110,21 @@ def is_trusted_adapter(adapter_id: str) -> bool:
 
 
 def trusted_adapters() -> Dict[str, str]:
-    return dict(_TRUSTED_ADAPTERS)
+    return {k: v["description"] for k, v in _TRUSTED_ADAPTERS.items()}
+
+
+def _project_registered_patch(
+    adapter_id: str,
+    field_id: str,
+    raw: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    projector = (_TRUSTED_ADAPTERS.get(adapter_id) or {}).get("project_profile_patch")
+    if projector is None:
+        return None
+    projected = projector(field_id, deepcopy(raw))
+    if projected is not None and not isinstance(projected, dict):
+        raise ValueError("适配器 profile patch 投影器必须返回 dict 或 None")
+    return projected
 
 
 class StructuredEvidence(TypedDict, total=False):
@@ -112,6 +137,7 @@ class StructuredEvidence(TypedDict, total=False):
     `profile_patch` 是本轮补上的关键字段：证据不仅要能被校验，还必须能
     **合并进评分卡真正读取的那份结构化数据**。只有 `value`（展示用字符串）
     的证据通不过评分视图构建，会导致不予评级而不是被当成"无风险"。
+    patch 必须由已注册适配器从 raw 确定性投影，而非调用方自由填写。
     """
     evidence_id: str
     field_id: str
@@ -121,6 +147,10 @@ class StructuredEvidence(TypedDict, total=False):
     conflict_values: List[Dict[str, Any]]   # conflicting 时各来源取值
     profile_patch: Dict[str, Any]           # 可合并进评分数据视图的档案片段
     raw: Dict[str, Any]        # 适配器原始返回，供人工追溯
+    active: bool               # 是否为字段当前结论使用的证据
+    supersedes: List[str]      # 本证据替代了哪些旧证据
+    supersede_reason: str      # 显式替代原因；首次写入为空
+    superseded_by: str         # 被哪条新证据替代；仅历史证据存在
 
 
 # ---------------------------------------------------------------- 失败原因
@@ -149,6 +179,10 @@ REASON_VERIFIED_WITHOUT_VALUE = "verified_without_value"
 
 # —— 评分视图（BC-31）——
 REASON_EVIDENCE_NOT_MERGEABLE = "evidence_not_mergeable"
+REASON_PATCH_FIELD_MISMATCH = "profile_patch_field_mismatch"
+REASON_PATCH_VALUE_MISMATCH = "profile_patch_value_mismatch"
+REASON_PATCH_RAW_MISMATCH = "profile_patch_raw_mismatch"
+REASON_EVIDENCE_INACTIVE = "evidence_inactive"
 
 
 def _fail(field_check: Dict, reason: str, detail: str, **extra) -> Dict[str, Any]:
@@ -173,6 +207,92 @@ def parse_iso(ts: Any) -> Optional[datetime]:
         return None
 
 
+def _timestamp_key(ts: Any) -> Optional[datetime]:
+    """把有/无时区的 ISO 时间统一成 UTC naive 值，供安全排序与比较。"""
+    parsed = parse_iso(ts)
+    if parsed is None:
+        return None
+    if parsed.tzinfo is None:
+        return parsed
+    return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+# 字段证据只能修改评分卡消费的对应档案切片。共享容器进一步限制子字段，
+# 避免“核实担保”时顺带注入一条虚假财务期（BC-36）。
+_PATCH_TOP_LEVEL_KEY: Dict[str, str] = {
+    "debt_ratio": "financials",
+    "net_profit": "financials",
+    "revenue": "financials",
+    "cash_flow": "financials",
+    "litigation": "judicial_records",
+    "enforcement": "judicial_records",
+    "dishonesty": "judicial_records",
+    "guarantee": "guarantee",
+    "guarantee_circle": "guarantee_circle",
+    "operating_status": "registration",
+    "bidding_record": "bidding_records",
+    "negative_news": "negative_news",
+    "regulatory_penalty": "regulatory_penalty",
+}
+
+_FINANCIAL_PATCH_VALUE_KEY = {
+    "debt_ratio": "debt_ratio",
+    "net_profit": "net_profit",
+    "revenue": "revenue",
+    "cash_flow": "operating_cash_flow",
+}
+
+_JUDICIAL_TYPE = {
+    "litigation": "涉诉",
+    "enforcement": "被执行",
+    "dishonesty": "失信",
+}
+
+
+def _validate_profile_patch_shape(field_id: str, patch: Optional[Dict[str, Any]]) -> None:
+    """拒绝跨字段 patch；只验证结构，内容一致性在评分前由生产映射重放。"""
+    if not patch:
+        return
+    if not isinstance(patch, dict):
+        raise ValueError("profile_patch 必须是字典")
+    allowed_top = _PATCH_TOP_LEVEL_KEY.get(field_id)
+    if allowed_top is None:
+        raise ValueError(f"字段 {field_id!r} 未登记评分 patch 映射，不得提交 profile_patch")
+    if set(patch) != {allowed_top}:
+        raise ValueError(
+            f"字段 {field_id!r} 的 profile_patch 只能修改 {allowed_top!r}，"
+            f"实际包含 {sorted(patch)}"
+        )
+
+    payload = patch[allowed_top]
+    if field_id in _FINANCIAL_PATCH_VALUE_KEY:
+        if not isinstance(payload, list) or not payload:
+            raise ValueError(f"字段 {field_id!r} 的 financials patch 必须是非空列表")
+        value_key = _FINANCIAL_PATCH_VALUE_KEY[field_id]
+        allowed = {"period", value_key, "retrieved_at"}
+        for row in payload:
+            if not isinstance(row, dict) or value_key not in row or not row.get("period"):
+                raise ValueError(f"字段 {field_id!r} 的每个财务期必须包含 period 与 {value_key}")
+            if set(row) - allowed:
+                raise ValueError(
+                    f"字段 {field_id!r} 不得借 financials patch 修改 {sorted(set(row) - allowed)}"
+                )
+    elif field_id in _JUDICIAL_TYPE:
+        if not isinstance(payload, list):
+            raise ValueError(f"字段 {field_id!r} 的 judicial_records patch 必须是列表")
+        wrong = [r.get("type") for r in payload
+                 if not isinstance(r, dict) or r.get("type") != _JUDICIAL_TYPE[field_id]]
+        if wrong:
+            raise ValueError(
+                f"字段 {field_id!r} 只能提交 type={_JUDICIAL_TYPE[field_id]!r} 的司法记录"
+            )
+    elif field_id == "operating_status":
+        if not isinstance(payload, dict) or set(payload) != {"operating_status"}:
+            raise ValueError("operating_status 只能修改 registration.operating_status")
+    elif not isinstance(payload, list):
+        raise ValueError(f"字段 {field_id!r} 的 {allowed_top} patch 必须是列表")
+
+
 # ---------------------------------------------------------------- 证据写入
 
 def new_evidence_id(field_id: str) -> str:
@@ -192,6 +312,14 @@ def _hashable(v: Any) -> Any:
     return repr(v)
 
 
+def _normalized_display(v: Any) -> Any:
+    """只消除结构化数值渲染中的无意义差异（1800 与 1800.0），不做语义猜测。"""
+    if not isinstance(v, str):
+        return v
+    compact = re.sub(r"\s+", "", v)
+    return re.sub(r"(?<=\d)\.0+(?=\D|$)", "", compact)
+
+
 def record_structured_evidence(
     evidence_store: Dict[str, Dict],
     field_check: Dict,
@@ -204,6 +332,8 @@ def record_structured_evidence(
     raw: Dict[str, Any],
     retrieved_at: str,
     failure_reason: str = "",
+    supersedes_evidence_ids: Optional[List[str]] = None,
+    supersede_reason: str = "",
 ) -> str:
     """
     结构化适配器核实字段时的**唯一原子写入口**。
@@ -219,6 +349,13 @@ def record_structured_evidence(
 
     非法组合直接抛 `ValueError`：适配器传错参数是编程错误，应当当场炸掉，
     而不是写进证据库等重放时才发现。
+
+    `profile_patch` 参数仅作为迁移期的可选一致性断言：若传入，必须等于注册
+    投影器从 raw 生成的结果；真正写入 evidence_store 的始终是投影器产物。
+
+    字段已有当前证据时，调用方还必须明确提交完整的
+    `supersedes_evidence_ids` 与非空 `supersede_reason`；调用顺序不自动代表
+    版本替代，避免把多来源冲突静默覆盖成单一结论（BC-40）。
     """
     if not is_trusted_adapter(source_adapter):
         raise ValueError(
@@ -233,8 +370,26 @@ def record_structured_evidence(
         )
     if not raw:
         raise ValueError("raw 不得为空：适配器原始返回是人工追溯的唯一依据")
-    if parse_iso(retrieved_at) is None:
+    cur = _timestamp_key(retrieved_at)
+    if cur is None:
         raise ValueError(f"retrieved_at {retrieved_at!r} 不是合法 ISO 时间")
+
+    field_id = field_check.get("field_id")
+    if not field_id:
+        raise ValueError("field_check 缺少 field_id")
+    projected_patch = _project_registered_patch(source_adapter, field_id, raw)
+    if projected_patch is not None:
+        if profile_patch is not None and profile_patch != projected_patch:
+            raise ValueError(
+                "调用方提交的 profile_patch 与受信任适配器从 raw 确定性投影的结果不一致"
+            )
+        profile_patch = projected_patch
+    elif profile_patch:
+        raise ValueError(
+            f"适配器 {source_adapter!r} 未登记 profile patch 投影器；"
+            "调用方不得自由决定进入评分的数据"
+        )
+    _validate_profile_patch_shape(field_id, profile_patch)
 
     if status == STATUS_VERIFIED:
         if value in (None, ""):
@@ -253,42 +408,83 @@ def record_structured_evidence(
                 f"同源同值凑不出分歧"
             )
 
-    ev_id = new_evidence_id(field_check["field_id"])
-    evidence_store[ev_id] = {
+    # 先完成所有可能失败的计算，再一次性提交两个共享对象。此前 naive/aware
+    # 时间比较会在写入一半后抛错，留下无法重放的半状态（BC-37）。
+    previous_ids = list(field_check.get("evidence_ids") or [])
+    declared_supersedes = list(supersedes_evidence_ids or [])
+    if previous_ids:
+        if set(declared_supersedes) != set(previous_ids):
+            raise ValueError(
+                "字段已有当前证据；更新结论时必须通过 supersedes_evidence_ids "
+                "明确声明要替代的完整证据集合"
+            )
+        if not supersede_reason.strip():
+            raise ValueError("替代已有证据时必须提供非空 supersede_reason，保留审计原因")
+    elif declared_supersedes:
+        raise ValueError("字段没有当前证据，不得声明 supersedes_evidence_ids")
+
+    previous_times = []
+    for eid in previous_ids:
+        old = evidence_store.get(eid)
+        if old is None:
+            raise ValueError(f"当前证据 {eid!r} 不存在，不得通过新写入静默修复断链")
+        if old.get("field_id") != field_id:
+            raise ValueError(f"当前证据 {eid!r} 属于其他字段，不得通过新写入静默改写")
+        if old.get("active") is False or old.get("superseded_by"):
+            raise ValueError(f"当前证据 {eid!r} 已失效，不得再次作为被替代版本")
+        old_ts = _timestamp_key(old.get("retrieved_at"))
+        if old_ts is None:
+            raise ValueError(f"当前证据 {eid!r} 缺少合法时间，不得通过新写入掩盖")
+        previous_times.append((old_ts, eid))
+    newest_previous = max((ts for ts, _ in previous_times), default=None)
+    if newest_previous is not None and cur < newest_previous:
+        raise ValueError(
+            f"retrieved_at {retrieved_at!r} 早于当前有效证据时间，"
+            "不得用旧数据覆盖新结论"
+        )
+
+    ev_id = new_evidence_id(field_id)
+    new_evidence = {
         "evidence_id": ev_id,
-        "field_id": field_check["field_id"],
+        "field_id": field_id,
         "source_adapter": source_adapter,
         "retrieved_at": retrieved_at,
         "value": value,
         "conflict_values": list(conflict_values or []),
         "profile_patch": deepcopy(profile_patch) if profile_patch else {},
         "raw": deepcopy(raw),
+        "active": True,
+        "supersedes": previous_ids,
+        "supersede_reason": supersede_reason.strip(),
     }
-
-    # —— 状态与证据在同一次调用里落定，不留漂移窗口 ——
-    field_check["status"] = status
-    field_check["verification_origin"] = ORIGIN_STRUCTURED_ADAPTER
-    field_check["source_adapter"] = source_adapter
-    field_check["failure_reason"] = failure_reason
-    field_check.setdefault("evidence_ids", []).append(ev_id)
-
+    new_check = deepcopy(field_check)
+    new_check["status"] = status
+    new_check["verification_origin"] = ORIGIN_STRUCTURED_ADAPTER
+    new_check["source_adapter"] = source_adapter
+    new_check["failure_reason"] = failure_reason
+    # evidence_ids 是“当前结论使用的证据”，不是无界历史列表。历史仍保留在
+    # evidence_store，并以 active/superseded_by 显式标记（BC-38）。
+    new_check["evidence_ids"] = [ev_id]
     if status == STATUS_VERIFIED:
-        field_check["value"] = value
-        field_check["conflict_detail"] = []
+        new_check["value"] = value
+        new_check["conflict_detail"] = []
     else:
-        field_check["value"] = None
-        detail = field_check.setdefault("conflict_detail", [])
-        for e in (conflict_values or []):
-            detail.append({"source": e.get("source"), "value": e.get("value"),
-                           "retrieved_at": e.get("retrieved_at", retrieved_at)})
+        new_check["value"] = None
+        new_check["conflict_detail"] = [
+            {"source": e.get("source"), "value": e.get("value"),
+             "retrieved_at": e.get("retrieved_at", retrieved_at)}
+            for e in (conflict_values or [])
+        ]
+    new_check["retrieved_at"] = retrieved_at
 
-    # 多条证据时取最新时间：check 上的时间戳代表"该结论最近一次取证于何时"
-    prev = parse_iso(field_check.get("retrieved_at"))
-    cur = parse_iso(retrieved_at)
-    field_check["retrieved_at"] = (
-        retrieved_at if prev is None or (cur and cur >= prev)
-        else field_check["retrieved_at"]
-    )
+    for old_id in previous_ids:
+        old = evidence_store.get(old_id)
+        if old is not None:
+            old["active"] = False
+            old["superseded_by"] = ev_id
+    evidence_store[ev_id] = new_evidence
+    field_check.clear()
+    field_check.update(new_check)
     return ev_id
 
 
@@ -386,6 +582,12 @@ def _replay_structured(check: Dict, evidence_store: Dict[str, Dict]) -> Optional
 
     fid = check.get("field_id")
     for ev in found:
+        if ev.get("active") is False or ev.get("superseded_by"):
+            return _fail(
+                check, REASON_EVIDENCE_INACTIVE,
+                f"证据 {ev.get('evidence_id')} 已被 {ev.get('superseded_by')} 替代，"
+                "历史证据不得继续支撑当前结论",
+            )
         # —— 字段绑定：证据不得跨字段借用 ——
         if ev.get("field_id") != fid:
             return _fail(
@@ -418,15 +620,36 @@ def _replay_structured(check: Dict, evidence_store: Dict[str, Dict]) -> Optional
                 check, REASON_EVIDENCE_MISSING_RAW,
                 f"证据 {ev.get('evidence_id')} 缺少 raw，人工复核无从追溯原始返回",
             )
+        # 写入时由注册投影器生成还不够：检查点/证据库可能事后漂移。
+        # 重放必须再次从 raw 投影并与存储 patch 比对（BC-36）。
+        try:
+            projected = _project_registered_patch(adapter, fid, ev.get("raw"))
+        except Exception as exc:
+            return _fail(
+                check, REASON_PATCH_RAW_MISMATCH,
+                f"证据 {ev.get('evidence_id')} 无法从 raw 重建 profile_patch：{exc}",
+            )
+        stored_patch = ev.get("profile_patch") or {}
+        if stored_patch and projected is None:
+            return _fail(
+                check, REASON_PATCH_RAW_MISMATCH,
+                f"证据 {ev.get('evidence_id')} 保存了 profile_patch，"
+                "但当前注册适配器无法从 raw 重建它",
+            )
+        if projected is not None and projected != stored_patch:
+            return _fail(
+                check, REASON_PATCH_RAW_MISMATCH,
+                f"证据 {ev.get('evidence_id')} 的 profile_patch 与其 raw 的确定性投影不一致",
+            )
 
     # —— check 上的时间戳必须等于最新一条证据的时间 ——
-    latest = max(parse_iso(ev["retrieved_at"]) for ev in found)
-    check_ts = parse_iso(check.get("retrieved_at"))
+    latest = max(_timestamp_key(ev["retrieved_at"]) for ev in found)
+    check_ts = _timestamp_key(check.get("retrieved_at"))
     if check_ts is None or check_ts != latest:
         return _fail(
             check, REASON_TIMESTAMP_MISMATCH,
             f"清单时间戳 {check.get('retrieved_at')!r} 与最新证据时间 "
-            f"{latest.isoformat()} 不一致",
+            f"{latest.isoformat()}（统一为 UTC 后比较）不一致",
         )
 
     if check.get("status") == STATUS_CONFLICTING:
@@ -636,6 +859,7 @@ def build_scoring_view(
     evidence_store: Optional[Dict[str, Dict]] = None,
     *,
     profile_backed_fields: frozenset,
+    profile_replay_fn: Optional[Callable] = None,
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """
     构造评分卡真正消费的那份结构化数据。
@@ -667,10 +891,16 @@ def build_scoring_view(
             # 该字段的风险贡献不从档案取值（如纯状态型判断），无需合并
             continue
 
-        patches = [
-            (evidence_store.get(e) or {}).get("profile_patch")
+        # conflicting 不参与具体分值计算，由冲突闸门上调等级；把互相矛盾的
+        # patch 合并进评分档案反而会形成一份不存在的“综合事实”。
+        if check.get("status") == STATUS_CONFLICTING:
+            continue
+
+        current_evidence = [
+            evidence_store.get(e) or {}
             for e in (check.get("evidence_ids") or [])
         ]
+        patches = [ev.get("profile_patch") for ev in current_evidence]
         applied = [p for p in patches if p]
         if not applied:
             unmergeable.append(_fail(
@@ -680,6 +910,54 @@ def build_scoring_view(
             ))
             continue
         for p in applied:
+            try:
+                _validate_profile_patch_shape(fid, p)
+            except ValueError as exc:
+                unmergeable.append(_fail(
+                    check, REASON_PATCH_FIELD_MISMATCH,
+                    f"字段 {fid} 的 profile_patch 越权或结构非法：{exc}",
+                ))
+                continue
+
+            if profile_replay_fn is None:
+                unmergeable.append(_fail(
+                    check, REASON_PATCH_VALUE_MISMATCH,
+                    f"字段 {fid} 无法使用生产清单映射重放 profile_patch；"
+                    "仅凭 patch 非空不足以证明它与证据结论一致",
+                ))
+                continue
+
+            # 在“仅含本 patch”的最小档案上运行生产字段映射。这样比较的是
+            # patch 自己表达的结论，而不是它与旧档案合并后的聚合文案。
+            # 例如 value 声称“存在1800万担保”而 patch 写 guarantee=[]，
+            # 会被重放成“经查询，无相关记录”并 fail-closed（BC-36）。
+            patch_company = deepcopy(p)
+            patch_company.update({
+                "name": company.get("name", "结构化证据重放"),
+                "credit_code": company.get("credit_code", ""),
+                "coverage": {"queried": [fid], "retrieved_at": check.get("retrieved_at", "")},
+            })
+            try:
+                predicted = profile_replay_fn(patch_company, field_checks).get(fid) or {}
+            except Exception as exc:
+                unmergeable.append(_fail(
+                    check, REASON_PATCH_VALUE_MISMATCH,
+                    f"字段 {fid} 的 profile_patch 无法通过生产映射重放："
+                    f"{type(exc).__name__}: {exc}",
+                ))
+                continue
+            if (predicted.get("status") != STATUS_VERIFIED
+                    or _normalized_display(predicted.get("value"))
+                    != _normalized_display(check.get("value"))):
+                unmergeable.append(_fail(
+                    check, REASON_PATCH_VALUE_MISMATCH,
+                    f"字段 {fid} 的 profile_patch 经生产映射重放后得到 "
+                    f"{predicted.get('status')}/{predicted.get('value')!r}，"
+                    f"与证据清单 {check.get('status')}/{check.get('value')!r} 不一致",
+                    patch_status=predicted.get("status"),
+                    patch_value=predicted.get("value"),
+                ))
+                continue
             _merge_patch(view, p)
 
     return view, unmergeable

@@ -192,8 +192,15 @@ def score(
     skipped: List[str] = []
 
     def _add_rule(dim: str, s: float, detail: str, fid: str):
+        check = by_id.get(fid, {})
+        # 初始档案沿用 fact_id；结构化适配器必须直接引用 evidence_store 中的
+        # evidence_id。此前这里只读 sources，导致适配器触发的规则 evidence=[]，
+        # 报告虽然扣了分，却无法回答“依据是哪条原始证据”（BC-39）。
+        evidence = (check.get("evidence_ids") or []
+                    if check.get("verification_origin") == "structured_adapter"
+                    else check.get("sources") or [])
         triggered.append({"dimension": dim, "score": s, "detail": detail,
-                          "field_id": fid, "evidence": by_id.get(fid, {}).get("sources", [])})
+                          "field_id": fid, "evidence": list(evidence)})
 
     # —— 财务 ——
     fin_items = []
