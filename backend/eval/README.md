@@ -26,6 +26,7 @@ python tests/test_dd_checklist.py         # 状态机单元测试
 | `eval/ground_truth.json` | 字段级标准答案 | **仅 eval/** |
 | `eval/critic_cases.json` | 10 注入 + 18 对照用例 | **仅 eval/** |
 | `eval/critic_holdout.json` | 6 注入 + 8 对照；首次运行后暴露 BC-26，现已退役为回归集 | **仅 eval/**；不得再作为盲测证据 |
+| `eval/critic_holdout_v2.json` | 12 注入 + 12 对照；首次运行未封板，现已退役为回归集 | **仅 eval/**；不得用于修复后的盲测证明 |
 
 ⚠️ 标准答案必须与数据文件分离。系统能看到答案，评测就退化成自我验证。
 

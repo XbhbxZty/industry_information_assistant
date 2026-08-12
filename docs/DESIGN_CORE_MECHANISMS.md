@@ -236,6 +236,19 @@ issue_type: Literal[
   因而已退役为回归集。不得将修后复跑结果称作新的泛化证据；封板前需另建盲测集。
 - 首次留出仍只是 case-level holdout，不是企业分布留出。
 
+### 第二套独立盲测：v0.5 未封板
+
+`critic_holdout_v2.json` 在 commit `c701bb7` 由独立 Agent 创建并冻结，SHA256 为
+`299bd3e22c9490e8b253eb1dd773de3f65b77bfc664c80ad5cedefd2d3e638e6`。
+首次运行中完整架构 A 的目标命中率 63.9%、坏报告拦截率 83.3%、误报率 36.1%，
+并出现 2 个稳定目标漏检与 4 个稳定误报，因此 **v0.5 未封板**。
+
+四个稳定误报均由扫描器不理解否定作用域/开放式冲突披露造成（BC-28）；另有坏报告
+在模型已指出逻辑外推时仍因 `minor + pass` 被稳定放行（BC-29）。完整结果、原始文件
+哈希与退役规则见
+[`backend/eval/BLIND_V2_SEAL_REPORT.md`](../backend/eval/BLIND_V2_SEAL_REPORT.md)。
+该集合已退役为回归集，修复后不得复跑并称作独立泛化证明。
+
 ### 附带发现：结构化输入还在锚定输出形状
 
 C 组首次运行崩溃：`AttributeError: 'str' object has no attribute 'get'`。

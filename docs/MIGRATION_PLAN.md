@@ -312,7 +312,7 @@ service/datasource/
 - 关联图谱重点识别**担保圈**（环状担保关系检测）
 - 接入 Text2SQL 工具调用
 
-#### ✅ 评分卡接入主流程（v0.5，2026-08-11 完成）
+#### ⚠️ 评分卡接入主流程（v0.5 功能完成，质量未封板）
 
 评分规则本身见 `service/risk_scorecard.py`（v0.5 早前已完成）。本次是接线，
 涉及文件：
@@ -329,8 +329,13 @@ service/datasource/
 | `tests/test_risk_integration.py` | 20 条**行为断言**（区别于 `test_risk_scorecard.py` 的规则正确性断言） |
 
 关键设计与踩坑见 [`DESIGN_CORE_MECHANISMS.md`](DESIGN_CORE_MECHANISMS.md) 第四节、
-[`BADCASES.md`](BADCASES.md) BC-19～BC-26；v3 消融实验见
+[`BADCASES.md`](BADCASES.md) BC-19～BC-29；v3 消融实验见
 [`backend/eval/ABLATION_V3.md`](../backend/eval/ABLATION_V3.md)。
+
+第二套独立盲测首次运行后，完整架构出现稳定漏检与稳定误报，因此 v0.5 尚未质量
+封板。具体结果及原始证据见
+[`backend/eval/BLIND_V2_SEAL_REPORT.md`](../backend/eval/BLIND_V2_SEAL_REPORT.md)，
+新增问题见 BC-28、BC-29。修复前不得进入“已封板”状态。
 
 > 关联图谱与 Text2SQL 两项仍未做，属 v0.6 范围。
 
