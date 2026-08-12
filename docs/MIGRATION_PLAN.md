@@ -482,3 +482,24 @@ git 历史按 Stage 分组；README 如实说明基于课程项目二次开发�
 - **2026-08-07**：v1 计划（学术文献方向）。无代码改动。
 - **2026-08-08**：v2，Opus 评审，新增 Stage 0 与作品集交付物。无代码改动。
 - **2026-08-08**：**v3，业务场景转向贷前尽调**（就业导师建议项目需体现真实业务需求）。目标岗位明确为 AI 应用开发，技术叙事重构为"不允许幻觉的场景下的 LLM 工程化"。新发现 LangGraph 编排为死代码（graph.py:349-356），列为最高优先级决策。仍无代码改动。
+
+---
+
+## v0.6a 进度：核实来源与结构化证据链（2026-08-11）
+
+| 项 | 状态 |
+|---|---|
+| 来源模型（闭集 + legacy 识别） | ✅ `service/verification.py` |
+| 结构化证据结构与写入口 | ✅ `record_structured_evidence()` |
+| 按来源分发重放 | ✅ `verify_evidence_chain()` |
+| `FieldCheck` 溯源字段 | ✅ `state.py` |
+| `ResearchState.evidence_store` | ✅ |
+| DataAnalyst 接入 + 降级披露 | ✅ |
+| 行为断言 | ✅ 22 例 |
+| 真实外部适配器 | ⬜ **本轮明确不做** |
+| Scout 升级字段状态 | ⬜ **本轮明确不做** |
+| evidence_store 持久化/SSE | ⬜ 待后续 |
+| 证据时效性策略 | ⬜ 待后续（当前只校验时间戳存在） |
+
+相关：`BADCASES.md` BC-28、`DESIGN_CORE_MECHANISMS.md` 第四节。
+

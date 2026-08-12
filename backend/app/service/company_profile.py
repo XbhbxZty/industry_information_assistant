@@ -21,8 +21,14 @@ from typing import Any, Dict, List, Optional
 
 try:
     from config.dd_checklist import CHECKLIST_BY_ID
+    from service.verification import (
+        stamp_initial_profile_origin, verify_evidence_chain,
+    )
 except ImportError:  # 兼容以 app 为包根的导入方式
     from app.config.dd_checklist import CHECKLIST_BY_ID
+    from app.service.verification import (
+        stamp_initial_profile_origin, verify_evidence_chain,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -434,6 +440,11 @@ def fill_field_checks(
                 + f"另检索到疑似相关线索但主体归属未确认，需人工核对：{leads}"
             )
 
+    # 打上来源标记：本函数产出的每一条 verified/conflicting 都来自初始档案。
+    # 必须在这里标，而不是交给调用方——漏标一次，该清单在重放校验里
+    # 就会被当成"来源不明的旧检查点"，走降级路径。
+    stamp_initial_profile_origin(field_checks, now)
+
     return field_checks
 
 
@@ -449,6 +460,24 @@ def verified_profile_mismatches(
     会被评分器误读成「已查询且无记录」。这里复用 fill_field_checks 作为唯一
     字段映射口径，重放一次填充并比较状态和值，避免另写第二套路径规则。
     """
+    report = verify_evidence_chain(
+        company, field_checks, evidence_store=None,
+        profile_replay_fn=replay_from_profile,
+    )
+    return report.mismatches
+
+
+def replay_from_profile(
+    company: Dict[str, Any],
+    field_checks: List[Dict[str, Any]],
+) -> Dict[str, Dict[str, Any]]:
+    """
+    用当前结构化档案重放一遍清单填充，返回 {field_id: 预测出的 check}。
+
+    复用 `fill_field_checks` 作为**唯一**字段映射口径——另写一套路径规则
+    必然会与填充逻辑漂移，届时"不一致"到底是数据问题还是两套规则不同步
+    就无从分辨。
+    """
     expected = deepcopy(field_checks)
     for check in expected:
         if check.get("status") == "not_applicable":
@@ -461,24 +490,28 @@ def verified_profile_mismatches(
         check["conflict_detail"] = []
 
     fill_field_checks(company, profile_to_facts(company), expected)
-    expected_by_id = {c.get("field_id"): c for c in expected}
-    mismatches = []
-    for actual in field_checks:
-        if actual.get("status") != "verified":
-            continue
-        predicted = expected_by_id.get(actual.get("field_id"), {})
-        if (
-            predicted.get("status") != "verified"
-            or predicted.get("value") != actual.get("value")
-        ):
-            mismatches.append({
-                "field_id": actual.get("field_id"),
-                "field_name": actual.get("field_name", actual.get("field_id", "")),
-                "check_value": actual.get("value"),
-                "profile_status": predicted.get("status", "missing"),
-                "profile_value": predicted.get("value"),
-            })
-    return mismatches
+    return {c.get("field_id"): c for c in expected}
+
+
+def verify_field_checks(
+    company: Dict[str, Any],
+    field_checks: List[Dict[str, Any]],
+    evidence_store: Optional[Dict[str, Dict]] = None,
+    *,
+    allow_legacy_profile_replay: bool = True,
+):
+    """
+    完整的证据链校验入口（v0.6）。
+
+    与 `verified_profile_mismatches()` 的区别：后者只返回 mismatches，
+    丢掉了 degradations——而旧检查点的降级必须被调用方看到并披露，
+    不能只在日志里一闪而过。新代码一律用本函数。
+    """
+    return verify_evidence_chain(
+        company, field_checks, evidence_store,
+        profile_replay_fn=replay_from_profile,
+        allow_legacy_profile_replay=allow_legacy_profile_replay,
+    )
 
 
 def build_credit_context(company: Dict[str, Any]) -> str:

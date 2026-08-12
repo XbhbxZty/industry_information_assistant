@@ -68,6 +68,14 @@ class FieldCheck(TypedDict):
     conflict_detail: List[Dict[str, Any]]  # conflicting 时填 [{source, value}]
     checked_at: str
 
+    # —— 溯源字段（v0.6）。verified / conflicting 必须齐备，否则 fail-closed ——
+    # 见 service/verification.py。设为可选是为了兼容旧检查点：
+    # 缺失时走显式降级路径，而不是被当成合法来源静默通过。
+    verification_origin: str         # initial_profile | structured_adapter
+    evidence_ids: List[str]          # 指向 evidence_store，structured_adapter 必填
+    source_adapter: str              # 产出该结论的适配器标识
+    retrieved_at: str                # 证据获取时间，缺失即不予采信
+
 
 @dataclass
 class Fact:
@@ -163,6 +171,13 @@ class ResearchState(TypedDict):
     # 因此原始档案必须留在 state 中。缺失时评分卡走 fail-closed，不得当作"无风险"。
     company_profile: Dict[str, Any]
 
+    # 结构化证据库（v0.6）：{evidence_id: StructuredEvidence}
+    # 由结构化适配器写入，供重放校验按 evidence_ids 回查。
+    # 与 facts 的区别：facts 是给 LLM 读的自然语言，evidence 是给程序做
+    # 等值比对的结构化记录——自然语言无法承担字段级重放。
+    # 见 service/verification.py
+    evidence_store: Dict[str, Any]
+
     # 风险评分结果（v0.5）——由 DataAnalyst 阶段的纯规则评分卡产出
     # 结构见 service/risk_scorecard.py::score()。
     # ⚠️ 消费方必须同时读 level 与 gates_applied，只看 composite_score 会误判
@@ -230,6 +245,7 @@ def create_initial_state(
         field_checks=[],
         completeness={},
         company_profile={},
+        evidence_store={},
         risk_assessment={},
         outline=[],
         mind_map={},

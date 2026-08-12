@@ -20,11 +20,11 @@ from ..state import ResearchState, ResearchPhase
 
 try:
     from service.risk_scorecard import score as score_risk, unratable
-    from service.company_profile import verified_profile_mismatches
+    from service.company_profile import verify_field_checks
     from config.dd_checklist import compute_completeness
 except ImportError:  # 兼容以 app 为包根的导入方式
     from app.service.risk_scorecard import score as score_risk, unratable
-    from app.service.company_profile import verified_profile_mismatches
+    from app.service.company_profile import verify_field_checks
     from app.config.dd_checklist import compute_completeness
 
 
@@ -312,18 +312,33 @@ class DataAnalyst(BaseAgent):
             state.setdefault("errors", []).append("风险评分：company_profile 缺失，已按不可评级处理")
         else:
             try:
-                mismatches = verified_profile_mismatches(profile, checks)
-                if mismatches:
-                    fields = "、".join(m["field_id"] for m in mismatches)
+                # v0.6：按 verification_origin 分发重放依据，而非一律用初始档案。
+                # 结构化适配器核实的字段本就无法由初始档案重放，旧实现会把
+                # 合法增量证据误判为不一致并全面 fail-closed。
+                report = verify_field_checks(
+                    profile, checks, state.get("evidence_store") or {}
+                )
+                # 降级必须显式披露，不能只进日志（BC-02 的教训）
+                for d in report.degradations:
+                    state.setdefault("errors", []).append(
+                        f"证据链降级：{d['field_id']} {d['detail']}"
+                    )
+                    self.logger.warning(
+                        f"[DataAnalyst] 证据链降级 {d['field_id']}: {d['reason']}"
+                    )
+                if report.mismatches:
+                    fields = "、".join(
+                        f"{m['field_id']}({m['reason']})" for m in report.mismatches
+                    )
                     result = unratable(
-                        f"核查清单与结构化档案不一致（清单标记已核实但档案无法复现：{fields}），不予评级",
+                        f"核查清单证据链不完整或与来源不一致（{fields}），不予评级",
                         completeness,
                     )
                     self.logger.error(
-                        f"[DataAnalyst] field_checks/company_profile 字段级不一致，评级 fail-closed: {fields}"
+                        f"[DataAnalyst] 证据链校验失败，评级 fail-closed: {fields}"
                     )
                     state.setdefault("errors", []).append(
-                        f"风险评分：清单与档案字段级不一致（{fields}），已按不可评级处理"
+                        f"风险评分：证据链校验失败（{fields}），已按不可评级处理"
                     )
                 else:
                     result = score_risk(profile, checks, completeness)

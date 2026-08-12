@@ -474,6 +474,39 @@ LLM 严重度/裁决不一致（BC-29）。该盲测现已退役为回归集；�
 
 ---
 
+## 迭代 v0.6a：核实来源与结构化证据链 ✅ 已完成（2026-08-11）
+
+**动机**：v0.5 交叉复核发现 `verified_profile_mismatches()` 有结构性缺陷——
+它假设所有 verified 都能由初始档案重放。接入结构化适配器那天，
+新查到的合法证据会被判成状态漂移 → 全面 fail-closed。
+**失败方向与系统目标相反：数据源越多，评级越不可用**（BC-28）。
+
+**做了**
+- 新增 `service/verification.py`：来源闭集、结构化证据、按来源分发重放
+- `FieldCheck` 增溯源字段：`verification_origin` / `evidence_ids` /
+  `source_adapter` / `retrieved_at`
+- `ResearchState` 增 `evidence_store`
+- `fill_field_checks()` 填充后自动打 `initial_profile` 来源戳
+- DataAnalyst 改用 `verify_field_checks()`，degradations 写进 `state["errors"]`
+
+**三条锁死的规则**
+1. `attempted_sources` 不是证据——只说明尝试过
+2. 通用网页检索不是合法来源——闭集之外一律 fail-closed
+3. 来源不明不得静默猜测——旧检查点走显式降级路径
+
+**明确未做**（本轮边界）
+- 未实现任何真实外部适配器
+- 未让 Scout 升级字段状态
+- evidence_store 未接入检查点持久化与 SSE
+- 未做证据时效性策略（只校验时间戳存在，未校验过期）
+
+**验收**：`tests/test_verification_chain.py` 22 例全通过，
+覆盖任务列出的 10 项必测场景。全量回归 97 项断言全绿。
+
+**尚待 Critic Agent 只读审查后方可宣布通过。**
+
+---
+
 ## 迭代 v0.6：人机协同 → 倒逼修复 LangGraph
 
 **动机**：v0.5 有了风险等级后，业务上高风险结论**不能全自动放行**，必须人工确认（合规要求，也是出坏账追责的前提）。
