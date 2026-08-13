@@ -145,13 +145,20 @@ def _build_graph(critic_phases=(ResearchPhase.COMPLETED.value,), saved=None,
         [("critic_feedback", {"severity": "minor"})],
         _CriticScript(critic_phases))
 
-    # 检查点：不连库，只记录调用，让 checkpoint_saved 事件照常产生
+    # 检查点：不连库，只记录调用，让 checkpoint_saved 事件照常产生。
+    #
+    # ⚠️ 签名必须与真实 `CheckpointService` **逐字一致**，不许用 `**kwargs` 兜底。
+    #    兜底会让替身成为真货的超集：生产代码多传一个真货不接受的参数，
+    #    测试照样绿，上线才炸——BC-45 的潜伏形态。
+    #    `tests/test_double_contracts.py` 会逐个方法比对这两者。
     class _CP:
         def __init__(self): self.statuses = []
-        def save_checkpoint(self, **k): return "cp_1"
-        def update_status(self, sid, status, err=None): self.statuses.append(status)
-        def load_checkpoint(self, sid): return None
-        def get_checkpoint_info(self, sid): return None
+        def save_checkpoint(self, session_id, state, user_id=None,
+                            ui_state=None, final_report=None): return "cp_1"
+        def update_status(self, session_id, status, error_message=None):
+            self.statuses.append(status)
+        def load_checkpoint(self, session_id): return None
+        def get_checkpoint_info(self, session_id): return None
 
     g.checkpoint_service = _CP()
     if saved is not None:
