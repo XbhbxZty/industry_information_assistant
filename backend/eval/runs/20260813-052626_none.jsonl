@@ -1,0 +1,2 @@
+{"_type": "run_meta", "timestamp": "20260813-052626", "label": "", "model": "deepseek-v4-flash", "temperature": "config", "ablate": "none", "repeat": 1, "cases": 1, "cases_file": "critic_cases.json", "cases_sha256": "ffd692dd5740338a206c6c0d5a80b64006b0c03c850d3b297aa3fbe3246a438f", "fp_definition": "任何 critical/major 级问题均计入误报（不限 checklist 三类）"}
+{"case_id": "CLN-01", "kind": "clean", "target_violation": null, "elapsed_s": 19.39, "llm_ok": true, "llm_error": "", "degraded": false, "verdict": "pass", "quality_score": 9, "operational_blocked": false, "issues": [], "ok": true}

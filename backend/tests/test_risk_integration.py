@@ -20,7 +20,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
 
 from config.dd_checklist import build_field_checks, compute_completeness  # noqa: E402
 from service import risk_scorecard  # noqa: E402
-from service.claim_scanner import scan_report  # noqa: E402
 from service.company_profile import fill_field_checks, profile_to_facts  # noqa: E402
 from service.risk_scorecard import INSUFFICIENT, LEVELS, RISK_BLOCK_MARKER  # noqa: E402
 from service.deep_research_v2.agents import data_analyst as da_module  # noqa: E402
@@ -376,19 +375,26 @@ def test_评级块同时呈现等级与闸门():
     assert "不可单独使用" in block
 
 
-def test_评级块不触发扫描器误报():
+def test_评级块不对非已核实字段作断言():
     """
-    评级块会随报告进入 Critic 的扫描范围。渲染文本里若出现
+    评级块会随报告进入 Critic 的审核范围。渲染文本里若出现
     「未发现被执行记录」而该字段并非 verified，就是我们用自己的输出
-    制造了一条 critical —— 每一轮都会被门控降级，且原因极难定位。
+    制造了一条 critical —— 每一轮都会被打回，且原因极难定位。
+
+    ⚠️ 本断言原先复用 `claim_scanner.scan_report` 做判定。扫描器已随 BC-47 删除，
+    这里改为直接检查渲染文本：非 verified 字段的名称不得与断言词同句出现。
+    判定比原来粗，但目的不同——这不是通用的报告审核，只是钉住**我们自己**
+    渲染的那段固定模板，模板的写法完全在掌控内。
 
     用 5 家评测企业做回归（含司法源故障、多源冲突、主体存疑等状态组合）。
     """
+    import re
     path = os.path.join(os.path.dirname(__file__), "..", "app", "data", "companies_eval.json")
     with open(path, encoding="utf-8") as f:
         companies = json.load(f)["companies"]
     assert companies, "前提：评测档案不能为空"
 
+    claims = ("无", "没有", "不存在", "未发现", "未见", "暂无", "良好", "正常", "可控")
     for c in companies:
         checks = build_field_checks(checked_at="2026-08-11T00:00:00")
         facts = profile_to_facts(c)
@@ -396,11 +402,17 @@ def test_评级块不触发扫描器误报():
         block = risk_scorecard.render_markdown(
             risk_scorecard.score(c, checks, compute_completeness(checks))
         )
-        found = scan_report(checks, block)
-        assert not found, (
-            f"{c['company_id']} 的评级块被扫描器判为违规："
-            f"{found[0]['field_name']} 命中「{found[0]['matched_claim']}」于「{found[0]['sentence'][:40]}」"
-        )
+        # 评级块里的 HTML 注释不会被渲染，也不参与审核，剔除后再查
+        visible = re.sub(r"<!--.*?-->", "", block, flags=re.S)
+        for chk in checks:
+            if chk["status"] in ("verified", "not_applicable"):
+                continue
+            for sent in re.split(r"[。；\n]+", visible):
+                if chk["field_name"] in sent and any(w in sent for w in claims):
+                    raise AssertionError(
+                        f"{c['company_id']} 的评级块对非已核实字段「{chk['field_name']}」"
+                        f"作了断言：「{sent.strip()[:60]}」"
+                    )
 
 
 def test_模型照抄评级块后不得出现两份():

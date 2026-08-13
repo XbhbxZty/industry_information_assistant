@@ -16,10 +16,6 @@ from typing import Dict, Any, List
 from datetime import datetime
 
 from .base import BaseAgent
-try:
-    from service.claim_scanner import scan_report, format_findings
-except ImportError:  # 兼容以 app 为包根的导入方式
-    from app.service.claim_scanner import scan_report, format_findings
 from ..state import ResearchState, ResearchPhase
 
 
@@ -51,25 +47,13 @@ class CriticMaster(BaseAgent):
 
 {field_checks}
 
-### 机械校验已由程序完成
+### 三类清单问题全部由你判定
 
-{scanner_findings}
+（v0.6 起不再有程序侧的确定性预判。原先由正则扫描器独占 `unverified_as_fact`
+与 `conflict_silently_resolved` 两类，三次独立盲测证明该分工使系统整体变差：
+扫描器零独有检出，却因"独占"而丢弃了你正确标注的同类问题。详见 BC-47。）
 
-### ⛔ 分工：这两类问题**禁止**你报告
-
-`unverified_as_fact` 与 `conflict_silently_resolved` 已由程序确定性判定完毕，
-**你不得输出这两个 issue_type**。实测表明你在这两类上的判定不稳定
-（同一份报告三次给出不同结论，且会误读清单状态），而程序判定零方差。
-重复报告只会制造噪音并与程序结论冲突。
-
-**你唯一需要判定的清单类问题是 `unsupported_risk_conclusion`**：
-风险评级或授信建议是否建立在已核实的字段之上。
-这需要通盘理解报告的论证链条，程序做不到，是你的价值所在。
-
-典型场景：报告写"该公司资信良好、经营合规、风险可控，综合评定风险等级为低"，
-未提任何具体字段名，但多项必查项未核实——这种整体性评价缺乏清单支撑。
-
-请按此分工检出问题：
+请逐类检出：
 
 **A. `unverified_as_fact`（把未核实字段当作事实断言）**
    对每一个状态为 `未核实` 的字段，检查报告中是否出现了针对该字段的实质性结论。
@@ -286,90 +270,73 @@ class CriticMaster(BaseAgent):
 
     def merge_review(self, state: ResearchState, llm_result: Any) -> Dict[str, Any]:
         """
-        合并确定性扫描与 LLM 审核结果。
+        规范化 LLM 审核结果；不可用时**不予出具审核结论**。
 
-        ⚠️ 两条设计原则，都来自实测教训：
+        ## v0.6：确定性扫描器已删除（BC-47）
 
-        1. **扫描器无条件执行，不受 LLM 成败影响。**
-           此前扫描代码被包在 `if review_result is not None:` 里，
-           LLM 调用失败或 JSON 解析失败时，确定性检出会**全部丢失**——
-           可靠的部分依赖了不可靠的部分，方向是反的。
+        本方法原先合并正则扫描器与 LLM 两路结论，并让扫描器独占
+        `unverified_as_fact` / `conflict_silently_resolved` 两类、丢弃 LLM 的同类输出。
+        三次独立盲测证明该分工使系统整体变差：
 
-        2. **本方法必须同时被生产流程与评测调用。**
-           此前扫描与过滤只存在于 process()，而评测直接调 _review_content()，
-           导致评测测的是"LLM 单独表现"，却被当成"系统整体表现"来解读，
-           进而把提示词带来的改善错误归因给代码过滤。
-           把合并逻辑收敛到一处，两边走同一路径，评测才对得上生产。
+            扫描器独有检出          0 例
+            因"独占"被丢弃的正确检出 4 例
+            扫描器误报              1 例（跨分句转述，仍阻断正确报告）
+
+        关掉扫描器组在检出与误报两项上同时优于完整架构（97.6%/7.1% vs 83.3%/33.3%）。
+        保留它没有任何可度量的收益，因此整条链路连同 `service/claim_scanner.py` 一并删除。
+
+        ## 降级路径改为 fail-closed
+
+        原设计里 LLM 不可用时退回"仅由扫描器审核"，产出 `needs_revision`。
+        扫描器删除后没有第二条链路，而**审核没有执行**与**审核通过**必须区分：
+        此时返回不可用结论并显式标记 `degraded`，由编排层拒绝进入完成态。
+        这与完整度闸门、证据链校验一致——最后一道关，后面没人接，宁可不出结论。
+
+        ## 本方法必须同时被生产流程与评测调用
+
+        此前过滤逻辑只存在于 process()，评测却直调 `_review_content()`，
+        导致评测测的是"LLM 单独表现"却被当成"系统整体表现"解读（BC-15）。
+        规范化收敛在这里，两边走同一路径，评测才对得上生产。
         """
-        # —— 确定性扫描：生产中始终执行；仅显式消融时关闭 ——
-        # 扫描器与 LLM 必须审核同一份文本，否则 final_report 中由整合步骤
-        # 新增的断言可能只被扫描器看见，而草稿中的旧句子只被 LLM 看见。
-        text = self._content_for_review(state)
-        scan_issues = []
-        scan_findings = (
-            [] if getattr(self, "_ablate_scanner", False)
-            else scan_report(state.get("field_checks") or [], text)
-        )
-        for f in scan_findings:
-            scan_issues.append({
-                "target_section": f.get("field_id", ""),
-                "issue_type": f["issue_type"],
-                "severity": f["severity"],
-                "location": f.get("sentence", "")[:60],
-                "description": f["description"],
-                "evidence": f"清单状态={f['status']}；命中断言词「{f['matched_claim']}」",
-                "suggestion": "改写为如实披露该项状态的表述",
-                "requires_new_search": False,
-                "detected_by": "scanner",
-            })
-
-        # —— LLM 结果：尽力而为，失败不影响扫描结论 ——
         # 判据要覆盖三种失败形态，不能只判 None：
         #   1) API 异常 → 调用方传入 None
         #   2) JSON 解析失败 → 可能返回 {} 或 None
         #   3) 解析出对象但缺关键字段（既无 issues 也无 overall_assessment）
-        #      → 结构不可用，等同失败
         # 此前只判 isinstance(dict)，空字典会被当成有效结果，degraded 永远不置位。
         _usable = (
             isinstance(llm_result, dict)
             and ("issues" in llm_result or "overall_assessment" in llm_result)
         )
         if not _usable:
-            if scan_issues:
-                self.logger.warning(
-                    f"[CriticMaster] LLM 审核不可用，仅保留 {len(scan_issues)} 条确定性扫描结论"
-                )
-            degraded = {
+            self.logger.error(
+                "[CriticMaster] LLM 审核不可用，且已无确定性兜底链路，按未审核处理"
+            )
+            return {
                 "overall_assessment": {
-                    "quality_score": 5.0,
-                    # LLM 不可用时绝不能是 pass：审核根本没完整执行过
-                    "verdict": "needs_revision",
-                    "summary": "LLM 审核不可用；结论仅基于确定性扫描"
-                             + ("，已发现清单越界表述" if scan_issues else "，未发现清单越界表述"),
+                    "quality_score": 0.0,
+                    # 绝不能是 pass：审核根本没有执行过
+                    "verdict": "major_issues",
+                    "summary": "审核未能执行（LLM 不可用），本报告未经复核，不得作为授信依据",
                 },
-                "issues": scan_issues,
+                "issues": [{
+                    "target_section": "",
+                    "issue_type": "review_not_executed",
+                    "severity": "critical",
+                    "location": "",
+                    "description": "Critic 审核链路不可用，报告未经任何质量检查",
+                    "evidence": "LLM 返回不可用结构",
+                    "suggestion": "重跑审核；在审核成功前不得进入完成态",
+                    "requires_new_search": False,
+                    "detected_by": "none",
+                }],
                 "missing_aspects": [],
                 "degraded": True,   # 显式标记降级，不得静默（BC-02 的教训）
             }
-            # 降级路径同样要过扫描器闸门，否则 LLM 一挂就绕开了门控
-            return self._enforce_scanner_gate(degraded, scan_issues)
 
-        # 强制分工：这两类由扫描器独占，丢弃 LLM 的同类输出
-        scanner_owned = (
-            set() if getattr(self, "_ablate_scanner", False)
-            else {"unverified_as_fact", "conflict_silently_resolved"}
-        )
-        llm_issues, dropped = [], 0
-        for issue in llm_result.get("issues", []):
-            if issue.get("issue_type") in scanner_owned:
-                dropped += 1
-                continue
-            llm_issues.append(issue)
-        if dropped:
-            self.logger.info(f"[CriticMaster] 丢弃 {dropped} 条 LLM 输出的扫描器独占类型问题")
-
-        llm_result["issues"] = scan_issues + llm_issues
-        return self._enforce_scanner_gate(llm_result, scan_issues)
+        for issue in llm_result.get("issues") or []:
+            if isinstance(issue, dict):
+                issue.setdefault("detected_by", "llm")
+        return llm_result
 
     @staticmethod
     def _content_for_review(state: ResearchState) -> str:
@@ -418,52 +385,16 @@ class CriticMaster(BaseAgent):
         cfg = self._agent_cfg()
         return int(getattr(cfg, "max_tokens", 8000) if cfg else 8000)
 
-    @staticmethod
-    def _enforce_scanner_gate(result: Dict[str, Any], scan_issues: List[Dict]) -> Dict[str, Any]:
-        """
-        扫描器 critical 强制门控裁决。
-
-        ⚠️ 修复的缺陷：此前扫描结论只是被追加进 `issues` 列表，
-        却**不影响 `verdict`**。若 LLM 返回 `pass`，流程照样把状态置为 COMPLETED——
-        扫描器抓到了"把未核实写成无记录"，报告仍然放行。
-
-        这是整套确定性检查在最后一步失效：**实现了机制，但机制不约束结果。**
-        确定性结论必须能否决模型的裁决，否则它只是一条日志。
-
-        规则：
-          - 存在 scanner critical → verdict 不得为 pass，quality_score 上限 3
-          - 存在 scanner major    → verdict 不得为 pass，quality_score 上限 6
-        （评分上限与提示词中"≥7 才可 pass"的规则保持一致，避免下游按分数放行）
-        """
-        crit = [i for i in scan_issues if i.get("severity") == "critical"]
-        major = [i for i in scan_issues if i.get("severity") == "major"]
-        if not crit and not major:
-            return result
-
-        oa = result.setdefault("overall_assessment", {})
-        old_verdict = oa.get("verdict")
-        old_score = oa.get("quality_score")
-
-        if crit:
-            oa["verdict"] = "major_issues"
-            cap = 3.0
-        else:
-            if oa.get("verdict") == "pass":
-                oa["verdict"] = "needs_revision"
-            cap = 6.0
-
-        try:
-            score = float(old_score)
-        except (TypeError, ValueError):
-            score = cap
-        oa["quality_score"] = min(score, cap)
-
-        oa["scanner_gate_applied"] = {
-            "critical": len(crit), "major": len(major),
-            "original_verdict": old_verdict, "original_score": old_score,
-            "fields": [i.get("target_section") for i in crit + major],
-        }
-        return result
+    # `_enforce_scanner_gate` 已随扫描器一并删除（BC-47）。
+    #
+    # 它当初解决的是真问题——确定性结论必须能否决模型裁决，否则只是一条日志。
+    # 但前提是那条确定性结论比模型可靠。三次盲测证伪了这个前提：门控唯一一次
+    # 生效是把一份**正确**的报告拦了下来（跨分句转述被误判）。
+    #
+    # ⚠️ 若将来重新引入任何确定性判定组件，需要同时回答两个问题，缺一不可：
+    #   1. 它在**未见数据**上有独有检出吗（不是开发集）
+    #   2. 它误报时，后面还有没有人能纠正
+    # 只答第 1 问就是 v0.4 的老路。
 
     async def process(self, state: ResearchState) -> ResearchState:
         """处理入口"""
@@ -650,20 +581,9 @@ class CriticMaster(BaseAgent):
         for section in state["outline"]:
             outline_summary.append(f"- {section.get('id')}: {section.get('title')} ({section.get('status', 'pending')})")
 
-        # 确定性扫描：字段名与断言词共现的显式违规由程序判定，不经 LLM。
-        # 实测该类判定交给模型时 12/18 对照用例结果不稳定（见 BADCASES.md BC-14）；
-        # 改为程序判定后检出 7/7、误报 0/18 且完全可复现。
-        # _ablate_scanner 为 True 时**完全禁用**扫描器：不执行扫描、
-        # 不注入提示词、不合并结果、不做类型过滤。
-        # 此前 --ablate scanner 只绕过了结果合并，扫描结论仍通过提示词
-        # 到达 LLM，导致"扫描器独立贡献"根本没被测到（外部评审第①条）。
-        scan_findings = (
-            [] if getattr(self, "_ablate_scanner", False)
-            else scan_report(state.get("field_checks") or [], draft_content)
-        )
-        if scan_findings:
-            self.logger.info(f"[CriticMaster] 确定性扫描检出 {len(scan_findings)} 项显式违规")
-
+        # 确定性扫描器已删除（BC-47）：三类清单问题现在全部由 LLM 判定。
+        # 原先扫描结论会通过 `scanner_findings` 注入本提示词，那条通道一并移除——
+        # 它是 A 组 LLM 告警多于 B 组的可疑来源之一，留着会带走同一份不确定性。
         prompt = self.REVIEW_PROMPT.format(
             query=state["query"],
             outline="\n".join(outline_summary),
@@ -671,7 +591,6 @@ class CriticMaster(BaseAgent):
             facts="\n".join(facts_summary) if facts_summary else "（暂无事实记录）",
             data_points="\n".join(data_summary) if data_summary else "（暂无数据点）",
             field_checks=self._format_checklist_for_review(state),
-            scanner_findings=format_findings(scan_findings)
         )
 
         self.logger.info(f"[CriticMaster] 调用 LLM 进行审核...")

@@ -112,14 +112,16 @@ _MODEL_OVERRIDE: Optional[str] = None
 _TEMP_OVERRIDE: Optional[float] = None
 
 # 消融实验开关。用于回答："高分是模型能力还是架构贡献？"
-#   none      完整架构（扫描器 + 结构化清单）
-#   scanner   关掉确定性扫描器，保留清单 —— 测扫描器的独立贡献
-#   checklist 同时关掉清单与扫描器 —— 测强模型能否只凭报告+事实自行判断
+#   none      完整架构（结构化清单）
+#   checklist 关掉清单 —— 测强模型能否只凭报告+事实自行判断
 #
 # checklist 这一组是决定性的：清单里"已查询但无记录"与"未查询"的区别，
 # **只存在于结构化数据中**，报告正文与原始事实里都没有这个信息。
 # 若模型没有清单也能判对，说明架构多余；若判不对，说明架构提供了
-# 不可从文本恢复的信息。
+# 不可从文本恢复的信息。第二次盲测复现了后者（关清单后目标命中显著下降）。
+#
+# 原有的 `scanner` 组已删除：确定性扫描器本身已随 BC-47 移除，无可消融。
+# 那三轮 A/B 对照的结论保留在 BADCASES.md BC-47 与 eval/BLIND_V4_REPORT.md 中。
 _ABLATE: str = "none"
 
 # 逐次运行的原始记录，落盘为 JSONL 供事后复算
@@ -135,9 +137,6 @@ def _make_critic() -> CriticMaster:
     )
     if _TEMP_OVERRIDE is not None:
         critic._eval_temperature = _TEMP_OVERRIDE
-    if _ABLATE in ("scanner", "checklist"):
-        # 真正关闭扫描器：执行、提示词注入、结果合并、类型过滤四处同时关闭
-        critic._ablate_scanner = True
     return critic
 
 
@@ -200,9 +199,9 @@ async def _run_once(sem: asyncio.Semaphore, company: Dict, case: Dict, kind: str
         t0 = time.time()
         state = _build_state(company, case["section"], case["text"])
         critic = _make_critic()
-        # 走与生产完全相同的路径：确定性扫描 + LLM + 强制分工过滤。
-        # 此前这里直接调 _review_content()，只测到 LLM 单独表现，
-        # 却被当作系统整体表现解读，导致归因错误。
+        # 走与生产完全相同的路径：_review_content() 取 LLM 结论，
+        # 再经 merge_review 规范化/判降级。此前这里只调前者，
+        # 却被当作系统整体表现解读，导致归因错误（BC-15）。
         llm_error = ""
         try:
             llm_result = await critic._review_content(state)
@@ -210,8 +209,7 @@ async def _run_once(sem: asyncio.Semaphore, company: Dict, case: Dict, kind: str
             llm_result = None
             llm_error = f"{type(e).__name__}: {e}"
         try:
-            # 始终走 merge_review —— 扫描器是否启用由 critic._ablate_scanner 决定，
-            # 这样消融组与完整组走的是同一条代码路径，差异只在扫描器本身
+            # 始终走 merge_review：生产与评测共用同一条规范化/降级路径（BC-15）
             review = critic.merge_review(state, llm_result) or {}
         except Exception as e:
             return {"ok": None, "error": f"{type(e).__name__}: {e}", "issues": []}
@@ -232,7 +230,6 @@ async def _run_once(sem: asyncio.Semaphore, company: Dict, case: Dict, kind: str
             "operational_blocked": (
                 (review.get("overall_assessment") or {}).get("verdict") != "pass"
             ),
-            "gate": (review.get("overall_assessment") or {}).get("scanner_gate_applied"),
             "issues": [
                 {"issue_type": i.get("issue_type"), "severity": i.get("severity"),
                  "detected_by": i.get("detected_by", "llm"),
@@ -240,10 +237,9 @@ async def _run_once(sem: asyncio.Semaphore, company: Dict, case: Dict, kind: str
                 for i in _norm_issues(issues)
             ],
         }
-        # 消融比较必须建立在 LLM 调用成功的共同前提上。否则完整组可由扫描器
-        # 在模型断线时命中，而关闭扫描器组必然漏检，网络故障就会被误算成
-        # 扫描器贡献（BC-25）。生产降级能力由 test_critic_gate 单独验证；
-        # 评测装置在这里 fail-fast，并把失败调用保留进 JSONL 供审计。
+        # 消融比较必须建立在 LLM 调用成功的共同前提上，否则网络故障会被
+        # 误算成架构差异（BC-25）。生产降级行为由 tests/test_critic_review.py
+        # 单独验证；评测装置在这里 fail-fast，并把失败调用保留进 JSONL 供审计。
         if review.get("degraded") or not isinstance(llm_result, dict):
             raw["ok"] = None
             _RAW_LOG.append(raw)
@@ -299,8 +295,8 @@ async def main() -> int:
         "--cases-file", default=CASES,
         help="评测用例 JSON；相对路径按 eval/ 解析（默认 critic_cases.json）",
     )
-    ap.add_argument("--ablate", choices=["none", "scanner", "checklist"], default="none",
-                    help="消融实验：关掉扫描器或同时关掉清单，用于区分模型能力与架构贡献")
+    ap.add_argument("--ablate", choices=["none", "checklist"], default="none",
+                    help="消融实验：关掉结构化清单，用于区分模型能力与架构贡献")
     args = ap.parse_args()
 
     global _MODEL_OVERRIDE, _TEMP_OVERRIDE
@@ -336,8 +332,7 @@ async def main() -> int:
     _t = _TEMP_OVERRIDE if _TEMP_OVERRIDE is not None else 0.0
     print(f"Critic 清单交叉校验评测 ｜ {len(todo)} 例 × {args.repeat} 次 = "
           f"{len(todo) * args.repeat} 次调用，并发 {args.concurrency}")
-    _abl = {"none": "完整架构", "scanner": "消融:关扫描器",
-            "checklist": "消融:关清单+扫描器"}[_ABLATE]
+    _abl = {"none": "完整架构", "checklist": "消融:关清单"}[_ABLATE]
     print(f"模型 {_m} ｜ 温度 {_t} ｜ {_abl}" + (f" ｜ {args.label}" if args.label else ""))
     print(f"用例 {os.path.basename(cases_path)} ｜ SHA256 {cases_sha256[:12]}")
     print("=" * 78)

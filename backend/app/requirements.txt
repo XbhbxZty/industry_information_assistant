@@ -40,3 +40,33 @@ dashscope
 apscheduler>=3.10.0
 sqlalchemy>=2.0.0
 psycopg2-binary>=2.9.0
+
+# —— 以下为 v0.6 补记 ——
+# 这些包一直是运行必需的，但从未写进本文件：按本文件装完，import 阶段就会失败。
+# 与 BC-41 同形——声明与实际运行分叉，且没有任何机制会因为不一致而报错。
+# 版本下限取自 2026-08-13 实测通过 183 项确定性回归的环境。
+
+# 编排与人机协同（v0.6）。graph.py 依赖 get_stream_writer/interrupt/Command，
+# 均为 langgraph 1.x API；原作者当年放弃 LangGraph 的理由在 1.x 已不成立。
+langgraph>=1.2
+# 复核卡点必须跨请求恢复，因此图检查点走 Postgres 而非 MemorySaver。
+# 它要的是 psycopg **v3**，与上面给 SQLAlchemy 用的 psycopg2-binary 并存，二者不可互相替代：
+# 只装 v2 时该路径报 "no pq wrapper available"（BC-45 的三条契约断言正是在这里失败）。
+langgraph-checkpoint-postgres>=3.1
+psycopg[binary,pool]>=3.3
+
+# 认证与口令（core/security.py、router/auth_router.py）
+bcrypt>=5.0
+python-jose>=3.5
+passlib>=1.7
+
+# 运行时基础设施
+redis>=8.0                # session_service
+minio>=7.2                # 附件与文档存储
+# 代码里 `from dotenv import load_dotenv` 来自 python-dotenv；
+# 上面第 7 行的 `dotenv` 是同名占位包，不要依赖它间接引入
+python-dotenv>=1.0
+
+# 解析与图表
+beautifulsoup4>=4.12      # web_search_service
+matplotlib>=3.8           # chart_generator

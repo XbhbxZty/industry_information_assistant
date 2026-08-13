@@ -20,7 +20,7 @@ class _BrokenCritic:
             "overall_assessment": {"verdict": "needs_revision", "quality_score": 3},
             "issues": [{
                 "issue_type": "unverified_as_fact", "severity": "critical",
-                "detected_by": "scanner", "description": "扫描器在模型断线时仍命中",
+                "detected_by": "llm", "description": "模型报出的 critical 级问题",
             }],
         }
 
