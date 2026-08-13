@@ -3,16 +3,20 @@
     "purpose": "评测标准答案。对应 backend/app/data/companies_eval.json 中的企业。",
     "isolation": "⚠️ 本文件绝不可被 app/ 下任何代码读取——系统看得到答案，评测就退化为自我验证。仅 eval/ 使用。",
     "field_status_values": "verified | unverified | conflicting | not_applicable",
-    "note": "expected_status 只标注必查项与有意义的选查项；未列出的项不参与字段准确率计算。"
+    "note": "expected_status 只标注必查项与有意义的选查项；未列出的项不参与字段准确率计算。",
+    "risk_level_annotation": "expected_risk_level 与闸门期望由业务场景反推（信贷常识），**不是**照抄系统当前输出。⚠️ 局限：标注时作者已知系统现状，存在锚定风险；且这 5 家原为字段状态测试设计，不覆盖等级空间——「低风险」在担保圈能力就绪前不可达，当前无用例覆盖（见 BC-18）。",
+    "gate_kind_note": "断言用 gate_kinds（机器可读标识）而非 gates_applied 的中文措辞。靠中文子串判断闸门理由，就是扫描器同款的开集脆弱性（BC-47）。只断言 include/exclude 两个子集，不锁死完整集合——完整集合含随夹具变化的维度闸门，锁死会因错误的原因变脆。"
   },
-
   "cases": [
     {
       "case_id": "EVAL-001",
       "company_name": "苏州恒晟自动化设备有限公司",
       "scenario": "优质企业：数据齐全、无不良记录、财务健康",
       "tests": "系统不应无中生有地制造风险；查询无记录的事件型字段应判为正面结论",
-      "expected_completeness": { "required_verified": 14, "required_total": 15 },
+      "expected_completeness": {
+        "required_verified": 14,
+        "required_total": 15
+      },
       "expected_status": {
         "registration": "verified",
         "business_scope": "verified",
@@ -36,20 +40,42 @@
         "bidding_record": "verified"
       },
       "expected_no_record_fields": [
-        "litigation", "enforcement", "dishonesty", "equity_freeze",
-        "negative_news", "regulatory_penalty", "guarantee", "external_investment"
+        "litigation",
+        "enforcement",
+        "dishonesty",
+        "equity_freeze",
+        "negative_news",
+        "regulatory_penalty",
+        "guarantee",
+        "external_investment"
       ],
       "report_must_not_contain": [
-        "存在被执行记录", "失信被执行人", "涉诉风险较高"
+        "存在被执行记录",
+        "失信被执行人",
+        "涉诉风险较高"
+      ],
+      "expected_risk_level": "中风险",
+      "expected_level_rationale": "数据齐全无不良，本应低风险；但担保圈是必查项而系统无核查能力，不具备核查能力就不能出具最宽松结论。缺口来自系统能力而非企业本身。",
+      "expected_gate_kinds_include": [
+        "capability_gap"
+      ],
+      "expected_gate_kinds_exclude": [
+        "dishonesty_veto",
+        "enforcement_veto",
+        "conflict_escalation",
+        "overall_rate_below_min",
+        "judicial_required_unverified"
       ]
     },
-
     {
       "case_id": "EVAL-002",
       "company_name": "郑州宏川物流供应链有限公司",
       "scenario": "高风险企业：失信 + 2笔被执行 + 资产负债率89.1% + 现金流连续两年为负",
       "tests": "一票否决类指标必须被识别并在报告中明确指出",
-      "expected_completeness": { "required_verified": 13, "required_total": 15 },
+      "expected_completeness": {
+        "required_verified": 13,
+        "required_total": 15
+      },
       "expected_status": {
         "registration": "verified",
         "business_scope": "verified",
@@ -69,22 +95,37 @@
         "equity_freeze": "verified",
         "cash_flow": "verified"
       },
-      "expected_no_record_fields": ["equity_freeze"],
-      "report_must_contain_any": ["失信", "被执行"],
+      "expected_no_record_fields": [
+        "equity_freeze"
+      ],
+      "report_must_contain_any": [
+        "失信",
+        "被执行"
+      ],
       "critical_risk_signals": [
         "失信被执行人记录",
         "资产负债率超过85%",
         "经营性现金流连续为负",
         "净利润连续两年亏损"
+      ],
+      "expected_risk_level": "拒绝",
+      "expected_level_rationale": "失信被执行人在信贷业务上是一票否决，无需综合分参与判断。",
+      "expected_gate_kinds_include": [
+        "dishonesty_veto"
+      ],
+      "expected_gate_kinds_exclude": [
+        "overall_rate_below_min"
       ]
     },
-
     {
       "case_id": "EVAL-003",
       "company_name": "合肥安芯电子材料有限公司",
       "scenario": "司法数据源接口超时，涉诉/被执行/失信/股权冻结全部未查询",
       "tests": "⭐核心用例：绝不能因为查不到司法记录就得出「无司法风险」或判低风险。这是尽调系统最危险的失效模式。",
-      "expected_completeness": { "required_verified": 9, "required_total": 15 },
+      "expected_completeness": {
+        "required_verified": 9,
+        "required_total": 15
+      },
       "expected_status": {
         "registration": "verified",
         "business_scope": "verified",
@@ -104,21 +145,43 @@
         "equity_freeze": "unverified",
         "cash_flow": "verified"
       },
-      "expected_no_record_fields": ["negative_news"],
-      "report_must_not_contain": [
-        "无涉诉记录", "未发现涉诉", "无被执行记录", "未发现被执行",
-        "无失信记录", "未发现失信", "司法风险较低", "无重大诉讼"
+      "expected_no_record_fields": [
+        "negative_news"
       ],
-      "report_must_contain_any": ["未核实", "未能查询"],
-      "gate_expectation": "judicial 维度必查项 0/3 已核实，完整度闸门应阻止输出低风险结论（v0.5 实现后校验）"
+      "report_must_not_contain": [
+        "无涉诉记录",
+        "未发现涉诉",
+        "无被执行记录",
+        "未发现被执行",
+        "无失信记录",
+        "未发现失信",
+        "司法风险较低",
+        "无重大诉讼"
+      ],
+      "report_must_contain_any": [
+        "未核实",
+        "未能查询"
+      ],
+      "gate_expectation": "judicial 维度必查项 0/3 已核实，完整度闸门应阻止输出低风险结论（v0.5 实现后校验）",
+      "expected_risk_level": "中风险",
+      "expected_level_rationale": "司法三项未查询。查不到不等于没有，必查项缺失须提升下限；但其余维度数据完整，不至于到不予评级。",
+      "expected_gate_kinds_include": [
+        "judicial_required_unverified"
+      ],
+      "expected_gate_kinds_exclude": [
+        "dishonesty_veto",
+        "enforcement_veto"
+      ]
     },
-
     {
       "case_id": "EVAL-004",
       "company_name": "深圳市讯联智能科技有限公司",
       "scenario": "主体存疑：工商登记已查询但返回空",
       "tests": "⭐属性型字段的空查询结果必须判为异常并提示主体真实性存疑，绝不能表述为「经查询无相关记录」",
-      "expected_completeness": { "required_verified": 4, "required_total": 15 },
+      "expected_completeness": {
+        "required_verified": 4,
+        "required_total": 15
+      },
       "expected_status": {
         "registration": "unverified",
         "business_scope": "unverified",
@@ -136,22 +199,50 @@
         "guarantee_circle": "unverified",
         "regulatory_penalty": "unverified"
       },
-      "expected_no_record_fields": ["litigation", "enforcement", "dishonesty", "negative_news"],
+      "expected_no_record_fields": [
+        "litigation",
+        "enforcement",
+        "dishonesty",
+        "negative_news"
+      ],
       "expected_anomaly_fields": {
         "_comment": "这些字段的 failure_reason 必须提示主体存疑，而非普通的「数据源未覆盖」",
-        "fields": ["registration", "business_scope", "operating_status", "shareholders"],
+        "fields": [
+          "registration",
+          "business_scope",
+          "operating_status",
+          "shareholders"
+        ],
         "reason_must_contain": "主体"
       },
-      "report_must_not_contain": ["经查询，无相关记录，登记状态", "该公司经营正常"],
-      "report_must_contain_any": ["主体", "存疑", "异常"]
+      "report_must_not_contain": [
+        "经查询，无相关记录，登记状态",
+        "该公司经营正常"
+      ],
+      "report_must_contain_any": [
+        "主体",
+        "存疑",
+        "异常"
+      ],
+      "expected_risk_level": "数据不足，无法评级",
+      "expected_level_rationale": "属性型字段空结果=主体存疑，核实率远低于门槛，不具备评级条件。",
+      "expected_gate_kinds_include": [
+        "overall_rate_below_min"
+      ],
+      "expected_gate_kinds_exclude": [
+        "dishonesty_veto",
+        "enforcement_veto"
+      ]
     },
-
     {
       "case_id": "EVAL-005",
       "company_name": "温州瑞泰阀门制造有限公司",
       "scenario": "多源冲突：工商登记称实缴5000万，财报附注称实缴1500万",
       "tests": "⭐conflicting 状态首次检验。不得单方面采信任一来源，必须披露冲突并要求人工核实。",
-      "expected_completeness": { "required_verified": 12, "required_total": 15 },
+      "expected_completeness": {
+        "required_verified": 12,
+        "required_total": 15
+      },
       "expected_status": {
         "registration": "conflicting",
         "business_scope": "verified",
@@ -171,12 +262,30 @@
         "equity_freeze": "verified",
         "cash_flow": "verified"
       },
-      "expected_no_record_fields": ["enforcement", "dishonesty", "equity_freeze", "negative_news"],
-      "report_must_contain_any": ["冲突", "不一致", "需人工核实"],
-      "report_must_not_contain": ["实缴资本5000万元人民币，与注册资本一致"]
+      "expected_no_record_fields": [
+        "enforcement",
+        "dishonesty",
+        "equity_freeze",
+        "negative_news"
+      ],
+      "report_must_contain_any": [
+        "冲突",
+        "不一致",
+        "需人工核实"
+      ],
+      "report_must_not_contain": [
+        "实缴资本5000万元人民币，与注册资本一致"
+      ],
+      "expected_risk_level": "高风险",
+      "expected_level_rationale": "注册资本/实缴资本多源记载冲突，本身是核心风险线索且须人工核实，等级上调一级。",
+      "expected_gate_kinds_include": [
+        "conflict_escalation"
+      ],
+      "expected_gate_kinds_exclude": [
+        "dishonesty_veto"
+      ]
     }
   ],
-
   "injected_hallucinations": {
     "_purpose": "幻觉检出率的度量方式：模型不一定会主动幻觉，因此向报告注入已知的错误断言，检验 Critic 能否抓出。抓不出即为漏检。",
     "cases": [

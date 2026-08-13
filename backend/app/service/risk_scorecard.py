@@ -42,6 +42,26 @@ WEIGHTS = {
 MIN_OVERALL_RATE = 0.60      # 总体核实率低于此值 → 不予评级
 MIN_CATEGORY_RATE = 0.50     # 维度核实率低于此值 → 该维度不参与加权
 
+# —— 闸门种类的稳定标识（v0.7）——
+#
+# `gates_applied` 是给人读的中文说明，措辞会随可读性调整而变。
+# 评测若靠中文子串判断"闸门理由对不对"，就是扫描器同款的开集脆弱性（BC-47）：
+# 改一个字，断言就假阴性。因此另给每条闸门一个**不随措辞变化**的 kind。
+#
+# 判据：等级对了不代表理由对了。BC-18 就是等级正确（中风险）但理由错误
+# （说成"这次核实率不足"，实为"系统根本查不了"）。只断言等级会漏掉这类缺陷。
+GATE_OVERALL_RATE = "overall_rate_below_min"
+GATE_JUDICIAL_REQUIRED = "judicial_required_unverified"
+GATE_CATEGORY_RATE = "category_rate_below_min"
+GATE_CAPABILITY = "capability_gap"
+GATE_CONFLICT = "conflict_escalation"
+GATE_DISHONESTY_VETO = "dishonesty_veto"
+GATE_ENFORCEMENT_VETO = "enforcement_veto"
+GATE_PROVENANCE = "provenance_degraded"
+GATE_UNRATABLE = "unratable"
+GATE_HUMAN_OVERRIDE = "human_review_override"
+GATE_HUMAN_REJECTED = "human_review_rejected"
+
 # 风险分**从结构化档案取值**计算的核查项。
 #
 # 这些项的 `_ok()` 只决定"要不要评"，具体扣多少分完全由 `company` 里的
@@ -310,7 +330,13 @@ def score(
 
     level = _score_to_level(composite)
     gates: List[str] = []
+    # 与 gates 一一对应的机器可读标识。中文说明供人读，kind 供程序与评测判断。
+    gate_kinds: List[str] = []
     requires_review = False
+
+    def _gate(kind: str, detail: str):
+        gates.append(detail)
+        gate_kinds.append(kind)
 
     # ================= 完整度闸门（不可被评分覆盖） =================
     rate = completeness.get("verified_rate", 0.0)
@@ -318,7 +344,8 @@ def score(
     # 1) 总体核实率过低 → 不予评级
     if rate < MIN_OVERALL_RATE:
         level = INSUFFICIENT
-        gates.append(f"总体核实率 {rate:.0%} 低于 {MIN_OVERALL_RATE:.0%}，不具备评级条件")
+        _gate(GATE_OVERALL_RATE,
+              f"总体核实率 {rate:.0%} 低于 {MIN_OVERALL_RATE:.0%}，不具备评级条件")
         requires_review = True
 
     # 2) 司法维度任一必查项未核实 → 至少中风险（司法是硬约束）
@@ -326,14 +353,16 @@ def score(
     if jud_missing:
         if level != INSUFFICIENT:
             level = _level_at_least(level, "中风险")
-        gates.append(f"司法维度必查项未核实（{'、'.join(jud_missing)}），等级下限提升至中风险")
+        _gate(GATE_JUDICIAL_REQUIRED,
+              f"司法维度必查项未核实（{'、'.join(jud_missing)}），等级下限提升至中风险")
         requires_review = True
 
     # 3) 某维度核实率过低 → 至少中风险
     for dim in skipped:
         if level != INSUFFICIENT:
             level = _level_at_least(level, "中风险")
-        gates.append(f"{dim} 维度核实率不足 {MIN_CATEGORY_RATE:.0%}，不参与加权且等级下限提升")
+        _gate(GATE_CATEGORY_RATE,
+              f"{dim} 维度核实率不足 {MIN_CATEGORY_RATE:.0%}，不参与加权且等级下限提升")
         requires_review = True
 
     # 3b) 能力缺失 → 至少中风险（BC-18）
@@ -356,11 +385,10 @@ def score(
         names = "、".join(
             (by_id.get(f) or {}).get("field_name", f) for f in capability_gaps
         )
-        gates.append(
-            f"系统尚不具备以下必查项的核查能力：{names}。"
-            f"这不是本次未查到，而是重试也无法解决的能力缺失——"
-            f"等级下限提升至中风险，该项须线下人工核查后方可下调"
-        )
+        _gate(GATE_CAPABILITY,
+              f"系统尚不具备以下必查项的核查能力：{names}。"
+              f"这不是本次未查到，而是重试也无法解决的能力缺失——"
+              f"等级下限提升至中风险，该项须线下人工核查后方可下调")
         requires_review = True
 
     # 4) 存在冲突必查项 → 上调一级 + 强制人工复核
@@ -369,9 +397,8 @@ def score(
     if conflicts:
         if level in LEVELS:
             level = LEVELS[min(len(LEVELS) - 1, LEVELS.index(level) + 1)]
-        gates.append(
-            f"存在数据冲突必查项（{'、'.join(c['field_id'] for c in conflicts)}），等级上调一级"
-        )
+        _gate(GATE_CONFLICT,
+              f"存在数据冲突必查项（{'、'.join(c['field_id'] for c in conflicts)}），等级上调一级")
         requires_review = True
 
     # 5) 一票否决类：失信 / 被执行 → 至少高风险
@@ -379,12 +406,12 @@ def score(
     if _ok("dishonesty") and any(r.get("type") == "失信" for r in jr):
         if level != INSUFFICIENT:
             level = _level_at_least(level, "高风险")
-        gates.append("存在失信被执行人记录，等级下限提升至高风险（一票否决类）")
+        _gate(GATE_DISHONESTY_VETO, "存在失信被执行人记录，等级下限提升至高风险（一票否决类）")
         requires_review = True
     elif _ok("enforcement") and any(r.get("type") == "被执行" for r in jr):
         if level != INSUFFICIENT:
             level = _level_at_least(level, "高风险")
-        gates.append("存在被执行记录，等级下限提升至高风险（一票否决类）")
+        _gate(GATE_ENFORCEMENT_VETO, "存在被执行记录，等级下限提升至高风险（一票否决类）")
         requires_review = True
 
     return {
@@ -394,6 +421,7 @@ def score(
         "dimensions_excluded": skipped,
         "triggered_rules": triggered,
         "gates_applied": gates,
+        "gate_kinds": gate_kinds,
         "requires_human_review": requires_review,
         "completeness": completeness,
         "credit_advice": _advice(level),
@@ -442,6 +470,7 @@ def apply_provenance_gate(
         f"{len(degradations)} 项核实来源或取证时间不明（{shown}），"
         f"等级下限提升至{floor}并强制人工复核；完成来源迁移后方可重新评级"
     ]
+    result["gate_kinds"] = list(result.get("gate_kinds") or []) + [GATE_PROVENANCE]
     result["provenance_degradations"] = degradations
     result["credit_advice"] = _advice(result["level"])
     return result
@@ -498,6 +527,7 @@ def apply_human_review(
     out = dict(result or {})
     engine_level = out.get("level", INSUFFICIENT)
     gates = list(out.get("gates_applied") or [])
+    kinds = list(out.get("gate_kinds") or [])
 
     if override and override != engine_level:
         out["level"] = override
@@ -505,13 +535,16 @@ def apply_human_review(
             f"人工复核将风险等级由「{engine_level}」调整为「{override}」"
             f"（复核人 {reviewer}）：{decision.get('comment') or '未填写理由'}"
         )
+        kinds.append(GATE_HUMAN_OVERRIDE)
     if not approved:
         gates.append(f"人工复核未通过（复核人 {reviewer}）：{decision.get('comment') or '未填写理由'}")
+        kinds.append(GATE_HUMAN_REJECTED)
         out["credit_advice"] = "复核未通过，不得出具授信建议；须按复核意见整改后重新提交"
     elif override and override != engine_level:
         out["credit_advice"] = _advice(out["level"])
 
     out["gates_applied"] = gates
+    out["gate_kinds"] = kinds
     out["requires_human_review"] = True      # 描述的是"曾经必须复核"，不因已复核而变假
     out["human_review"] = {
         "completed": True,
@@ -544,6 +577,7 @@ def unratable(reason: str, completeness: Optional[Dict[str, Any]] = None) -> Dic
         "dimensions_excluded": [],
         "triggered_rules": [],
         "gates_applied": [reason],
+        "gate_kinds": [GATE_UNRATABLE],
         "requires_human_review": True,
         "completeness": completeness or {},
         "credit_advice": _advice(INSUFFICIENT),

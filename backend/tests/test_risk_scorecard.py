@@ -271,6 +271,75 @@ def test_能力就绪后低风险方可达():
         "担保圈查不了时不得出具低风险"
 
 
+# ---------- 闸门标识：评测判据不得依赖中文措辞（v0.7）----------
+
+def test_每条闸门都带机器可读标识():
+    """
+    `gates_applied` 是给人读的，措辞会随可读性调整而变。评测若靠中文子串
+    判断闸门理由，就是扫描器同款的开集脆弱性（BC-47）——改一个字断言就假阴性。
+    """
+    r = _run(_CLEAN, {"litigation": "unverified", "enforcement": "unverified",
+                      "dishonesty": "unverified"})
+    assert len(r["gate_kinds"]) == len(r["gates_applied"]), \
+        "每条闸门说明必须配一个 kind，数量不一致说明有入口漏加"
+    assert all(isinstance(k, str) and k for k in r["gate_kinds"])
+
+
+def test_各类闸门的标识正确():
+    from service.risk_scorecard import (
+        GATE_CAPABILITY, GATE_CONFLICT, GATE_DISHONESTY_VETO,
+        GATE_JUDICIAL_REQUIRED, GATE_OVERALL_RATE,
+    )
+    jud = _run(_CLEAN, {"litigation": "unverified", "enforcement": "unverified",
+                        "dishonesty": "unverified"})
+    assert GATE_JUDICIAL_REQUIRED in jud["gate_kinds"]
+
+    cap = _run(_CLEAN, {"guarantee_circle": "unverified"})
+    assert GATE_CAPABILITY in cap["gate_kinds"]
+
+    veto = _run({**_CLEAN, "judicial_records": [{"type": "失信", "amount": 100}]})
+    assert GATE_DISHONESTY_VETO in veto["gate_kinds"]
+
+    cs = _checks({})
+    for c in cs:
+        if c["field_id"] == "registration":
+            c["status"] = "conflicting"; c["value"] = None
+    conf = score(_CLEAN, cs, compute_completeness(cs))
+    assert GATE_CONFLICT in conf["gate_kinds"]
+
+    poor = _run(_CLEAN, {f: "unverified" for f in
+                         ("registration", "business_scope", "operating_status",
+                          "shareholders", "actual_controller", "revenue",
+                          "net_profit", "debt_ratio", "litigation")})
+    assert GATE_OVERALL_RATE in poor["gate_kinds"]
+
+
+def test_不可评级与降级闸门同样带标识():
+    from service.risk_scorecard import (
+        GATE_PROVENANCE, GATE_UNRATABLE, apply_provenance_gate, unratable,
+    )
+    u = unratable("测试原因")
+    assert u["gate_kinds"] == [GATE_UNRATABLE]
+
+    d = apply_provenance_gate(_run(_CLEAN), [{"field_id": "guarantee", "reason": "x"}])
+    assert GATE_PROVENANCE in d["gate_kinds"]
+    assert len(d["gate_kinds"]) == len(d["gates_applied"])
+
+
+def test_人工复核改写也带标识():
+    from service.risk_scorecard import (
+        GATE_HUMAN_OVERRIDE, GATE_HUMAN_REJECTED, apply_human_review,
+    )
+    ov = apply_human_review(_run(_CLEAN, {"guarantee_circle": "unverified"}),
+                            {"approved": True, "reviewer": "张三",
+                             "comment": "已线下核查", "override_level": "低风险"})
+    assert GATE_HUMAN_OVERRIDE in ov["gate_kinds"]
+    assert len(ov["gate_kinds"]) == len(ov["gates_applied"])
+
+    rj = apply_human_review(_run(_CLEAN), {"approved": False, "reviewer": "李四"})
+    assert GATE_HUMAN_REJECTED in rj["gate_kinds"]
+
+
 def test_能力缺失清单来自配置而非硬编码():
     """新增 not_implemented 项时，闸门应自动覆盖，不需要改评分卡"""
     from config.dd_checklist import CAPABILITY_GAP_IDS, CHECKLIST_BY_ID

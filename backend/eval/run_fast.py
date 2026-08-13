@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.join(_HERE, "..", "app"))
 
 from config.dd_checklist import build_field_checks, compute_completeness  # noqa: E402
 from service.company_profile import fill_field_checks, profile_to_facts  # noqa: E402
+from service.risk_scorecard import score as score_risk  # noqa: E402
 
 EVAL_DATA = os.path.join(_HERE, "..", "app", "data", "companies_eval.json")
 GROUND_TRUTH = os.path.join(_HERE, "ground_truth.json")
@@ -80,6 +81,26 @@ def run_case(company: Dict, expected: Dict) -> Dict:
         else:
             anomaly_misses.append({"field": fid, "status": c.get("status"), "reason": reason[:60]})
 
+    # —— 风险等级与闸门理由（v0.7 新增）——
+    #
+    # 只断言等级是不够的：等级可能对了但理由是错的。BC-18 就是这个形态——
+    # 等级正确（中风险），理由却说成"这次核实率不足"，实为"系统根本查不了"。
+    # 因此同时断言**决定性闸门必须出现**与**特定闸门绝不能出现**。
+    #
+    # 判据用 gate_kinds（机器可读）而非中文措辞：靠中文子串判断闸门，
+    # 就是扫描器同款的开集脆弱性（BC-47）。
+    assessment = score_risk(company, checks, comp)
+    got_level = assessment["level"]
+    want_level = expected.get("expected_risk_level")
+    level_ok = (want_level is None) or (got_level == want_level)
+
+    kinds = set(assessment.get("gate_kinds") or [])
+    need = expected.get("expected_gate_kinds_include") or []
+    forbid = expected.get("expected_gate_kinds_exclude") or []
+    gate_missing = [k for k in need if k not in kinds]
+    gate_forbidden = [k for k in forbid if k in kinds]
+    gate_ok = not gate_missing and not gate_forbidden
+
     # —— 完整度统计是否吻合 ——
     exp_comp = expected.get("expected_completeness", {})
     comp_ok = (
@@ -99,6 +120,13 @@ def run_case(company: Dict, expected: Dict) -> Dict:
         "anomaly_total": len(anomaly_fields),
         "anomaly_hits": anomaly_hits,
         "anomaly_misses": anomaly_misses,
+        "level_ok": level_ok,
+        "level_actual": got_level,
+        "level_expected": want_level,
+        "gate_ok": gate_ok,
+        "gate_missing": gate_missing,
+        "gate_forbidden": gate_forbidden,
+        "gate_kinds_actual": sorted(kinds),
         "completeness_ok": comp_ok,
         "completeness_actual": f"{comp['required_verified']}/{comp['required_total']}",
         "completeness_expected": f"{exp_comp.get('required_verified')}/{exp_comp.get('required_total')}",
@@ -137,17 +165,20 @@ def main() -> int:
     print("=" * 74)
 
     tot_s = tot_sh = tot_n = tot_nh = tot_a = tot_ah = 0
-    comp_ok_n = 0
+    comp_ok_n = level_ok_n = gate_ok_n = 0
     for r in results:
         tot_s += r["status_total"]; tot_sh += r["status_hits"]
         tot_n += r["no_record_total"]; tot_nh += r["no_record_hits"]
         tot_a += r["anomaly_total"]; tot_ah += r["anomaly_hits"]
         comp_ok_n += 1 if r["completeness_ok"] else 0
+        level_ok_n += 1 if r["level_ok"] else 0
+        gate_ok_n += 1 if r["gate_ok"] else 0
 
         flag = "PASS" if (r["status_hits"] == r["status_total"]
                           and r["no_record_hits"] == r["no_record_total"]
                           and r["anomaly_hits"] == r["anomaly_total"]
-                          and r["completeness_ok"]) else "FAIL"
+                          and r["completeness_ok"]
+                          and r["level_ok"] and r["gate_ok"]) else "FAIL"
         print(f"\n[{flag}] {r['case_id']}  {r['scenario']}")
         print(f"       字段状态 {r['status_hits']}/{r['status_total']}"
               f" | 无记录识别 {r['no_record_hits']}/{r['no_record_total']}"
@@ -158,8 +189,15 @@ def main() -> int:
             print(f"         ✗ {m['field']}: 期望 {m['expected']}，实际 {m['actual']}")
         for m in r["no_record_misses"]:
             print(f"         ✗ 无记录项 {m['field']}: status={m['status']} value={m['value']!r}")
+        print(f"       风险等级 {r['level_actual']}"
+              f" (期望 {r['level_expected']}) {'OK' if r['level_ok'] else '✗'}"
+              f" | 闸门 {'OK' if r['gate_ok'] else '✗'} {r['gate_kinds_actual']}")
         for m in r["anomaly_misses"]:
             print(f"         ✗ 异常项 {m['field']}: status={m['status']} reason={m['reason']!r}")
+        if r["gate_missing"]:
+            print(f"         ✗ 缺少决定性闸门: {r['gate_missing']}")
+        if r["gate_forbidden"]:
+            print(f"         ✗ 触发了不该触发的闸门: {r['gate_forbidden']}")
 
     print("\n" + "=" * 74)
     print("汇总")
@@ -172,6 +210,8 @@ def main() -> int:
     print(f"  无记录识别率       {pct(tot_nh, tot_n)}")
     print(f"  主体异常识别率     {pct(tot_ah, tot_a)}")
     print(f"  核实率统计吻合     {pct(comp_ok_n, len(results))}")
+    print(f"  风险等级一致性     {pct(level_ok_n, len(results))}")
+    print(f"  闸门理由正确性     {pct(gate_ok_n, len(results))}")
 
     all_pass = (tot_sh == tot_s and tot_nh == tot_n
                 and tot_ah == tot_a and comp_ok_n == len(results))
