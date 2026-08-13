@@ -33,14 +33,23 @@ Critic 用脚本控制回环走向，覆盖直线 / 补充搜索 / 修订 / 取�
 运行：cd backend && python tests/test_graph_equivalence.py
 """
 import asyncio
+import itertools
 import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
 
+from langgraph.checkpoint.memory import MemorySaver  # noqa: E402
+
 from service.deep_research_v2 import graph as graph_module  # noqa: E402
-from service.deep_research_v2.graph import DeepResearchGraph  # noqa: E402
+from service.deep_research_v2.graph import (  # noqa: E402
+    DeepResearchGraph, reset_graph_checkpointer,
+)
 from service.deep_research_v2.state import ResearchPhase  # noqa: E402
+
+# 每条轨迹用独立 session_id：图检查点按 thread_id 索引，复用会让上一条
+# 轨迹的中断点泄漏到下一条，测试之间不再独立。
+_SESSION_SEQ = itertools.count(1)
 
 _DD_QUERY = "请对东莞市泰锐精密传动件有限公司做贷前尽职调查，授信2000万元"
 _PLAIN_QUERY = "分析一下新能源汽车行业的发展趋势"
@@ -87,7 +96,20 @@ class _CriticScript:
         state["unresolved_issues"] = 0 if phase == ResearchPhase.COMPLETED.value else 2
 
 
-def _build_graph(critic_phases=(ResearchPhase.COMPLETED.value,), saved=None):
+def _assessment(requires_review=False, level="中风险"):
+    return {
+        "composite_score": 42.0, "level": level, "dimension_scores": {},
+        "dimensions_excluded": [], "triggered_rules": [],
+        "gates_applied": ["测试用闸门"], "requires_human_review": requires_review,
+        "completeness": {}, "credit_advice": "可考虑授信，建议追加增信措施",
+    }
+
+
+def _build_graph(critic_phases=(ResearchPhase.COMPLETED.value,), saved=None,
+                 requires_review=False):
+    # 图检查点注入内存实现：等价性测试不该依赖数据库，
+    # 也不该为了连不上的 Postgres 每次等 30 秒超时
+    reset_graph_checkpointer(MemorySaver())
     g = DeepResearchGraph.__new__(DeepResearchGraph)     # 跳过 __init__ 的 LLM 客户端构造
     from service.deep_research_v2.agents import (
         ChiefArchitect, DeepScout, CodeWizard, CriticMaster, LeadWriter, DataAnalyst,
@@ -108,7 +130,8 @@ def _build_graph(critic_phases=(ResearchPhase.COMPLETED.value,), saved=None):
         lambda s: s["facts"].append({"id": "f_x", "content": "c", "source_url": "u"}))
     g.data_analyst = _fake_agent(
         DataAnalyst(*kw, "m"),
-        [("risk_assessment", {"level": "中风险", "gates_applied": ["g"]})])
+        [("risk_assessment", {"level": "中风险", "gates_applied": ["g"]})],
+        lambda s: s.update({"risk_assessment": _assessment(requires_review)}))
     g.wizard = _fake_agent(
         CodeWizard(*kw, "m"),
         [("research_step", {"step_type": "analyzing", "title": "生成图表"})],
@@ -156,22 +179,36 @@ def _clean(ev):
     return {k: v for k, v in ev.items() if k not in _VOLATILE}
 
 
-async def _collect(g, query, cancel_after=None):
-    """跑一次并收集事件；cancel_after 用于在第 N 条事件后置取消标志"""
+async def _collect(g, query, session_id, cancel_after=None, resume_with=None, raw=False):
+    """
+    跑一次并收集事件。
+
+    cancel_after: 在第 N 条事件后置取消标志
+    resume_with : 首轮结束后带该复核结论恢复，把两轮事件拼成一条轨迹
+    raw         : 不做归一化。断言**事件载荷完整性**时必须用它——
+                  `_clean` 会剥掉 session_id 等键，那是给轨迹比对用的，
+                  拿它断言"载荷里有没有某个字段"会得出错误结论。
+    """
+    norm = (lambda e: e) if raw else _clean
     out = []
-    async for ev in g.run(query, "sess-equiv", user_id="u1"):
-        out.append(_clean(ev))
+    async for ev in g.run(query, session_id, user_id="u1"):
+        out.append(norm(ev))
         if cancel_after is not None and len(out) == cancel_after:
             graph_module.is_research_cancelled = lambda sid: True
+    if resume_with is not None:
+        async for ev in g.resume_review(session_id, resume_with, user_id="u1"):
+            out.append(norm(ev))
     return out
 
 
-def _trace(query, critic_phases=(ResearchPhase.COMPLETED.value,), cancel_after=None):
+def _trace(query, critic_phases=(ResearchPhase.COMPLETED.value,), cancel_after=None,
+           requires_review=False, resume_with=None, raw=False):
     saved = []
-    g = _build_graph(critic_phases, saved)
+    g = _build_graph(critic_phases, saved, requires_review)
+    session_id = f"sess-equiv-{next(_SESSION_SEQ)}"
     original = graph_module.is_research_cancelled
     try:
-        evs = asyncio.run(_collect(g, query, cancel_after))
+        evs = asyncio.run(_collect(g, query, session_id, cancel_after, resume_with, raw))
     finally:
         graph_module.is_research_cancelled = original
     return evs, saved[0]

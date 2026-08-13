@@ -22,6 +22,7 @@ LLM 打分不可复现，评测就无从谈起——v0.4 实测的 LLM 判定方
 
 **查不到 ≠ 没问题。** 闸门在综合评分之后强制施加，不可被评分覆盖。
 """
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 # —— 风险等级（有序，便于取"至少为 X"）——
@@ -419,6 +420,86 @@ def apply_provenance_gate(
     return result
 
 
+def needs_human_review(assessment: Optional[Dict[str, Any]]) -> bool:
+    """
+    该评级是否必须经人工复核后才能出具。
+
+    判据只有一条：`requires_human_review`。它由完整度闸门、冲突闸门、
+    一票否决闸门与来源闸门共同置位，是规则层已经算好的结论——
+    编排层不该再自己推断一遍，否则两处判据会漂移。
+    """
+    if not assessment:
+        # 连评级都没有，更不能自动放行
+        return True
+    return bool(assessment.get("requires_human_review"))
+
+
+def apply_human_review(
+    result: Dict[str, Any],
+    decision: Dict[str, Any],
+    reviewed_at: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    把风控人员的复核结论并入评级。
+
+    ## 一条不可让步的规则：改写必须留痕
+
+    复核人可以推翻规则引擎的等级——业务上这是必需的，规则永远覆盖不全。
+    但**规则引擎的原始结论必须原样保留**，且改写要作为一条闸门写进
+    `gates_applied`。改写而不留痕，出坏账追责时就无法区分
+    "规则算错了"与"人改过了"——这两者的责任归属完全不同。
+
+    与 BC-22 同形：当时是模型保留标记即可改写等级，这次是人。
+    机制一样：**谁都可以改，但改动本身必须可见。**
+
+    Args:
+        decision: {approved, reviewer, comment, override_level}
+                  `reviewer` 必填——没有署名的复核等于没有复核。
+    """
+    decision = decision or {}
+    reviewer = (decision.get("reviewer") or "").strip()
+    if not reviewer:
+        raise ValueError("复核结论必须署名：没有复核人的确认无法追责")
+
+    approved = bool(decision.get("approved"))
+    override = (decision.get("override_level") or "").strip() or None
+    if override and override not in LEVELS and override != INSUFFICIENT:
+        raise ValueError(
+            f"override_level 必须是 {LEVELS + [INSUFFICIENT]} 之一，收到 {override!r}"
+        )
+
+    out = dict(result or {})
+    engine_level = out.get("level", INSUFFICIENT)
+    gates = list(out.get("gates_applied") or [])
+
+    if override and override != engine_level:
+        out["level"] = override
+        gates.append(
+            f"人工复核将风险等级由「{engine_level}」调整为「{override}」"
+            f"（复核人 {reviewer}）：{decision.get('comment') or '未填写理由'}"
+        )
+    if not approved:
+        gates.append(f"人工复核未通过（复核人 {reviewer}）：{decision.get('comment') or '未填写理由'}")
+        out["credit_advice"] = "复核未通过，不得出具授信建议；须按复核意见整改后重新提交"
+    elif override and override != engine_level:
+        out["credit_advice"] = _advice(out["level"])
+
+    out["gates_applied"] = gates
+    out["requires_human_review"] = True      # 描述的是"曾经必须复核"，不因已复核而变假
+    out["human_review"] = {
+        "completed": True,
+        "approved": approved,
+        "reviewer": reviewer,
+        "comment": decision.get("comment") or "",
+        "override_level": override,
+        # 规则引擎的原始结论。永远保留，永远不被覆盖。
+        "engine_level": engine_level,
+        "engine_composite_score": out.get("composite_score"),
+        "reviewed_at": reviewed_at or datetime.now().isoformat(),
+    }
+    return out
+
+
 def unratable(reason: str, completeness: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     构造「无法评级」结果，用于评分前置条件不满足时。
@@ -489,6 +570,28 @@ def render_markdown(assessment: Dict[str, Any], max_rules: int = 10) -> str:
         f"| 人工复核 | {'必须' if assessment.get('requires_human_review') else '非强制'} |",
         f"| 授信建议 | {assessment.get('credit_advice', '')} |",
     ]
+
+    # 人工复核结论：必须与规则引擎结论**并列**呈现，不能只显示最终等级。
+    # 只给最终等级，读者无法判断这个结论是算出来的还是人改的（见 apply_human_review）。
+    hr = assessment.get("human_review") or {}
+    if hr.get("completed"):
+        lines += [
+            "",
+            "**人工复核**",
+            "",
+            "| 项目 | 内容 |",
+            "|---|---|",
+            f"| 复核人 | {hr.get('reviewer', '')} |",
+            f"| 复核时间 | {hr.get('reviewed_at', '')} |",
+            f"| 复核结论 | {'通过' if hr.get('approved') else '**未通过**'} |",
+            f"| 规则引擎原始等级 | {hr.get('engine_level', '')} |",
+        ]
+        if hr.get("override_level"):
+            lines.append(
+                f"| 人工调整后等级 | **{hr['override_level']}**"
+                f"（原始结论已保留于上一行，供事后追溯） |"
+            )
+        lines.append(f"| 复核意见 | {hr.get('comment') or '（未填写）'} |")
 
     gates = assessment.get("gates_applied") or []
     lines += ["", "**触发的完整度闸门**"]

@@ -50,5 +50,16 @@ class VerificationPolicy:
             "DD_DEGRADED_LEVEL_FLOOR", "中风险"
         )
 
+        # —— 人机协同复核卡点（v0.6）——
+        #
+        # `requires_human_review` 为真时，流程在 `human_review` 节点中断，
+        # 等风控人员确认后才继续。合规要求，也是出坏账追责的前提。
+        #
+        # 置 False 只应用于**离线批量评测**：评测跑几十家企业，没人在旁边点确认，
+        # 中断会让整批任务挂死。生产环境关掉它等于取消了复核这道岗。
+        self.require_human_review_gate: bool = _env_bool(
+            "DD_REQUIRE_HUMAN_REVIEW_GATE", True
+        )
+
 
 POLICY = VerificationPolicy()

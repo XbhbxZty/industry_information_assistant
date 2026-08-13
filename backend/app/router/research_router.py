@@ -60,6 +60,30 @@ class ResearchRequest(BaseModel):
             return 'local' in self.search_modes
         return self.search_local if self.search_local is not None else False
 
+
+class HumanReviewRequest(BaseModel):
+    """
+    风控复核结论（v0.6 人机协同）
+
+    `reviewer` 必填且不得为空：没有署名的复核等于没有复核——
+    出坏账追责时无法确定是谁批的。
+    """
+    reviewer: str                                   # 复核人，必填
+    approved: bool                                  # 是否通过
+    comment: Optional[str] = ""                     # 复核意见
+    override_level: Optional[str] = None            # 人工调整后的风险等级
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "reviewer": "风控部-张三",
+                "approved": True,
+                "comment": "已复核司法数据源缺口，要求追加担保后可授信",
+                "override_level": None,
+            }
+        }
+
+
 # 获取服务实例
 def get_research_service():
     """获取研究服务实例"""
@@ -518,4 +542,60 @@ async def resume_research(session_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to resume research: {e}")
+        raise HTTPException(status_code=HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.post("/review/{session_id}", status_code=HTTP_200_OK)
+async def submit_human_review(session_id: str, request: HumanReviewRequest):
+    """
+    提交风控复核结论，从复核卡点继续执行（v0.6 人机协同）
+
+    业务位置：系统产出尽调报告与风险评级后，若评级要求人工复核
+    （`requires_human_review`），流程会在 `human_review` 节点暂停并推出
+    `human_review_required` 事件。风控人员在前端确认后调用本端点。
+
+    复核人可以推翻规则引擎的等级（`override_level`），但**规则引擎的原始
+    结论会被完整保留并写进报告**——改写而不留痕，出坏账追责时无法区分
+    "规则算错了"和"人改过了"。
+
+    Args:
+        session_id: 会话ID，与发起尽调时一致
+        request: 复核结论（复核人必填）
+
+    Returns:
+        流式响应：从断点继续直到 research_complete
+    """
+    try:
+        from service.checkpoint_service import get_checkpoint_service
+        info = get_checkpoint_service().get_checkpoint_info(session_id)
+        if not info:
+            raise HTTPException(
+                status_code=HTTP_400_BAD_REQUEST,
+                detail=f"会话 {session_id} 不存在"
+            )
+        if info.get("status") != "paused":
+            # 不在暂停态就提交复核，多半是前端状态过期或重复提交。
+            # 直接放行会让一份没有中断点的会话收到复核结论却无处安放。
+            raise HTTPException(
+                status_code=HTTP_400_BAD_REQUEST,
+                detail=f"会话当前状态为 {info.get('status')}，没有待复核的卡点"
+            )
+
+        service_v2 = get_research_service_v2()
+
+        async def generate_sse():
+            try:
+                async for chunk in service_v2.submit_review(
+                    session_id, request.model_dump()
+                ):
+                    yield chunk
+            except Exception as e:
+                logger.error(f"Submit review error: {e}")
+                yield f"data: {serialize_event({'type': 'error', 'content': str(e)})}\n\n"
+
+        return StreamingResponse(generate_sse(), media_type="text/event-stream")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to submit human review: {e}")
         raise HTTPException(status_code=HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

@@ -146,6 +146,29 @@ class DeepResearchV2Service:
         # 发送结束标记
         yield "data: [DONE]\n\n"
 
+    async def submit_review(
+        self,
+        session_id: str,
+        decision: Dict[str, Any],
+        user_id: str = None,
+    ):
+        """
+        提交风控复核结论并从断点继续（v0.6 人机协同）。
+
+        流式返回是必要的：恢复后还要跑完 `human_review` 之后的收尾，
+        调用方需要拿到最终的 `research_complete`——复核结论只有走到终局
+        才算真正生效。
+        """
+        logger.info(f"Submitting human review for session {session_id}: "
+                    f"approved={decision.get('approved')}, reviewer={decision.get('reviewer')}")
+        try:
+            async for event in self.graph.resume_review(session_id, decision, user_id=user_id):
+                yield self._format_sse(event)
+        except Exception as e:
+            logger.error(f"Submit review error: {e}", exc_info=True)
+            yield self._format_sse({"type": "error", "content": str(e)})
+        yield "data: [DONE]\n\n"
+
     def _format_sse(self, event: Dict[str, Any]) -> str:
         """格式化为 SSE 事件"""
         return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"

@@ -31,7 +31,7 @@ except ImportError:
 # LangGraph 导入 - 如果没有安装则使用简化版本
 try:
     from langgraph.graph import StateGraph, END
-    from langgraph.types import Command
+    from langgraph.types import Command, interrupt
     from langgraph.config import get_stream_writer
     LANGGRAPH_AVAILABLE = True
 except ImportError:
@@ -43,6 +43,16 @@ except ImportError:
 
 from .state import ResearchState, ResearchPhase, create_initial_state
 from .agents import ChiefArchitect, DeepScout, CodeWizard, CriticMaster, LeadWriter, DataAnalyst
+from .agents.writer import _canonicalize_risk_block
+
+try:
+    from service.risk_scorecard import apply_human_review, needs_human_review, render_markdown
+    from config.verification_policy import POLICY
+except ImportError:
+    from app.service.risk_scorecard import (
+        apply_human_review, needs_human_review, render_markdown,
+    )
+    from app.config.verification_policy import POLICY
 
 # 导入检查点服务
 try:
@@ -101,6 +111,59 @@ def build_complete_event(state: Dict[str, Any], references: List[Dict[str, Any]]
         # 调用方只等最终结果就看不到"这份评级建立在来源不明的数据上"（BC-33）
         "errors": state.get("errors", []),
     }
+
+
+# ---------------------------------------------------------------- 图检查点
+#
+# 与本项目自带的 `checkpoint_service` **职责不重叠**，两者都需要：
+#
+#   LangGraph checkpointer  → 图执行到哪个节点、中断在哪、resume 从哪继续
+#   本项目 checkpoint_service → 业务状态与 UI 状态，供前端刷新后重建界面
+#
+# 必须持久化而非 MemorySaver：`DeepResearchV2Service()` 是**每次请求新建**的，
+# 进程内内存检查点跨请求必然失效——风控人员几小时后来点"确认"时，
+# 那个中断点已经不存在了。这不是偏好，是 resume 能否工作的硬约束。
+_CHECKPOINTER = None
+_CHECKPOINTER_POOL = None
+
+
+def _get_graph_checkpointer():
+    """惰性构造全局共享的图检查点存储。失败时降级为进程内存储并大声告警。"""
+    global _CHECKPOINTER, _CHECKPOINTER_POOL
+    if _CHECKPOINTER is not None:
+        return _CHECKPOINTER
+
+    try:
+        from langgraph.checkpoint.postgres import PostgresSaver
+        from psycopg_pool import ConnectionPool
+        try:
+            from core.database import DATABASE_URL
+        except ImportError:
+            from app.core.database import DATABASE_URL
+
+        _CHECKPOINTER_POOL = ConnectionPool(
+            DATABASE_URL, min_size=1, max_size=5, open=True,
+            # autocommit + 关闭 prepare 是 PostgresSaver 的要求
+            kwargs={"autocommit": True, "prepare_threshold": 0},
+        )
+        saver = PostgresSaver(_CHECKPOINTER_POOL)
+        saver.setup()
+        _CHECKPOINTER = saver
+        logger.info("[Graph] 图检查点使用 PostgresSaver（人工复核可跨请求恢复）")
+    except Exception as e:
+        from langgraph.checkpoint.memory import MemorySaver
+        _CHECKPOINTER = MemorySaver()
+        logger.error(
+            f"[Graph] PostgresSaver 不可用（{e}），降级为 MemorySaver。"
+            f"⚠️ 人工复核中断将无法跨请求恢复——生产环境必须修复此项"
+        )
+    return _CHECKPOINTER
+
+
+def reset_graph_checkpointer(checkpointer=None) -> None:
+    """替换图检查点存储。供测试注入 MemorySaver，避免依赖数据库。"""
+    global _CHECKPOINTER
+    _CHECKPOINTER = checkpointer
 
 
 class DeepResearchGraph:
@@ -290,21 +353,26 @@ class DeepResearchGraph:
 
         # 审核后的三种走向。原图只有 revise / complete 两种，
         # 漏掉了"信息不足需补充检索"这条实际存在的路径。
+        workflow.add_node("human_review", self._human_review_node)
+
         workflow.add_conditional_edges(
             "review",
             self._route_after_review,
             {
                 "re_research": "re_research",
                 "revise": "revise",
-                "complete": END,
+                # 审核回环结束后一律经过复核卡点。是否真的中断由节点自己判断——
+                # 路由函数不该重复实现"要不要人工复核"这条规则。
+                "complete": "human_review",
             },
         )
+        workflow.add_edge("human_review", END)
 
         workflow.add_conditional_edges("re_research", self._guard("rewrite"), ["rewrite", END])
         workflow.add_conditional_edges("rewrite", self._guard("review"), ["review", END])
         workflow.add_conditional_edges("revise", self._guard("review"), ["review", END])
 
-        return workflow.compile()
+        return workflow.compile(checkpointer=_get_graph_checkpointer())
 
     @staticmethod
     def _guard(next_node: str):
@@ -492,6 +560,108 @@ class DeepResearchGraph:
         if not await self._run_agent(self.writer, state):
             return state
         return state
+
+    async def _human_review_node(self, state: ResearchState):
+        """
+        风控复核卡点（v0.6 人机协同）。
+
+        ## 为什么这一步必须存在
+
+        业务约束：高风险结论不得全自动放行。这既是信贷合规要求，也是出坏账
+        追责的前提——报告上必须有人签字。`checkpoint_service` 从原项目起就
+        支持 `paused` 状态，但**在此之前没有任何一行代码设置过它**。
+
+        ## 为什么它倒逼了 LangGraph 的恢复
+
+        "暂停 → 等人确认 → 从断点继续"最干净的实现是 LangGraph 原生
+        `interrupt()`。而 v0.6 之前图执行是死代码，所以这条业务需求
+        直接倒逼了 A 阶段的编排重建——不是先重构再找用途。
+
+        ## ⚠️ interrupt 之前不得有不可重复的副作用
+
+        实测：恢复时**本节点会从头重跑**，`interrupt()` 这次直接返回复核结论
+        而不再抛出。因此中断点之前的任何写操作都会执行两次。
+        本节点在 `interrupt()` 之前只读不写；"已暂停"的 SSE 事件也不在这里推，
+        而是由 `_run_with_langgraph` 检测到 `__interrupt__` 时推一次（BC-44）。
+        """
+        state = dict(state)
+        assessment = state.get("risk_assessment") or {}
+
+        if not POLICY.require_human_review_gate:
+            logger.warning("[Graph] 人工复核卡点已被配置关闭（仅应用于离线评测）")
+            return state
+        if not needs_human_review(assessment):
+            logger.info("[Graph] 评级未要求人工复核，直接完成")
+            return state
+
+        decision = interrupt(self._review_request(state, assessment))
+
+        # —— 以下只在恢复后执行 ——
+        logger.info(f"[Graph] 收到复核结论: {decision}")
+        try:
+            state["risk_assessment"] = apply_human_review(assessment, decision or {})
+        except ValueError as e:
+            # 结论不合法（如未署名）不得静默放行：宁可停在未复核状态
+            logger.error(f"[Graph] 复核结论非法: {e}")
+            state.setdefault("errors", []).append(f"人工复核结论非法，未采纳: {e}")
+            return state
+
+        self._sync_risk_block(state)
+        self._emit({
+            "type": "human_review_completed",
+            "session_id": state.get("session_id", ""),
+            "human_review": state["risk_assessment"]["human_review"],
+            "level": state["risk_assessment"]["level"],
+            "gates_applied": state["risk_assessment"]["gates_applied"],
+            "credit_advice": state["risk_assessment"]["credit_advice"],
+        })
+        return state
+
+    @staticmethod
+    def _review_request(state: ResearchState, assessment: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        交给复核人的材料。
+
+        必须同时给出等级**与闸门**：等级往往由闸门而非分数决定，
+        只给分数会让复核人得出与等级相反的结论（见 risk_scorecard 3.1）。
+        """
+        comp = state.get("completeness") or {}
+        critical = [
+            f for f in (state.get("critic_feedback") or [])
+            if (f.get("severity") if isinstance(f, dict) else None) == "critical"
+        ]
+        return {
+            "type": "human_review_required",
+            "session_id": state.get("session_id", ""),
+            "company_name": state.get("company_name", ""),
+            "level": assessment.get("level"),
+            "composite_score": assessment.get("composite_score"),
+            "credit_advice": assessment.get("credit_advice"),
+            "gates_applied": assessment.get("gates_applied") or [],
+            "verified_rate": comp.get("verified_rate"),
+            "unverified_fields": comp.get("unverified_fields") or [],
+            "conflicting_fields": comp.get("conflicting_fields") or [],
+            "critical_issues": critical,
+            "errors": state.get("errors") or [],
+        }
+
+    def _sync_risk_block(self, state: ResearchState) -> None:
+        """
+        复核结论回写报告正文。
+
+        复核人签的是这份报告，复核结果就必须出现在这份报告里——
+        只存在事件载荷里，导出的 Word 交到评审会时就看不到谁批的。
+        """
+        report = state.get("final_report") or ""
+        if not report:
+            return
+        try:
+            state["final_report"] = _canonicalize_risk_block(
+                report, render_markdown(state["risk_assessment"])
+            )
+        except Exception as e:
+            logger.error(f"[Graph] 复核结论回写报告失败: {e}", exc_info=True)
+            state.setdefault("errors", []).append(f"复核结论未能写入报告正文: {e}")
 
     def _route_after_review(
         self, state: ResearchState
@@ -761,15 +931,85 @@ class DeepResearchGraph:
             clear_cancel_flag(session_id)
         state["_cancelled"] = False
 
-        final_state: Dict[str, Any] = state
+        async for event in self._drive(state, session_id):
+            yield event
+
+    async def resume_review(
+        self,
+        session_id: str,
+        decision: Dict[str, Any],
+        user_id: str = None,
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        风控人员提交复核结论后，从中断点继续执行。
+
+        `Command(resume=...)` 让 `interrupt()` 直接返回该结论——被中断的节点
+        会**从头重跑**，所以它在中断点之前必须是只读的（见 `_human_review_node`）。
+
+        线程标识用 `session_id`：一次尽调 = 一个 thread，恢复才能找回断点。
+        """
+        if not (LANGGRAPH_AVAILABLE and self.graph):
+            yield {"type": "error", "content": "LangGraph 不可用，无法恢复复核"}
+            return
+
+        config = {"configurable": {"thread_id": session_id}}
+        snapshot = await self.graph.aget_state(config)
+        if not (snapshot and snapshot.next):
+            yield {"type": "error",
+                   "content": f"会话 {session_id} 没有待复核的中断点（可能已完成或从未暂停）"}
+            return
+
+        logger.info(f"[Graph] 恢复复核: session={session_id}, 断点={snapshot.next}")
+        yield {
+            "type": "research_resumed",
+            "session_id": session_id,
+            "reason": "human_review",
+            "timestamp": datetime.now().isoformat(),
+        }
+        async for event in self._drive(Command(resume=decision), session_id,
+                                       user_id=user_id):
+            yield event
+
+    async def _drive(
+        self,
+        payload: Any,
+        session_id: str,
+        user_id: str = None,
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        驱动一次图执行（首次运行或恢复），把三种收尾情况分开处理：
+        中断待复核 / 被取消 / 正常完成。
+
+        三者必须严格互斥：**中断和取消都不得产出 `research_complete`**，
+        否则调用方会以为拿到了完整结论——而"暂停等复核"恰恰意味着
+        这份结论还没有效力。
+        """
+        config = {"configurable": {"thread_id": session_id}}
+        final_state: Dict[str, Any] = payload if isinstance(payload, dict) else {}
+        interrupted = None
+
         try:
             async for mode, chunk in self.graph.astream(
-                state, stream_mode=["custom", "values"]
+                payload, config, stream_mode=["custom", "values"]
             ):
                 if mode == "custom":
                     yield chunk
                 elif isinstance(chunk, dict):
-                    final_state = chunk
+                    if chunk.get("__interrupt__"):
+                        interrupted = chunk["__interrupt__"][0]
+                    else:
+                        final_state = chunk
+
+            if interrupted is not None:
+                # 暂停：写 paused 状态，推出复核请求，**不发终局事件**
+                if self.checkpoint_service and session_id:
+                    self.checkpoint_service.update_status(session_id, "paused")
+                payload_out = dict(getattr(interrupted, "value", {}) or {})
+                payload_out.setdefault("type", "human_review_required")
+                payload_out["session_id"] = session_id
+                logger.info(f"[Graph] 已暂停等待人工复核: session={session_id}")
+                yield payload_out
+                return
 
             if final_state.get("_cancelled"):
                 logger.info(f"[Graph] 研究已取消: {session_id}")
