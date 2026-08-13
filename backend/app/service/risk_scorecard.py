@@ -581,6 +581,16 @@ def unratable(reason: str, completeness: Optional[Dict[str, Any]] = None) -> Dic
         "requires_human_review": True,
         "completeness": completeness or {},
         "credit_advice": _advice(INSUFFICIENT),
+        # 显式给出"不出具"而非留空：下游读到 None 会自行脑补一个默认值
+        "credit_recommendation": {
+            "recommendable": False,
+            "reason": "不具备评级条件，不出具授信额度建议",
+            "suggested_amount": None, "range_low": None, "range_high": None,
+            "basis": [], "deductions": [], "adjustments": [],
+            "application_amount": None, "application_gap": None,
+            "conditions": ["须补齐必查项并重新评估后方可出具授信建议"],
+            "advice_text": "不具备评级条件，不出具授信额度建议",
+        },
     }
 
 
@@ -653,6 +663,18 @@ def render_markdown(assessment: Dict[str, Any], max_rules: int = 10) -> str:
                 f"（原始结论已保留于上一行，供事后追溯） |"
             )
         lines.append(f"| 复核意见 | {hr.get('comment') or '（未填写）'} |")
+
+    # 授信额度建议：信贷评审要的是"建议多少钱、附什么条件"，
+    # 只给一个等级标签他们什么也决定不了
+    rec = assessment.get("credit_recommendation")
+    if rec:
+        try:
+            from service.credit_advice import render_markdown as _render_rec
+        except ImportError:
+            from app.service.credit_advice import render_markdown as _render_rec
+        block = _render_rec(rec)
+        if block:
+            lines += ["", block]
 
     gates = assessment.get("gates_applied") or []
     lines += ["", "**触发的完整度闸门**"]

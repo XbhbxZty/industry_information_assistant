@@ -24,6 +24,7 @@ try:
     )
     from service.company_profile import replay_from_profile, verify_field_checks
     from service.verification import build_scoring_view
+    from service.credit_advice import recommend_credit
     from config.dd_checklist import compute_completeness
     from config.verification_policy import POLICY
 except ImportError:  # 兼容以 app 为包根的导入方式
@@ -32,6 +33,7 @@ except ImportError:  # 兼容以 app 为包根的导入方式
     )
     from app.service.company_profile import replay_from_profile, verify_field_checks
     from app.service.verification import build_scoring_view
+    from app.service.credit_advice import recommend_credit
     from app.config.dd_checklist import compute_completeness
     from app.config.verification_policy import POLICY
 
