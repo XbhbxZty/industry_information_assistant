@@ -199,27 +199,85 @@ def test_评分可复现():
     assert a["gates_applied"] == b["gates_applied"]
 
 
-# ---------- ⚠️ 已知设计问题（显式记录，不靠调阈值掩盖）----------
+# ---------- 能力缺失 vs 信息缺口（BC-18 决策）----------
+#
+# 结论：**「低风险不可达」不是缺陷，是正确行为。**
+#
+# 系统若确实无法核查某个必查项，它本来就不该出具低风险结论。原先的两个候选
+# 解法都被否掉了：
+#   (a) 把 guarantee_circle 降为选查项 —— 担保圈是监管明确关注的系统性风险，
+#       为了让评级好看而改业务定义是自欺
+#   (b) 维度核实率分母只计"有数据源"的项 —— 这恰是「查不到 ≠ 没问题」的反面。
+#       借款人的担保圈敞口是未知的，不管未知的原因是什么
+#
+# 真正要修的是**闸门理由说错了**：能力缺失伪装成「这次核实率不足」，
+# 导致每份报告都挂同一条闸门。一个永远亮的告警等于没有告警。
 
-def test_已知问题_低风险等级当前不可达():
+def test_能力缺失触发专用闸门而非核实率闸门():
+    """⭐ BC-18 的核心行为变更：理由必须准确，否则告警会被学会无视"""
+    r = _run(_CLEAN, {"guarantee_circle": "unverified"})
+    cap = [g for g in r["gates_applied"] if "尚不具备" in g]
+    assert cap, f"必须给出能力缺失的专用闸门：{r['gates_applied']}"
+    assert "担保圈" in cap[0], "闸门须点名是哪一项查不了"
+    assert "重试也无法解决" in cap[0], "须讲清这不是本次没查到"
+    assert not any("relation 维度核实率不足" in g for g in r["gates_applied"]), \
+        "能力缺失不该再伪装成维度核实率不足——那是两回事"
+
+
+def test_能力缺失仍然提升等级下限():
     """
-    guarantee_circle 是必查项，但当前**没有任何数据源**
-    （需关联图谱推导，属 v0.6 工作），因此永远 unverified。
-    relation 维度最高只能到 2/3=67%… 实际当前仅 1/3=33% < 50% 阈值，
-    导致该维度恒被排除且等级下限恒被提升至中风险。
-
-    后果：**「低风险」在当前实现下不可达。**
-
-    一个永远达不到的等级说明规则有问题。可选解法：
-      (a) 在关联图谱能力就绪前，把 guarantee_circle 降为选查项
-      (b) 维度核实率的分母只计"有数据源可查"的项
-    本测试锁定当前行为，待 v0.6 决策后再改。
+    区分能力缺失**不是**为了把它从风险里排除。
+    因为"我们查不了"就不计入风险，正是完整度闸门当初要防的那件事。
     """
-    r = _run(_CLEAN)   # 全部 verified 的理想情况
-    assert r["level"] == "低风险", (
-        "全部字段 verified 时应可达低风险；若此断言失败，"
-        "说明闸门在理想数据下仍被触发，需检查阈值设计"
-    )
+    r = _run(_CLEAN, {"guarantee_circle": "unverified"})
+    assert r["level"] == "中风险", f"能力缺失必须提升下限，实际 {r['level']}"
+    assert r["requires_human_review"], "查不了的项必须转人工"
+
+
+def test_能力缺失不拖累同维度其它项():
+    """
+    guarantee 查到了，related_party 也查到了，不该因为担保圈查不了
+    就把整个 relation 维度判成"核实率不足"并整体排除出加权。
+    """
+    comp = compute_completeness(_checks({"guarantee_circle": "unverified"}))
+    rel = comp["by_category"]["relation"]
+    assert rel["capability_gaps"] == 1
+    assert rel["total"] == 2, "能力缺失项不进维度分母"
+    assert rel["rate"] == 1.0, f"其余两项都已核实，维度率应为 100%，实际 {rel['rate']}"
+
+
+def test_能力缺失仍计入总体核实率分母():
+    """
+    诚实性要求：15 项必查确实只核实了 14 项。
+    若把它从总分母里也剔掉，核实率会虚高，总体闸门会被削弱。
+    """
+    comp = compute_completeness(_checks({"guarantee_circle": "unverified"}))
+    assert comp["required_total"] == 15
+    assert comp["required_verified"] == 14
+    assert comp["verified_rate"] < 1.0, "能力缺失不得让核实率显示为 100%"
+    assert "guarantee_circle" in comp["capability_gaps"]
+    assert "guarantee_circle" in comp["unverified_fields"], \
+        "它同时也是未核实项——两个列表语义不同但可以重叠"
+
+
+def test_能力就绪后低风险方可达():
+    """
+    「低风险不可达」的解除条件是**建成关联图谱能力**，
+    不是调阈值。这条断言锁住这一点：一旦担保圈真的能查了，规则本身放行。
+    """
+    assert _run(_CLEAN)["level"] == "低风险", \
+        "全部字段（含担保圈）已核实时，规则设计本身应允许低风险"
+    assert _run(_CLEAN, {"guarantee_circle": "unverified"})["level"] == "中风险", \
+        "担保圈查不了时不得出具低风险"
+
+
+def test_能力缺失清单来自配置而非硬编码():
+    """新增 not_implemented 项时，闸门应自动覆盖，不需要改评分卡"""
+    from config.dd_checklist import CAPABILITY_GAP_IDS, CHECKLIST_BY_ID
+    assert CAPABILITY_GAP_IDS == {"guarantee_circle"}, \
+        f"当前应只有担保圈一项无数据源，实际 {CAPABILITY_GAP_IDS}"
+    for fid in CAPABILITY_GAP_IDS:
+        assert CHECKLIST_BY_ID[fid].data_source_status == "not_implemented"
 
 
 if __name__ == "__main__":

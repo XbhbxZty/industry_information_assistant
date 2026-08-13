@@ -25,6 +25,29 @@ class ChecklistItem:
     required: bool         # 必查项未核实会触发风险等级下限（v0.5 完整度闸门）
     description: str       # 供 Writer 理解该项要交代什么
     primary_source: str    # 主数据源，未取到时写入 attempted_sources
+    data_source_status: str = "available"
+    """
+    该项**是否存在可用的获取路径**（BC-18）。
+
+    available       —— 有数据源。查不到属于「信息缺口」：可能是数据源故障、
+                       主体存疑，重试或换源有可能解决。
+    not_implemented —— 系统尚不具备核查该项的能力，重试永远不会成功。
+
+    ## 为什么必须区分，以及区分之后**不能**做什么
+
+    区分的目的**不是**把能力缺失从风险中排除——借款人的担保圈敞口是未知的，
+    不管未知的原因是什么。因为"我们查不了"就不计入风险，正是完整度闸门
+    当初要防的那件事（查不到 ≠ 没问题）。
+
+    区分的目的是让**闸门理由准确**。此前能力缺失伪装成「维度核实率不足」，
+    导致每份报告都挂同一条闸门——一个永远亮的告警等于没有告警，
+    风控人员会学会无视它，真正的信息缺口反而被淹没。
+
+    因此 `not_implemented` 的项：
+      - 仍然计入 `verified_rate` 的分母（诚实：15 项必查确实只核实了 14 项）
+      - **不**计入维度核实率的分母（它不是这次没查到，不该拖累同维度其它项）
+      - 触发一条**专用闸门**，明确写出是能力缺失、须线下人工核查
+    """
     absence_meaningful: bool = True
     """
     数据源查询后返回空结果时，「无记录」是否构成有效结论。
@@ -54,7 +77,7 @@ CATEGORY_TO_SECTION: Dict[str, str] = {
 
 
 def _item(field_id, field_name, category, required, description, primary_source,
-          absence_meaningful=True):
+          absence_meaningful=True, data_source_status="available"):
     return ChecklistItem(
         field_id=field_id,
         field_name=field_name,
@@ -63,6 +86,7 @@ def _item(field_id, field_name, category, required, description, primary_source,
         required=required,
         description=description,
         primary_source=primary_source,
+        data_source_status=data_source_status,
         absence_meaningful=absence_meaningful,
     )
 
@@ -113,8 +137,12 @@ CHECKLIST: List[ChecklistItem] = [
     # —— 关联关系与对外担保 ——
     _item("guarantee", "对外担保", "relation", True,
           "作为担保人的对外担保、主债权金额、担保方式、内部决议程序", "business_registry"),
+    # ⚠️ 唯一的 not_implemented 项：担保圈需要关联图谱推导，当前没有任何数据源
+    #    能提供。**不降为选查项**——它是监管明确关注的系统性风险，
+    #    为了让评级好看而改业务定义是自欺。系统查不了就如实说查不了（BC-18）。
     _item("guarantee_circle", "担保圈", "relation", True,
-          "是否涉入互保、连环担保。监管明确关注的系统性风险", "graph_analysis"),
+          "是否涉入互保、连环担保。监管明确关注的系统性风险", "graph_analysis",
+          data_source_status="not_implemented"),
     _item("related_party", "关联方交易", "relation", False,
           "关联方识别及关联交易占比、资金占用情况", "financial_report"),
 
@@ -130,6 +158,12 @@ CHECKLIST_BY_ID: Dict[str, ChecklistItem] = {i.field_id: i for i in CHECKLIST}
 
 REQUIRED_IDS = [i.field_id for i in CHECKLIST if i.required]
 OPTIONAL_IDS = [i.field_id for i in CHECKLIST if not i.required]
+
+# 系统尚不具备核查能力的项。评分卡据此施加**专用**闸门，
+# 而不是让它伪装成「这次没查到」（BC-18）。
+CAPABILITY_GAP_IDS = frozenset(
+    i.field_id for i in CHECKLIST if i.data_source_status == "not_implemented"
+)
 
 
 def build_field_checks(
@@ -209,12 +243,26 @@ def compute_completeness(field_checks: List[Dict]) -> Dict:
     unverified = [c for c in required if c.get("status") == "unverified"]
     conflicting = [c for c in field_checks if c.get("status") == "conflicting"]
 
+    # 能力缺失项（BC-18）：系统根本查不了，重试永远不会成功。
+    # 它们**仍计入 verified_rate 的分母**——15 项必查确实只核实了 14 项，
+    # 这个数字必须诚实。但不计入维度核实率的分母：把"永远查不了"和
+    # "这次没查到"混在一个比率里，会让同维度其它项被无辜拖累，
+    # 且闸门理由永远指向错误的方向。
+    capability_gaps = [
+        c["field_id"] for c in field_checks
+        if c.get("field_id") in CAPABILITY_GAP_IDS
+        and c.get("status") not in ("verified", "not_applicable")
+    ]
+
     by_category: Dict[str, Dict] = {}
     for c in field_checks:
         if c.get("status") == "not_applicable":
             continue
         cat = c.get("category", "?")
-        stat = by_category.setdefault(cat, {"total": 0, "verified": 0})
+        stat = by_category.setdefault(cat, {"total": 0, "verified": 0, "capability_gaps": 0})
+        if c.get("field_id") in capability_gaps:
+            stat["capability_gaps"] += 1
+            continue                      # 不进该维度的分子分母
         stat["total"] += 1
         if c.get("status") == "verified":
             stat["verified"] += 1
@@ -227,5 +275,8 @@ def compute_completeness(field_checks: List[Dict]) -> Dict:
         "verified_rate": round(len(verified) / len(required), 3) if required else 0.0,
         "unverified_fields": [c["field_id"] for c in unverified],
         "conflicting_fields": [c["field_id"] for c in conflicting],
+        # 与 unverified_fields 有交集，但语义不同：前者是信息缺口（可补），
+        # 这里是能力缺失（补不了，须线下核查）。消费方必须分开呈现。
+        "capability_gaps": capability_gaps,
         "by_category": by_category,
     }

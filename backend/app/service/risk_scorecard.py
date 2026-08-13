@@ -336,6 +336,33 @@ def score(
         gates.append(f"{dim} 维度核实率不足 {MIN_CATEGORY_RATE:.0%}，不参与加权且等级下限提升")
         requires_review = True
 
+    # 3b) 能力缺失 → 至少中风险（BC-18）
+    #
+    # ⚠️ 这条闸门与 3) 是**不同的事**，绝不能合并：
+    #   3)  这次没查到 → 可能重试/换源能解决，是数据问题
+    #   3b) 系统查不了 → 重试永远不会成功，是产品能力问题，须线下人工核查
+    #
+    # 分开的理由不是文字讲究，而是：合并后每份报告都挂同一条「核实率不足」，
+    # 风控人员会学会无视它，真正的信息缺口反而被淹没——一个永远亮的告警
+    # 等于没有告警。
+    #
+    # 能力缺失**仍然提升等级下限**。借款人的担保圈敞口是未知的，
+    # 不管未知的原因是什么；因为"我们查不了"就不计入风险，
+    # 正是完整度闸门当初要防的那件事。
+    capability_gaps = completeness.get("capability_gaps") or []
+    if capability_gaps:
+        if level != INSUFFICIENT:
+            level = _level_at_least(level, "中风险")
+        names = "、".join(
+            (by_id.get(f) or {}).get("field_name", f) for f in capability_gaps
+        )
+        gates.append(
+            f"系统尚不具备以下必查项的核查能力：{names}。"
+            f"这不是本次未查到，而是重试也无法解决的能力缺失——"
+            f"等级下限提升至中风险，该项须线下人工核查后方可下调"
+        )
+        requires_review = True
+
     # 4) 存在冲突必查项 → 上调一级 + 强制人工复核
     conflicts = [c for c in field_checks
                  if c.get("status") == "conflicting" and c.get("required")]
