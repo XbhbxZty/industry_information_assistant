@@ -27,7 +27,10 @@ sys.path.insert(0, os.path.join(_HERE, "..", "app"))
 
 from config.dd_checklist import build_field_checks, compute_completeness  # noqa: E402
 from service.company_profile import fill_field_checks, profile_to_facts  # noqa: E402
-from service.risk_scorecard import score as score_risk  # noqa: E402
+from service.company_profile import replay_from_profile, verify_field_checks  # noqa: E402
+from service.datasource import apply_all  # noqa: E402
+from service.risk_scorecard import PROFILE_BACKED_FIELDS, score as score_risk  # noqa: E402
+from service.verification import build_scoring_view  # noqa: E402
 
 EVAL_DATA = os.path.join(_HERE, "..", "app", "data", "companies_eval.json")
 GROUND_TRUTH = os.path.join(_HERE, "ground_truth.json")
@@ -43,6 +46,10 @@ def run_case(company: Dict, expected: Dict) -> Dict:
     checks = build_field_checks(checked_at="2026-08-10T00:00:00")
     facts = profile_to_facts(company)
     fill_field_checks(company, facts, checks)
+    # 走与生产同一条链路：档案填充 → 数据源适配层 → 证据链校验 → 评分视图。
+    # 评测若只跑档案填充，测的就不是生产行为（BC-15 的教训）。
+    evidence_store: Dict = {}
+    apply_all(company, checks, evidence_store)
     comp = compute_completeness(checks)
     by_id = {c["field_id"]: c for c in checks}
 
@@ -89,7 +96,14 @@ def run_case(company: Dict, expected: Dict) -> Dict:
     #
     # 判据用 gate_kinds（机器可读）而非中文措辞：靠中文子串判断闸门，
     # 就是扫描器同款的开集脆弱性（BC-47）。
-    assessment = score_risk(company, checks, comp)
+    chain = verify_field_checks(company, checks, evidence_store)
+    view, unmergeable = build_scoring_view(
+        company, checks, evidence_store,
+        profile_backed_fields=PROFILE_BACKED_FIELDS,
+        profile_replay_fn=replay_from_profile,
+    )
+    chain_ok = chain.ok and not unmergeable
+    assessment = score_risk(view, checks, comp)
     got_level = assessment["level"]
     want_level = expected.get("expected_risk_level")
     level_ok = (want_level is None) or (got_level == want_level)
@@ -120,6 +134,9 @@ def run_case(company: Dict, expected: Dict) -> Dict:
         "anomaly_total": len(anomaly_fields),
         "anomaly_hits": anomaly_hits,
         "anomaly_misses": anomaly_misses,
+        "chain_ok": chain_ok,
+        "chain_problems": [m["reason"] for m in chain.mismatches] + [u["reason"] for u in unmergeable],
+        "evidence_count": len(evidence_store),
         "level_ok": level_ok,
         "level_actual": got_level,
         "level_expected": want_level,
@@ -165,12 +182,13 @@ def main() -> int:
     print("=" * 74)
 
     tot_s = tot_sh = tot_n = tot_nh = tot_a = tot_ah = 0
-    comp_ok_n = level_ok_n = gate_ok_n = 0
+    comp_ok_n = level_ok_n = gate_ok_n = chain_ok_n = 0
     for r in results:
         tot_s += r["status_total"]; tot_sh += r["status_hits"]
         tot_n += r["no_record_total"]; tot_nh += r["no_record_hits"]
         tot_a += r["anomaly_total"]; tot_ah += r["anomaly_hits"]
         comp_ok_n += 1 if r["completeness_ok"] else 0
+        chain_ok_n += 1 if r["chain_ok"] else 0
         level_ok_n += 1 if r["level_ok"] else 0
         gate_ok_n += 1 if r["gate_ok"] else 0
 
@@ -178,7 +196,8 @@ def main() -> int:
                           and r["no_record_hits"] == r["no_record_total"]
                           and r["anomaly_hits"] == r["anomaly_total"]
                           and r["completeness_ok"]
-                          and r["level_ok"] and r["gate_ok"]) else "FAIL"
+                          and r["level_ok"] and r["gate_ok"]
+                          and r["chain_ok"]) else "FAIL"
         print(f"\n[{flag}] {r['case_id']}  {r['scenario']}")
         print(f"       字段状态 {r['status_hits']}/{r['status_total']}"
               f" | 无记录识别 {r['no_record_hits']}/{r['no_record_total']}"
@@ -189,6 +208,7 @@ def main() -> int:
             print(f"         ✗ {m['field']}: 期望 {m['expected']}，实际 {m['actual']}")
         for m in r["no_record_misses"]:
             print(f"         ✗ 无记录项 {m['field']}: status={m['status']} value={m['value']!r}")
+        print(f"       证据 {r['evidence_count']} 条 | 证据链 {'OK' if r['chain_ok'] else '✗ ' + str(r['chain_problems'])}")
         print(f"       风险等级 {r['level_actual']}"
               f" (期望 {r['level_expected']}) {'OK' if r['level_ok'] else '✗'}"
               f" | 闸门 {'OK' if r['gate_ok'] else '✗'} {r['gate_kinds_actual']}")
@@ -212,6 +232,7 @@ def main() -> int:
     print(f"  核实率统计吻合     {pct(comp_ok_n, len(results))}")
     print(f"  风险等级一致性     {pct(level_ok_n, len(results))}")
     print(f"  闸门理由正确性     {pct(gate_ok_n, len(results))}")
+    print(f"  证据链完整性       {pct(chain_ok_n, len(results))}")
 
     all_pass = (tot_sh == tot_s and tot_nh == tot_n
                 and tot_ah == tot_a and comp_ok_n == len(results))

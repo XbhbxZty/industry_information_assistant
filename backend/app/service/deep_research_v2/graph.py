@@ -844,14 +844,41 @@ class DeepResearchGraph:
         # 核查清单：生成骨架 → 用档案填充 → 统计核实率
         checks = build_field_checks(checked_at=datetime.now().isoformat())
         fill_field_checks(company, facts, checks)
+        before = compute_completeness(checks)
+
+        # 结构化数据源适配层（v0.7-B）。
+        #
+        # 顺序在档案填充**之后**：适配器只补档案没覆盖的项，不覆盖已核实结论——
+        # 覆盖需要显式的证据替代授权，"我后跑"不构成替代理由（BC-40）。
+        #
+        # 这也是 v0.6a 那套证据链第一次处理非替身适配器：证据经受信任注册表
+        # 登记、带 profile_patch 投影、走同一条重放校验（BC-45 的教训在架构层）。
+        state["evidence_store"] = state.get("evidence_store") or {}
+        try:
+            from service.datasource import apply_all
+        except ImportError:
+            from app.service.datasource import apply_all
+        try:
+            applied = apply_all(company, checks, state["evidence_store"])
+            for adapter_id, fields in applied.items():
+                got = sorted(f for f, r in fields.items() if r == "verified")
+                if got:
+                    logger.info(f"[graph] 适配器 {adapter_id} 补充核实：{got}")
+        except Exception as e:
+            # 适配器失败不得中断尽调，但必须显式披露——静默失败会让核实率
+            # 悄悄退回档案水平，而报告读者无从知道少查了哪些源
+            logger.error(f"[graph] 数据源适配层执行失败: {e}", exc_info=True)
+            state.setdefault("errors", []).append(f"数据源适配层执行失败，本次仅使用初始档案: {e}")
+
         state["field_checks"] = checks
         state["completeness"] = compute_completeness(checks)
 
         comp = state["completeness"]
         logger.info(
             f"[graph] 已注入尽调对象 {company['name']}：事实 {len(facts)} 条，"
-            f"必查项核实 {comp['required_verified']}/{comp['required_total']} "
-            f"({comp['verified_rate']:.0%})，未核实：{comp['unverified_fields']}"
+            f"必查项核实 {before['required_verified']}→{comp['required_verified']}"
+            f"/{comp['required_total']} ({comp['verified_rate']:.0%})，"
+            f"未核实：{comp['unverified_fields']}"
         )
         return company
 

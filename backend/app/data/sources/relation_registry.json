@@ -1,0 +1,82 @@
+{
+  "_meta": {
+    "purpose": "关联关系登记数据源（v0.7-B mock 适配器）。模拟第三方关联关系/对外担保登记库。",
+    "disclaimer": "全部为虚构数据。企业名、统一社会信用代码、人名、金额均系编造，仅用于开发测试。如与真实主体雷同纯属巧合。",
+    "design_note": "刻意与 companies*.json 物理分离。适配器若从企业档案读数据，它就不是适配器，只是换了个壳的档案读取器——那样证据链仍然没有被真实检验过。",
+    "coverage_note": "queried 列出本源实际执行了查询的核查项。列出但无记录 = 事件型字段的正面结论；未列出 = 本源不覆盖，保持信息缺口。",
+    "deliberate_absence": "EVAL-004（主体存疑）不在本文件中：该主体在工商源就查不到，关联关系源同样查不到它。适配器不得填补为测试而设计的缺口，否则用例失效。"
+  },
+  "companies": {
+    "91320500MA1ND4KX7Y": {
+      "company_name": "苏州恒晟自动化设备有限公司",
+      "retrieved_at": "2026-08-11",
+      "queried": ["related_party", "external_investment", "guarantee"],
+      "related_party": [
+        {"name": "苏州恒晟精密模具有限公司", "relation": "同一实际控制人", "note": "共同实控人陈立"},
+        {"name": "昆山恒晟贸易有限公司", "relation": "受同一控制", "note": "采购代理"}
+      ],
+      "external_investment": [
+        {"name": "苏州恒晟精密模具有限公司", "ratio": 0.35}
+      ],
+      "guarantee": []
+    },
+    "91410100MA44QW8P3B": {
+      "company_name": "郑州宏川物流供应链有限公司",
+      "retrieved_at": "2026-08-11",
+      "queried": ["related_party", "external_investment", "guarantee"],
+      "related_party": [
+        {"name": "郑州宏川仓储管理有限公司", "relation": "同一实际控制人", "note": "共用经营场地"},
+        {"name": "洛阳通达运输有限公司", "relation": "关联方资金往来", "note": "存在大额往来款"}
+      ],
+      "external_investment": [
+        {"name": "郑州宏川仓储管理有限公司", "ratio": 0.60}
+      ],
+      "guarantee": [
+        {"beneficiary": "郑州宏川仓储管理有限公司", "guarantee_type": "连带责任保证",
+         "amount": 2400.0, "unit": "万元", "period": "2025-03 至 2028-03",
+         "board_resolution": "未提供股东会决议"},
+        {"beneficiary": "洛阳通达运输有限公司", "guarantee_type": "连带责任保证",
+         "amount": 1600.0, "unit": "万元", "period": "2025-07 至 2027-07",
+         "board_resolution": "未提供股东会决议"}
+      ]
+    },
+    "91340100MA2RTB6K9E": {
+      "company_name": "合肥安芯电子材料有限公司",
+      "retrieved_at": "2026-08-11",
+      "queried": ["related_party", "external_investment", "guarantee"],
+      "related_party": [
+        {"name": "合肥安芯半导体设备有限公司", "relation": "同一实际控制人", "note": "上游供应"}
+      ],
+      "external_investment": [],
+      "guarantee": []
+    },
+    "91330300MA2CJ5L47N": {
+      "company_name": "温州瑞泰阀门制造有限公司",
+      "retrieved_at": "2026-08-11",
+      "queried": ["related_party", "external_investment", "guarantee"],
+      "related_party": [
+        {"name": "温州瑞泰机械配件有限公司", "relation": "同一实际控制人", "note": "零部件供应"}
+      ],
+      "external_investment": [],
+      "guarantee": [
+        {"beneficiary": "温州瑞泰机械配件有限公司", "guarantee_type": "连带责任保证",
+         "amount": 800.0, "unit": "万元", "period": "2026-01 至 2027-12",
+         "board_resolution": "已取得股东会决议"}
+      ]
+    },
+    "91441900MA5XKT9F2L": {
+      "company_name": "东莞市泰锐精密传动件有限公司",
+      "retrieved_at": "2026-08-11",
+      "queried": ["related_party", "external_investment", "guarantee"],
+      "related_party": [
+        {"name": "东莞市泰锐五金制品有限公司", "relation": "同一实际控制人", "note": "毛坯件供应"}
+      ],
+      "external_investment": [],
+      "guarantee": [
+        {"beneficiary": "东莞市泰锐五金制品有限公司", "guarantee_type": "连带责任保证",
+         "amount": 1200.0, "unit": "万元", "period": "2025-09 至 2027-09",
+         "board_resolution": "已取得股东会决议"}
+      ]
+    }
+  }
+}

@@ -5,7 +5,8 @@
     "field_status_values": "verified | unverified | conflicting | not_applicable",
     "note": "expected_status 只标注必查项与有意义的选查项；未列出的项不参与字段准确率计算。",
     "risk_level_annotation": "expected_risk_level 与闸门期望由业务场景反推（信贷常识），**不是**照抄系统当前输出。⚠️ 局限：标注时作者已知系统现状，存在锚定风险；且这 5 家原为字段状态测试设计，不覆盖等级空间——「低风险」在担保圈能力就绪前不可达，当前无用例覆盖（见 BC-18）。",
-    "gate_kind_note": "断言用 gate_kinds（机器可读标识）而非 gates_applied 的中文措辞。靠中文子串判断闸门理由，就是扫描器同款的开集脆弱性（BC-47）。只断言 include/exclude 两个子集，不锁死完整集合——完整集合含随夹具变化的维度闸门，锁死会因错误的原因变脆。"
+    "gate_kind_note": "断言用 gate_kinds（机器可读标识）而非 gates_applied 的中文措辞。靠中文子串判断闸门理由，就是扫描器同款的开集脆弱性（BC-47）。只断言 include/exclude 两个子集，不锁死完整集合——完整集合含随夹具变化的维度闸门，锁死会因错误的原因变脆。",
+    "v07b_adapter_note": "2026-08-13 接入 relation_registry 适配器后的期望变更（逐条核对为真实增量，非把期望改成实际）：EVAL-001 related_party 查到2个关联方；EVAL-002 guarantee 查到2笔共4000万担保——加重风险的证据，必查项核实 13→14；EVAL-003 guarantee 查询无记录（正面结论），必查项核实 9→10。EVAL-004 未变：主体在关联关系源同样查不到，适配器不得填补为测试而设计的缺口。EVAL-005 未变：guarantee 已由初始档案核实，适配器不覆盖已定结论（BC-40）。"
   },
   "cases": [
     {
@@ -36,7 +37,7 @@
         "external_investment": "verified",
         "equity_freeze": "verified",
         "cash_flow": "verified",
-        "related_party": "unverified",
+        "related_party": "verified",
         "bidding_record": "verified"
       },
       "expected_no_record_fields": [
@@ -73,7 +74,7 @@
       "scenario": "高风险企业：失信 + 2笔被执行 + 资产负债率89.1% + 现金流连续两年为负",
       "tests": "一票否决类指标必须被识别并在报告中明确指出",
       "expected_completeness": {
-        "required_verified": 13,
+        "required_verified": 14,
         "required_total": 15
       },
       "expected_status": {
@@ -90,7 +91,7 @@
         "dishonesty": "verified",
         "negative_news": "verified",
         "regulatory_penalty": "verified",
-        "guarantee": "unverified",
+        "guarantee": "verified",
         "guarantee_circle": "unverified",
         "equity_freeze": "verified",
         "cash_flow": "verified"
@@ -123,7 +124,7 @@
       "scenario": "司法数据源接口超时，涉诉/被执行/失信/股权冻结全部未查询",
       "tests": "⭐核心用例：绝不能因为查不到司法记录就得出「无司法风险」或判低风险。这是尽调系统最危险的失效模式。",
       "expected_completeness": {
-        "required_verified": 9,
+        "required_verified": 10,
         "required_total": 15
       },
       "expected_status": {
@@ -139,14 +140,15 @@
         "litigation": "unverified",
         "enforcement": "unverified",
         "dishonesty": "unverified",
-        "guarantee": "unverified",
+        "guarantee": "verified",
         "guarantee_circle": "unverified",
         "regulatory_penalty": "unverified",
         "equity_freeze": "unverified",
         "cash_flow": "verified"
       },
       "expected_no_record_fields": [
-        "negative_news"
+        "negative_news",
+        "guarantee"
       ],
       "report_must_not_contain": [
         "无涉诉记录",
