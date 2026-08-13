@@ -137,12 +137,11 @@ CHECKLIST: List[ChecklistItem] = [
     # —— 关联关系与对外担保 ——
     _item("guarantee", "对外担保", "relation", True,
           "作为担保人的对外担保、主债权金额、担保方式、内部决议程序", "business_registry"),
-    # ⚠️ 唯一的 not_implemented 项：担保圈需要关联图谱推导，当前没有任何数据源
-    #    能提供。**不降为选查项**——它是监管明确关注的系统性风险，
-    #    为了让评级好看而改业务定义是自欺。系统查不了就如实说查不了（BC-18）。
+    # BC-18 的解除条件在 v0.7-C 达成：`service/guarantee_graph.py` 实现了
+    # 从关联关系库推导互保与连环担保的能力，`graph_analysis` 适配器已登记。
+    # **解除靠建能力，不靠调阈值**——这正是当初拒绝把它降为选查项的原因。
     _item("guarantee_circle", "担保圈", "relation", True,
-          "是否涉入互保、连环担保。监管明确关注的系统性风险", "graph_analysis",
-          data_source_status="not_implemented"),
+          "是否涉入互保、连环担保。监管明确关注的系统性风险", "graph_analysis"),
     _item("related_party", "关联方交易", "relation", False,
           "关联方识别及关联交易占比、资金占用情况", "financial_report"),
 

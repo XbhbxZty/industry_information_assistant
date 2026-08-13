@@ -361,6 +361,18 @@ def fill_field_checks(
             ),
             "relation")
 
+    # 担保圈（v0.7-C）：由 graph_analysis 适配器推导后并入档案。
+    # 措辞必须与 `guarantee_graph.CircleReport.describe()` 逐字一致——
+    # 证据取值要能被本函数重放出来，否则 patch 一致性校验会判为漂移。
+    if company.get("guarantee_circle"):
+        resolved["guarantee_circle"] = (
+            "；".join(
+                f"{c['kind']}：{' → '.join(list(c['path']) + [c['path'][0]])}"
+                f"（环上担保合计 {float(c['total_amount']):.0f} 万元）"
+                for c in company["guarantee_circle"]
+            ),
+            "relation")
+
     if company.get("related_party"):
         resolved["related_party"] = (
             "；".join(f"{r['name']}（{r['relation']}）" for r in company["related_party"]),

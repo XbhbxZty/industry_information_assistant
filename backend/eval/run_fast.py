@@ -234,8 +234,18 @@ def main() -> int:
     print(f"  闸门理由正确性     {pct(gate_ok_n, len(results))}")
     print(f"  证据链完整性       {pct(chain_ok_n, len(results))}")
 
+    # ⚠️ 判定必须覆盖**全部**已呈现的指标。
+    #
+    # 此前 all_pass 只看字段状态/无记录/主体异常/核实率四项，等级一致性、
+    # 闸门理由、证据链完整性三项**印在报告里却不参与判定**——装置可以一边
+    # 显示「风险等级一致性 80%」一边宣布「全部通过」。
+    #
+    # 与 BC-12 同形（评测装置产出误导性结论），且 chain_ok 是 v0.7-B
+    # 新加的指标，加了却没纳入判定——一个不参与判定的指标等于没有指标。
     all_pass = (tot_sh == tot_s and tot_nh == tot_n
-                and tot_ah == tot_a and comp_ok_n == len(results))
+                and tot_ah == tot_a and comp_ok_n == len(results)
+                and level_ok_n == len(results) and gate_ok_n == len(results)
+                and chain_ok_n == len(results))
     print(f"\n结果：{'全部通过' if all_pass else '存在未通过项'}")
     return 0 if all_pass else 1
 

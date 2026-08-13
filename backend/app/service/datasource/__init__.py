@@ -9,13 +9,19 @@
 from typing import Any, Dict, List
 
 try:
+    from service.datasource.mock.guarantee_circle import GuaranteeCircleAdapter
     from service.datasource.mock.relation_registry import RelationRegistryAdapter
 except ImportError:  # 兼容以 app 为包根的导入方式
+    from app.service.datasource.mock.guarantee_circle import GuaranteeCircleAdapter
     from app.service.datasource.mock.relation_registry import RelationRegistryAdapter
 
 # 当前启用的适配器。mock 实现默认启用，真实适配器需付费 Key，
 # 按同一基类实现后加入此处即可。
-_ADAPTERS = [RelationRegistryAdapter]
+#
+# ⚠️ 顺序有意义：担保圈推导消费关联关系库里的担保边，
+#    但它读的是**整个库**而非本次尽调对象的清单状态，因此与前者无数据依赖。
+#    放在后面只是为了让日志里"先查到什么、再推导出什么"读起来符合因果。
+_ADAPTERS = [RelationRegistryAdapter, GuaranteeCircleAdapter]
 
 _INSTANCES: List[Any] = []
 

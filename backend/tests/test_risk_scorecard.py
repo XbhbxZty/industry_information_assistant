@@ -33,6 +33,33 @@ def _run(company, status_map=None):
     return score(company, cs, compute_completeness(cs))
 
 
+class _capability_gap:
+    """
+    临时把某字段声明为"系统尚不具备核查能力"。
+
+    v0.7-C 建成担保圈图谱推导后，`CAPABILITY_GAP_IDS` 已清空——现实中不再有
+    未实现的必查项。但**能力缺失与信息缺口的区分机制本身依然要被测**：
+    下一个没有数据源的必查项出现时，它必须照常工作。
+
+    所以这些用例改为注入一个合成的能力缺失，而不是依赖
+    `guarantee_circle` 碰巧还没实现。删掉它们等于把机制的覆盖一起删掉。
+    """
+
+    def __init__(self, *field_ids):
+        self.field_ids = frozenset(field_ids)
+
+    def __enter__(self):
+        import config.dd_checklist as ck
+        self._original = ck.CAPABILITY_GAP_IDS
+        ck.CAPABILITY_GAP_IDS = self.field_ids
+        return self
+
+    def __exit__(self, *exc):
+        import config.dd_checklist as ck
+        ck.CAPABILITY_GAP_IDS = self._original
+        return False
+
+
 _CLEAN = {
     "registration": {"operating_status": "存续"},
     "financials": [{"period": "2025年度", "revenue": 10000.0, "net_profit": 1200.0,
@@ -215,7 +242,8 @@ def test_评分可复现():
 
 def test_能力缺失触发专用闸门而非核实率闸门():
     """⭐ BC-18 的核心行为变更：理由必须准确，否则告警会被学会无视"""
-    r = _run(_CLEAN, {"guarantee_circle": "unverified"})
+    with _capability_gap("guarantee_circle"):
+        r = _run(_CLEAN, {"guarantee_circle": "unverified"})
     cap = [g for g in r["gates_applied"] if "尚不具备" in g]
     assert cap, f"必须给出能力缺失的专用闸门：{r['gates_applied']}"
     assert "担保圈" in cap[0], "闸门须点名是哪一项查不了"
@@ -229,7 +257,8 @@ def test_能力缺失仍然提升等级下限():
     区分能力缺失**不是**为了把它从风险里排除。
     因为"我们查不了"就不计入风险，正是完整度闸门当初要防的那件事。
     """
-    r = _run(_CLEAN, {"guarantee_circle": "unverified"})
+    with _capability_gap("guarantee_circle"):
+        r = _run(_CLEAN, {"guarantee_circle": "unverified"})
     assert r["level"] == "中风险", f"能力缺失必须提升下限，实际 {r['level']}"
     assert r["requires_human_review"], "查不了的项必须转人工"
 
@@ -239,7 +268,8 @@ def test_能力缺失不拖累同维度其它项():
     guarantee 查到了，related_party 也查到了，不该因为担保圈查不了
     就把整个 relation 维度判成"核实率不足"并整体排除出加权。
     """
-    comp = compute_completeness(_checks({"guarantee_circle": "unverified"}))
+    with _capability_gap("guarantee_circle"):
+        comp = compute_completeness(_checks({"guarantee_circle": "unverified"}))
     rel = comp["by_category"]["relation"]
     assert rel["capability_gaps"] == 1
     assert rel["total"] == 2, "能力缺失项不进维度分母"
@@ -251,7 +281,8 @@ def test_能力缺失仍计入总体核实率分母():
     诚实性要求：15 项必查确实只核实了 14 项。
     若把它从总分母里也剔掉，核实率会虚高，总体闸门会被削弱。
     """
-    comp = compute_completeness(_checks({"guarantee_circle": "unverified"}))
+    with _capability_gap("guarantee_circle"):
+        comp = compute_completeness(_checks({"guarantee_circle": "unverified"}))
     assert comp["required_total"] == 15
     assert comp["required_verified"] == 14
     assert comp["verified_rate"] < 1.0, "能力缺失不得让核实率显示为 100%"
@@ -267,8 +298,9 @@ def test_能力就绪后低风险方可达():
     """
     assert _run(_CLEAN)["level"] == "低风险", \
         "全部字段（含担保圈）已核实时，规则设计本身应允许低风险"
-    assert _run(_CLEAN, {"guarantee_circle": "unverified"})["level"] == "中风险", \
-        "担保圈查不了时不得出具低风险"
+    with _capability_gap("guarantee_circle"):
+        assert _run(_CLEAN, {"guarantee_circle": "unverified"})["level"] == "中风险", \
+            "系统查不了担保圈时不得出具低风险"
 
 
 # ---------- 闸门标识：评测判据不得依赖中文措辞（v0.7）----------
@@ -294,7 +326,8 @@ def test_各类闸门的标识正确():
                         "dishonesty": "unverified"})
     assert GATE_JUDICIAL_REQUIRED in jud["gate_kinds"]
 
-    cap = _run(_CLEAN, {"guarantee_circle": "unverified"})
+    with _capability_gap("guarantee_circle"):
+        cap = _run(_CLEAN, {"guarantee_circle": "unverified"})
     assert GATE_CAPABILITY in cap["gate_kinds"]
 
     veto = _run({**_CLEAN, "judicial_records": [{"type": "失信", "amount": 100}]})
@@ -330,7 +363,9 @@ def test_人工复核改写也带标识():
     from service.risk_scorecard import (
         GATE_HUMAN_OVERRIDE, GATE_HUMAN_REJECTED, apply_human_review,
     )
-    ov = apply_human_review(_run(_CLEAN, {"guarantee_circle": "unverified"}),
+    with _capability_gap("guarantee_circle"):
+        _capped = _run(_CLEAN, {"guarantee_circle": "unverified"})
+    ov = apply_human_review(_capped,
                             {"approved": True, "reviewer": "张三",
                              "comment": "已线下核查", "override_level": "低风险"})
     assert GATE_HUMAN_OVERRIDE in ov["gate_kinds"]
@@ -342,9 +377,13 @@ def test_人工复核改写也带标识():
 
 def test_能力缺失清单来自配置而非硬编码():
     """新增 not_implemented 项时，闸门应自动覆盖，不需要改评分卡"""
-    from config.dd_checklist import CAPABILITY_GAP_IDS, CHECKLIST_BY_ID
-    assert CAPABILITY_GAP_IDS == {"guarantee_circle"}, \
-        f"当前应只有担保圈一项无数据源，实际 {CAPABILITY_GAP_IDS}"
+    from config.dd_checklist import CAPABILITY_GAP_IDS, CHECKLIST, CHECKLIST_BY_ID
+    # v0.7-C 后应为空：担保圈能力已建成，BC-18 解除
+    assert CAPABILITY_GAP_IDS == frozenset(), \
+        f"不应再有未实现的必查项，实际 {CAPABILITY_GAP_IDS}"
+    # 清单由配置派生而非硬编码：下一个没有数据源的必查项出现时自动纳入闸门
+    derived = {i.field_id for i in CHECKLIST if i.data_source_status == "not_implemented"}
+    assert CAPABILITY_GAP_IDS == derived
     for fid in CAPABILITY_GAP_IDS:
         assert CHECKLIST_BY_ID[fid].data_source_status == "not_implemented"
 

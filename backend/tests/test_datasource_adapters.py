@@ -153,8 +153,11 @@ def test_只处理覆盖范围内的字段():
     c = _companies()["EVAL-001"]
     checks, store, applied, _, _ = _run(c)
     assert set(applied["relation_registry"]) == RelationRegistryAdapter.covers
+    # 证据库里现在有多个适配器的产物，必须按 source_adapter 分别核对——
+    # 笼统断言"所有证据都在某一个适配器的射程内"会在加适配器时莫名其妙地红
     for ev in store.values():
-        assert ev["field_id"] in RelationRegistryAdapter.covers
+        owner = next(a for a in register_all() if a.adapter_id == ev["source_adapter"])
+        assert ev["field_id"] in owner.covers,             f"证据 {ev['field_id']} 不在其适配器 {ev['source_adapter']} 的射程内"
 
 
 # ---------------------------------------------------------------- 端到端
@@ -193,25 +196,56 @@ def test_担保证据真正进入评分而非被读成未发现():
     assert rules[0]["evidence"], "规则必须能追溯到具体证据 id（BC-39）"
 
 
-def test_适配器提升核实率且等级不被削弱():
+def test_适配器提升核实率且结论不被负面证据稀释():
     """
     接入数据源的收益必须可度量；同时安全性不得因为"数据变多"而下降。
+
+    ⚠️ 这条断言在 v0.7-C 被改写过。原文是"等级不应因补充数据而改变"——
+    太强了，它把两个方向混为一谈：
+
+      危险方向：新增**负面证据**却让等级变宽松（BC-31 的稀释效应）
+      正当方向：一道**闸门被解除**（能力建成）导致等级下调
+
+    担保圈能力上线后 EVAL-001 从中风险降为低风险，属后者：它本就无任何不良，
+    此前唯一的闸门是"系统查不了担保圈"。一刀切地禁止等级变化，
+    会把 BC-18 的正当解除也一起判红。
     """
+    from service.risk_scorecard import LEVELS
+
     gains = {}
     for cid, c in _companies().items():
         checks0 = _filled(c)
         comp0 = compute_completeness(checks0)
-        lvl0 = score(c, checks0, comp0)["level"]
+        r0 = score(c, checks0, comp0)
 
         checks, store, _, _, comp1 = _run(c)
         view, _ = build_scoring_view(
             c, checks, store, profile_backed_fields=PROFILE_BACKED_FIELDS,
             profile_replay_fn=replay_from_profile)
-        lvl1 = score(view, checks, comp1)["level"]
+        r1 = score(view, checks, comp1)
 
         assert comp1["verified_rate"] >= comp0["verified_rate"], f"{cid} 核实率不得下降"
-        assert lvl1 == lvl0, f"{cid} 等级不应因补充数据而改变：{lvl0} -> {lvl1}"
         gains[cid] = comp1["verified_rate"] - comp0["verified_rate"]
+
+        # 适配器是否带来了扣分项
+        added_negative = [
+            x for x in r1["triggered_rules"]
+            if x["score"] > 0 and x["field_id"] in
+            {"guarantee", "guarantee_circle", "related_party", "external_investment"}
+        ]
+        idx0, idx1 = LEVELS.index(r0["level"]) if r0["level"] in LEVELS else -1, \
+            LEVELS.index(r1["level"]) if r1["level"] in LEVELS else -1
+
+        if added_negative:
+            assert idx1 >= idx0, (
+                f"{cid} 适配器带来了扣分项 {[x['field_id'] for x in added_negative]}，"
+                f"等级却变宽松：{r0['level']} -> {r1['level']}——这是 BC-31 的稀释形态")
+        if 0 <= idx1 < idx0:
+            # 等级确实变宽松了：必须是闸门被解除，而不是负面证据被稀释
+            assert not added_negative, f"{cid} 有负面证据时不得下调等级"
+            assert set(r1["gate_kinds"]) < set(r0["gate_kinds"]), (
+                f"{cid} 等级下调必须伴随闸门解除："
+                f"{r0['gate_kinds']} -> {r1['gate_kinds']}")
 
     assert any(v > 0 for v in gains.values()), \
         f"至少要有企业核实率提升，否则适配器没有实际贡献：{gains}"
