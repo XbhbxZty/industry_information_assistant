@@ -20,8 +20,14 @@ from ..state import ResearchState, ResearchPhase
 
 try:
     from service.risk_scorecard import RISK_BLOCK_END, RISK_BLOCK_MARKER, render_markdown
+    from service.evidence_appendix import (
+        APPENDIX_MARKER, canonicalize_appendix, format_provenance, render_appendix,
+    )
 except ImportError:  # 兼容以 app 为包根的导入方式
     from app.service.risk_scorecard import RISK_BLOCK_END, RISK_BLOCK_MARKER, render_markdown
+    from app.service.evidence_appendix import (
+        APPENDIX_MARKER, canonicalize_appendix, format_provenance, render_appendix,
+    )
 
 
 def _excise_risk_block(text: str) -> str:
@@ -437,7 +443,16 @@ class LeadWriter(BaseAgent):
             tag = "必查" if c.get("required") else "选查"
             status = c.get("status")
             if status == "verified":
-                lines.append(f"- [{tag}] {c['field_name']}｜已核实：{c.get('value')}")
+                # 来源与取证时间必须一并给出。
+                #
+                # 本提示词要求"在句末标注来源与日期"，而此前清单里根本没有这两项——
+                # 让模型标注它拿不到的东西，在一个以反幻觉为目的的系统里
+                # 等于邀请它编造。溯源信息 v0.6a 起就存在于 field_check 上，
+                # 只是从没传到撰写环节（BC-48）。
+                lines.append(
+                    f"- [{tag}] {c['field_name']}｜已核实：{c.get('value')}"
+                    f"｜{format_provenance(c)}"
+                )
             elif status == "unverified":
                 lines.append(
                     f"- [{tag}] {c['field_name']}｜**未核实**，原因：{c.get('failure_reason') or '数据源未覆盖'}"
@@ -671,6 +686,7 @@ class LeadWriter(BaseAgent):
 
         # 整合是 LLM 步骤，可能把评级抹平或丢弃——代码层兜底补回
         self._ensure_risk_block(state)
+        self._ensure_evidence_appendix(state)
 
         # 发送报告完成事件 - 包含完整报告内容用于前端流式显示
         self.add_message(state, "report_draft", {
@@ -681,6 +697,34 @@ class LeadWriter(BaseAgent):
             "word_count": len(state["final_report"]),
             "references_count": len(state["references"])
         })
+
+    def _ensure_evidence_appendix(self, state: ResearchState) -> bool:
+        """
+        保证最终报告带有证据溯源附录，由代码收口。
+
+        与评级块同一理由：整合与修订都会重写全文，附录若交给模型生成，
+        会被改写、被精简、被"综合来看"掉——**一张被模型改过的证据清单
+        比没有更危险**，读者会以为它是原始记录。
+
+        Returns: 是否触发了兜底
+        """
+        checks = state.get("field_checks") or []
+        if not checks:
+            return False        # 非尽调流程没有清单，不强加附录
+        report = state.get("final_report") or ""
+        if not report:
+            return False
+        block = render_appendix(checks, state.get("evidence_store") or {},
+                                state.get("completeness") or {})
+        canonical = canonicalize_appendix(report, block)
+        changed = canonical != report
+        state["final_report"] = canonical
+        if changed:
+            self.logger.info(
+                f"[LeadWriter] 证据溯源附录已"
+                f"{'重建' if APPENDIX_MARKER in report else '追加'}"
+                f"（{len(checks)} 项核查）")
+        return changed
 
     def _ensure_risk_block(self, state: ResearchState) -> bool:
         """
