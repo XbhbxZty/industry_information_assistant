@@ -518,3 +518,29 @@ git 历史按 Stage 分组；README 如实说明基于课程项目二次开发�
 字段路径绑定、异常原子性、显式且可审计的证据替代关系、规则到 raw 的终局可追溯性。
 当前专项 53/53 及既有确定性回归全绿，**仍待另一个 Agent 独立复审，不自行封板**。
 
+---
+
+## v0.6 进度：编排交还 LangGraph + 人机协同复核（2026-08-13）
+
+| 项 | 状态 |
+|---|---|
+| 编排等价性黄金轨迹 | ✅ `tests/test_graph_equivalence.py` 11 例 |
+| 重建声明式图（补 DataAnalyst / 补充搜索回环 / 档案加载 / 取消 / 检查点） | ✅ |
+| 节点内实时流式（`get_stream_writer()` + `stream_mode="custom"`） | ✅ |
+| 删除 `_run_simplified`，消除双份控制流 | ✅ |
+| `human_review` 节点（`interrupt`） | ✅ |
+| 图检查点 PostgresSaver + 异步桥接 | ✅ 见 BC-45 |
+| `checkpoint_service` 首次真正设置 `paused` | ✅ |
+| `POST /research/review/{session_id}` | ✅ |
+| 复核结论并入评级并写回报告正文 | ✅ `apply_human_review()` |
+| 真实跨进程恢复验证 | ✅ 两个独立进程实测 |
+| 前端复核确认卡片 | ⬜ v1.0 范围 |
+| BC-18（`guarantee_circle` 低风险可达性） | ⬜ 待决策 |
+
+**本轮新增缺陷记录**：BC-41（声明式图与实际执行分叉）、BC-42（`Command(goto=END)`
+不取代静态边）、BC-43（未声明的 state 键被丢弃）、BC-44（`interrupt` 前的副作用
+执行两次）、BC-45（测试替身比真货能力强，生产路径整条失效）。
+
+其中 **BC-45 是在 B 阶段提交之后才发现的**：23 条断言全绿，但注入的
+`MemorySaver` 同步异步两套接口都实现，真正上生产的 `PostgresSaver` 只有同步一套。
+详见 `BADCASES.md` BC-41～BC-45、`ITERATION_ROADMAP.md` v0.6。

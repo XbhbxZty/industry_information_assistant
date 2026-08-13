@@ -234,6 +234,34 @@ def test_未署名的复核结论不被静默采纳():
         f"必须显式披露结论被拒：{final['errors']}"
 
 
+def test_生产检查点必须实现异步接口():
+    """
+    ⭐ BC-45：这条断言是拿真实跨进程验证换来的。
+
+    同步 `PostgresSaver` **没有实现异步接口**——`aget_tuple` 直接抛
+    `NotImplementedError`，而 `astream` 只走异步接口。于是人机协同在
+    生产路径上完全不工作，而本文件其余 23 条断言全绿。
+
+    根因：**测试替身比真实实现能力更强。** MemorySaver 同步异步两套都实现，
+    真正会被用到的 PostgresSaver 只有同步一套。替身能跑通的路径，真货跑不了。
+    与 BC-31 同形——断言覆盖不到真正会执行的那条链路。
+
+    所以这里不断言"某次调用成功"，而是断言**工厂可能返回的每一种检查点
+    都实现了异步接口**：不依赖数据库，却能覆盖生产路径的全部取值。
+    """
+    from langgraph.checkpoint.base import BaseCheckpointSaver
+    from service.deep_research_v2.graph import _make_async_bridge_saver
+
+    required = ("aget_tuple", "aput", "aput_writes", "alist")
+    # _get_graph_checkpointer() 只可能返回这两者之一
+    for cls in (_make_async_bridge_saver(), MemorySaver):
+        for m in required:
+            assert getattr(cls, m, None) is not getattr(BaseCheckpointSaver, m), (
+                f"{cls.__name__}.{m} 未实现异步接口，astream 会抛 NotImplementedError——"
+                f"人机协同在生产路径上会整条失效"
+            )
+
+
 def test_没有中断点时恢复给出明确错误():
     g = _build_graph(requires_review=False)
 

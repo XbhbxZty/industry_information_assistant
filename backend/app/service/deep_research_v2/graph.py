@@ -127,6 +127,47 @@ _CHECKPOINTER = None
 _CHECKPOINTER_POOL = None
 
 
+def _make_async_bridge_saver():
+    """
+    构造带异步桥接的 PostgresSaver 类。
+
+    ## 为什么需要桥接（BC-45）
+
+    同步 `PostgresSaver` **没有实现异步接口**——`aget_tuple` 直接抛
+    `NotImplementedError`，而 `astream` 只走异步接口。直接拿它编译图，
+    人机协同在生产路径上完全不工作。
+
+    为什么不用 `AsyncPostgresSaver`：psycopg 的异步模式在 Windows 上要求
+    `WindowsSelectorEventLoopPolicy`，而改全局事件循环策略会牵动整个应用
+    （Selector 循环不支持子进程）。桥接只影响检查点这一处，代价是每次
+    读写多一次线程切换——检查点操作短且不频繁，这个代价可以接受。
+    """
+    from langgraph.checkpoint.postgres import PostgresSaver
+
+    class _AsyncBridgePostgresSaver(PostgresSaver):
+        async def aget_tuple(self, config):
+            return await asyncio.to_thread(self.get_tuple, config)
+
+        async def aput(self, config, checkpoint, metadata, new_versions):
+            return await asyncio.to_thread(
+                self.put, config, checkpoint, metadata, new_versions)
+
+        async def aput_writes(self, config, writes, task_id, task_path=""):
+            return await asyncio.to_thread(
+                self.put_writes, config, writes, task_id, task_path)
+
+        async def adelete_thread(self, thread_id):
+            return await asyncio.to_thread(self.delete_thread, thread_id)
+
+        async def alist(self, config, *, filter=None, before=None, limit=None):
+            items = await asyncio.to_thread(
+                lambda: list(self.list(config, filter=filter, before=before, limit=limit)))
+            for item in items:
+                yield item
+
+    return _AsyncBridgePostgresSaver
+
+
 def _get_graph_checkpointer():
     """惰性构造全局共享的图检查点存储。失败时降级为进程内存储并大声告警。"""
     global _CHECKPOINTER, _CHECKPOINTER_POOL
@@ -134,7 +175,6 @@ def _get_graph_checkpointer():
         return _CHECKPOINTER
 
     try:
-        from langgraph.checkpoint.postgres import PostgresSaver
         from psycopg_pool import ConnectionPool
         try:
             from core.database import DATABASE_URL
@@ -142,11 +182,11 @@ def _get_graph_checkpointer():
             from app.core.database import DATABASE_URL
 
         _CHECKPOINTER_POOL = ConnectionPool(
-            DATABASE_URL, min_size=1, max_size=5, open=True,
+            DATABASE_URL, min_size=1, max_size=5, open=True, timeout=10,
             # autocommit + 关闭 prepare 是 PostgresSaver 的要求
             kwargs={"autocommit": True, "prepare_threshold": 0},
         )
-        saver = PostgresSaver(_CHECKPOINTER_POOL)
+        saver = _make_async_bridge_saver()(_CHECKPOINTER_POOL)
         saver.setup()
         _CHECKPOINTER = saver
         logger.info("[Graph] 图检查点使用 PostgresSaver（人工复核可跨请求恢复）")
