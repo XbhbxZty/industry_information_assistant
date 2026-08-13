@@ -18,6 +18,13 @@ from openai import OpenAI
 
 from ..state import ResearchState, AgentLog
 
+# LangGraph 的节点内实时流式出口（v0.6）。未安装时降级为 asyncio.Queue 路径，
+# 保证 Agent 单测与不带 LangGraph 的环境仍可运行。
+try:
+    from langgraph.config import get_stream_writer as _get_stream_writer
+except ImportError:  # pragma: no cover - 取决于运行环境是否装了 langgraph
+    _get_stream_writer = None
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
 
 
@@ -257,7 +264,18 @@ class BaseAgent(ABC):
 
     def add_message(self, state: ResearchState, event_type: str, content: Any) -> None:
         """
-        添加消息到状态（用于SSE流式输出）
+        添加消息到状态并实时推送（SSE 流式输出）
+
+        ## 为什么这里要认识 LangGraph 的 stream writer（v0.6）
+
+        原作者放弃 LangGraph 的理由是"`astream` 按节点粒度产出，无法从节点
+        内部实时流式输出"——这在 langgraph 1.x 已不成立：`get_stream_writer()`
+        就是为"从节点内部往外推自定义事件"设计的，实测逐条即时送达，
+        不在节点边界批处理。
+
+        `get_stream_writer()` 是上下文局部的：在节点内返回真正的 writer，
+        在节点外抛 `RuntimeError`。因此**不需要把 sink 塞进 state 再层层传递**，
+        直接取即可——这也避免了把不可序列化的对象写进要落检查点的 state。
 
         Args:
             state: 研究状态
@@ -272,15 +290,22 @@ class BaseAgent(ABC):
         }
         state["messages"].append(message)
 
-        # 如果有消息队列，立即推送（支持实时流式输出）
-        if "_message_queue" in state and state["_message_queue"] is not None:
+        # 路径一：LangGraph 节点内——直接推给 stream writer
+        if _get_stream_writer is not None:
             try:
-                state["_message_queue"].put_nowait(message)
-                self.logger.info(f"[SSE] Queued event: {event_type} (queue size: {state['_message_queue'].qsize()})")
+                _get_stream_writer()(message)
+                return
+            except Exception:
+                # 不在 runnable 上下文里（如单测直接调 Agent），落到路径二
+                pass
+
+        # 路径二：手写编排的 asyncio.Queue（保留以兼容直接调用 Agent 的测试）
+        queue = state.get("_message_queue")
+        if queue is not None:
+            try:
+                queue.put_nowait(message)
             except Exception as e:
                 self.logger.warning(f"Failed to push message to queue: {e}")
-        else:
-            self.logger.warning(f"[SSE] No queue available for event: {event_type}")
 
     def add_log(
         self,

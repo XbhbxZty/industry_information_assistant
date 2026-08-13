@@ -217,6 +217,16 @@ class ResearchState(TypedDict):
     errors: List[str]                       # 错误记录
     messages: List[Dict[str, Any]]          # Agent间消息（用于流式输出）
 
+    # —— 运行期内部键（v0.6）——
+    # ⚠️ 必须在此声明，不能只在运行时往 state 里塞。
+    # LangGraph 把 TypedDict 的字段当作**通道白名单**：节点返回的未声明键
+    # 会被整个丢弃。v0.6 首次把编排交给 LangGraph 时，`_cancelled` 因为
+    # 没声明而无法跨节点传播——取消守卫边永远读到 None，取消后流程照常
+    # 跑到底并发出终局事件（BC-43）。
+    _cancelled: bool                        # 取消标志，守卫边据此路由到 END
+    _user_id: str                           # 检查点归属用户
+    _ui_state: Dict[str, Any]               # 前端恢复用的 UI 投影
+
 
 def create_initial_state(
     query: str,
