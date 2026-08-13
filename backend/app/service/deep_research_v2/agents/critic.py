@@ -18,6 +18,11 @@ from datetime import datetime
 from .base import BaseAgent
 from ..state import ResearchState, ResearchPhase
 
+try:
+    from service.review_verdict import derive_verdict, unresolved_blocking_issues
+except ImportError:  # 兼容以 app 为包根的导入方式
+    from app.service.review_verdict import derive_verdict, unresolved_blocking_issues
+
 
 class CriticMaster(BaseAgent):
     """
@@ -311,7 +316,11 @@ class CriticMaster(BaseAgent):
             self.logger.error(
                 "[CriticMaster] LLM 审核不可用，且已无确定性兜底链路，按未审核处理"
             )
-            return {
+            # 刻意**不**在这里直接 return：降级结果同样要走下面的规则裁决。
+            # 另写一套 verdict 就是第二条判定路径，两条迟早漂移——
+            # 而 review_not_executed 本就在阻断类型清单里，规则算出的
+            # 结论与这里手写的一致，正好互为校验（BC-29）。
+            llm_result = {
                 "overall_assessment": {
                     "quality_score": 0.0,
                     # 绝不能是 pass：审核根本没有执行过
@@ -335,7 +344,33 @@ class CriticMaster(BaseAgent):
 
         for issue in llm_result.get("issues") or []:
             if isinstance(issue, dict):
+                # 降级路径的条目自带 detected_by="none"，不该被改写成 llm
                 issue.setdefault("detected_by", "llm")
+
+        # —— 裁决由规则推导，不采信模型自报（BC-29）——
+        #
+        # 模型此前既报 issues 又报 verdict，实测会出现"指出了危险外推、
+        # 却给 minor + pass"——它看见了，然后自己放过了自己。
+        # 规则只消费它抽取的结构化 issues，判断权收回代码。
+        assessment = dict(llm_result.get("overall_assessment") or {})
+        decision = derive_verdict(
+            llm_result.get("issues"),
+            assessment.get("quality_score", 0.0),
+            llm_verdict=assessment.get("verdict"),
+        )
+        if decision["llm_verdict_overridden"]:
+            self.logger.warning(
+                f"[CriticMaster] 模型自报 verdict={decision['llm_verdict']}，"
+                f"规则判定为 {decision['verdict']}：{decision['verdict_reasons']}"
+            )
+        assessment.update({
+            "verdict": decision["verdict"],
+            "verdict_source": decision["verdict_source"],
+            "llm_verdict": decision["llm_verdict"],
+            "llm_verdict_overridden": decision["llm_verdict_overridden"],
+            "verdict_reasons": decision["verdict_reasons"],
+        })
+        llm_result["overall_assessment"] = assessment
         return llm_result
 
     @staticmethod
@@ -480,9 +515,37 @@ class CriticMaster(BaseAgent):
             elif state["iteration"] >= state["max_iterations"]:
                 # 达到最大迭代次数，强制完成
                 state["phase"] = ResearchPhase.COMPLETED.value
+                # ⚠️ 迭代用尽 ≠ 问题解决了（BC-29 的另一半）。
+                #    此前这条分支直接进完成态，一份带着未解决 unverified_as_fact
+                #    的报告就这样出厂了——只留下一句 warning，而 warning
+                #    不参与任何判定。与 BC-33 同形：披露不是控制。
+                #    现在把它接到 v0.6 的复核卡点上：出厂可以，但必须有人签字。
+                blocking = unresolved_blocking_issues(review_result.get("issues"))
+                if blocking:
+                    kinds = "、".join(sorted({i.get("issue_type", "?") for i in blocking}))
+                    assessment = state.get("risk_assessment")
+                    if isinstance(assessment, dict):
+                        assessment["requires_human_review"] = True
+                        assessment["gates_applied"] = list(
+                            assessment.get("gates_applied") or []
+                        ) + [
+                            f"审核迭代已用尽但仍存在未解决的阻断级问题（{kinds}），"
+                            f"强制人工复核后方可出具"
+                        ]
+                    state.setdefault("errors", []).append(
+                        f"审核未收敛：迭代用尽仍有 {len(blocking)} 条阻断级问题（{kinds}）"
+                    )
+                    self.logger.error(
+                        f"[CriticMaster] 迭代用尽仍有阻断级问题，强制转人工复核: {kinds}"
+                    )
                 self.add_message(state, "warning", {
                     "agent": self.name,
-                    "content": "已达最大迭代次数，部分问题可能未解决"
+                    "content": (
+                        f"已达最大迭代次数，仍有 {len(blocking)} 条阻断级问题未解决，"
+                        f"已强制转人工复核"
+                        if blocking else "已达最大迭代次数，部分问题可能未解决"
+                    ),
+                    "unresolved_blocking": len(blocking),
                 })
             else:
                 # 智能路由：判断是需要补充搜索还是仅修改文字
