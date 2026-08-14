@@ -214,6 +214,50 @@ def test_评级块与附录共存且互不吞噬():
     assert "正文内容" in again
 
 
+def test_修订路径同样重建附录():
+    """
+    ⭐ BC-50：这条断言是拿一次真实端到端换来的。
+
+    整合与修订都是 LLM 步骤、都会重写全文，因此每条路径都要重跑全部收口。
+    此前 `_synthesize_report` 调了评级块与附录，`_revise_report` 只调了评级块——
+    **只要 Critic 要求修订一次，证据溯源附录就从最终报告里消失。**
+
+    真实运行验证时发现：复核卡点上的报告有附录（8416 字），
+    终局报告没有（6651 字）。
+    """
+    c, checks, store, comp = _run()
+    writer = _writer()
+    state = {"final_report": "# 尽调报告\n\n正文", "field_checks": checks,
+             "evidence_store": store, "completeness": comp,
+             "risk_assessment": score(c, checks, comp)}
+    writer._finalize_report(state)
+    assert APPENDIX_MARKER in state["final_report"]
+
+    # 模拟 LLM 修订：全文被重写，两个区块都没了
+    state["final_report"] = "# 尽调报告（修订版）\n\n修订后的正文，模型没有保留任何区块"
+    writer._finalize_report(state)
+    assert RISK_BLOCK_MARKER in state["final_report"], "修订后评级块必须补回"
+    assert APPENDIX_MARKER in state["final_report"], "修订后溯源附录同样必须补回"
+    assert "修订后的正文" in state["final_report"], "正文不得被收口逻辑吃掉"
+
+
+def test_收口只有一个入口():
+    """
+    新增收口区块时只该改一个地方。"记得同步几个调用点"这种要求迟早失效——
+    上一次就失效了（BC-50）。
+    """
+    import inspect
+    from service.deep_research_v2.agents import writer as wmod
+
+    src = inspect.getsource(wmod.LeadWriter)
+    # 除 _finalize_report 自身外，不应再有别处直接调用两个 _ensure_*
+    for name in ("_ensure_risk_block", "_ensure_evidence_appendix"):
+        calls = src.count(f"self.{name}(state)")
+        assert calls == 1, (
+            f"{name} 被直接调用 {calls} 次；应只在 _finalize_report 里调用一次，"
+            f"其余路径统一走收口入口")
+
+
 def test_非尽调流程不强加附录():
     writer = _writer()
     state = {"final_report": "# 行业研究报告\n\n正文", "field_checks": [],

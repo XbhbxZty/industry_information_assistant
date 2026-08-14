@@ -686,9 +686,7 @@ class LeadWriter(BaseAgent):
             state["final_report"] = fallback_report
             self.logger.info(f"[LeadWriter] 使用备选报告，长度: {len(state['final_report'])}")
 
-        # 整合是 LLM 步骤，可能把评级抹平或丢弃——代码层兜底补回
-        self._ensure_risk_block(state)
-        self._ensure_evidence_appendix(state)
+        self._finalize_report(state)
 
         # 发送报告完成事件 - 包含完整报告内容用于前端流式显示
         self.add_message(state, "report_draft", {
@@ -699,6 +697,26 @@ class LeadWriter(BaseAgent):
             "word_count": len(state["final_report"]),
             "references_count": len(state["references"])
         })
+
+    def _finalize_report(self, state: ResearchState) -> None:
+        """
+        报告的**唯一收口入口**：把所有由代码保证的区块重新装回正文。
+
+        ## 为什么必须是单一入口
+
+        整合与修订都是 LLM 步骤，都会重写全文，因此每条路径都要重跑全部收口。
+        此前两条路径各自调用：`_synthesize_report` 调了评级块与溯源附录，
+        `_revise_report` 只调了评级块——**只要 Critic 要求修订一次，
+        证据溯源附录就从最终报告里消失了**（BC-50）。
+
+        真实运行验证时发现：复核卡点上的报告有附录（8416 字），
+        终局报告没有（6651 字）。
+
+        新增收口区块时只改这一个方法，不必记得同步几个调用点——
+        "记得同步"这种要求迟早会失效，上一次就失效了。
+        """
+        self._ensure_risk_block(state)
+        self._ensure_evidence_appendix(state)
 
     def _ensure_evidence_appendix(self, state: ResearchState) -> bool:
         """
@@ -790,8 +808,8 @@ class LeadWriter(BaseAgent):
 
         if result and result.get("revised_content"):
             state["final_report"] = result["revised_content"]
-            # 修订同样会重写全文，评级块可能在这一步被抹掉
-            self._ensure_risk_block(state)
+            # 修订同样会重写全文，所有代码层收口都要重跑
+            self._finalize_report(state)
 
             # 标记已解决的问题
             for issue_id in result.get("addressed_issues", []):
