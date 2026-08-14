@@ -263,6 +263,78 @@ def test_无风险点时不堆砌套话():
 
 # ------------------------------------------------- 报告呈现
 
+def _analyst_state(cid="EVAL-005"):
+    """走 DataAnalyst 生产路径，而不是直接调纯函数"""
+    from config.dd_checklist import compute_completeness
+    from service.datasource import apply_all
+    from service.deep_research_v2.agents.data_analyst import DataAnalyst
+
+    company = _companies()[cid]
+    checks = build_field_checks(checked_at="2026-08-13T00:00:00")
+    fill_field_checks(company, profile_to_facts(company), checks)
+    store = {}
+    apply_all(company, checks, store)
+    state = {
+        "field_checks": checks, "company_profile": company,
+        "evidence_store": store, "messages": [], "errors": [],
+        "completeness": compute_completeness(checks),
+    }
+    agent = DataAnalyst("sk-test", "http://localhost:1", "test-model")
+    return agent.assess_risk(state), state
+
+
+def test_生产路径必须真的产出额度建议():
+    """
+    ⭐ 这条断言是拿一次真实端到端换来的。
+
+    额度建议模块与 21 条纯函数断言全部通过并已提交，但 `recommend_credit`
+    在 `DataAnalyst` 里**只被 import、从未被调用**——生产路径上根本没有额度建议。
+    纯函数测得再全，也测不到"它有没有被接上"。
+
+    与 BC-31 / BC-45 / BC-48 同形：算出来了，但没送到消费方。
+    """
+    result, _ = _analyst_state()
+    rec = result.get("credit_recommendation")
+    assert rec is not None, "生产路径必须产出额度建议，而不是只在测试里直接调纯函数"
+    assert "recommendable" in rec and "conditions" in rec
+
+
+def test_额度建议随评级一起推送给前端():
+    """
+    流程在复核卡点暂停时**不会发终局事件**。额度建议若只在
+    `research_complete` 里带上，复核人在界面上永远看不到建议额度与放款条件——
+    而那正是他要签字确认的东西。
+    """
+    _, state = _analyst_state()
+    evs = [m for m in state["messages"] if m.get("type") == "risk_assessment"]
+    assert evs, "必须推送评级事件"
+    content = evs[0]["content"]
+    assert "credit_recommendation" in content, "SSE 载荷缺少额度建议"
+    assert content["credit_recommendation"] is not None
+
+
+def test_额度建议基于合并后的评分视图():
+    """
+    用原始 profile 会让适配器查到的担保不参与或有负债扣减（BC-31 同形）。
+    EVAL-005 的担保由初始档案提供，EVAL-002 的由适配器提供——后者更能验证。
+    """
+    result, _ = _analyst_state("EVAL-002")
+    rec = result["credit_recommendation"]
+    joined = " ".join(rec.get("conditions") or [])
+    assert "或有负债" in joined, f"适配器查到的担保必须进入放款条件：{rec['conditions']}"
+
+
+def test_额度建议在闸门之后计算():
+    """等级被闸门改过，额度系数要跟着改——否则用的是闸门前的等级"""
+    result, _ = _analyst_state("EVAL-005")
+    assert result["gates_applied"], "前提：该企业触发了闸门"
+    rec = result["credit_recommendation"]
+    if rec["recommendable"]:
+        lvl = [a for a in rec["adjustments"] if "风险等级" in a["factor"]]
+        assert lvl and result["level"] in lvl[0]["factor"], \
+            f"额度系数应使用闸门后的等级 {result['level']}：{lvl}"
+
+
 def test_额度建议渲染进评级块():
     c, checks, r = _pipeline(_companies()["EVAL-001"])
     r["credit_recommendation"] = recommend_credit(c, checks, r)

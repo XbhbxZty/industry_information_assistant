@@ -379,6 +379,10 @@ class DataAnalyst(BaseAgent):
                     result = apply_provenance_gate(
                         result, report.degradations, POLICY.degraded_level_floor
                     )
+                    # 额度建议基于**合并后的评分视图**，与评级同源。
+                    # 用原始 profile 会让适配器查到的担保不参与扣减（BC-31 同形）。
+                    # 必须在闸门之后：等级被闸门改过，额度系数要跟着改。
+                    result["credit_recommendation"] = recommend_credit(view, checks, result)
             except Exception as e:
                 # 打分本身出错同样不得静默：没有评级 ≠ 没有风险
                 result = unratable(f"风险评分执行失败（{type(e).__name__}: {e}），不予评级", completeness)
@@ -406,6 +410,11 @@ class DataAnalyst(BaseAgent):
             # 来源降级必须随评级一起推给前端：只在 errors 里出现的话，
             # 只看评级卡片的复核人根本不知道这份结论建立在来源不明的数据上
             "provenance_degradations": result.get("provenance_degradations", []),
+            # 额度建议必须一起推。**流程在复核卡点暂停时不会发终局事件**，
+            # 若只在 research_complete 里带上它，复核人在界面上永远看不到
+            # 建议额度与放款条件——而那正是他要签字确认的东西。
+            # 与 BC-31 / BC-48 同形：算出来了，但没送到消费方。
+            "credit_recommendation": result.get("credit_recommendation"),
         })
         return result
 

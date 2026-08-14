@@ -91,6 +91,28 @@ export function useDDStream() {
         break
       }
 
+      // ⚠️ 复核人签的是这份报告，暂停时必须看得到它。
+      //    `research_complete` 在暂停时刻意不发（暂停 ≠ 完成），
+      //    因此报告正文只能从撰写阶段的 report_draft 取——
+      //    否则复核卡片弹出来时，右侧是空的，复核人只能凭等级和闸门签字。
+      case 'report_draft': {
+        const c = json.content || json
+        if (c?.content) patch({ report: c.content })
+        break
+      }
+
+      // 「迭代用尽仍有阻断级问题，已强制转人工复核」这类提示必须呈现，
+      // 它解释了复核卡点为什么会出现
+      case 'warning': {
+        const c = json.content || json
+        const text = typeof c === 'string' ? c : c?.content
+        if (text) {
+          setState(prev =>
+            prev.errors.includes(text) ? prev : { ...prev, errors: [...prev.errors, text] })
+        }
+        break
+      }
+
       case 'risk_assessment': {
         const c = json.content || json
         setState(prev => ({
@@ -120,15 +142,18 @@ export function useDDStream() {
         break
 
       case 'research_complete':
-        patch({
+        setState(prev => ({
+          ...prev,
           phase: 'completed',
-          report: json.final_report || '',
-          fieldChecks: json.field_checks || [],
-          completeness: json.completeness || null,
-          risk: json.risk_assessment || null,
-          errors: json.errors || [],
+          report: json.final_report || prev.report,
+          fieldChecks: json.field_checks || prev.fieldChecks,
+          completeness: json.completeness || prev.completeness,
+          risk: json.risk_assessment || prev.risk,
+          // 必须与已累积的 warning 合并。终局事件只带 state["errors"]，
+          // 流式过程中推来的告警不在其中，直接覆盖会让它们凭空消失。
+          errors: Array.from(new Set([...prev.errors, ...(json.errors || [])])),
           reviewRequest: null,
-        })
+        }))
         break
 
       case 'research_cancelled':
