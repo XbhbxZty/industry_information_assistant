@@ -3,11 +3,6 @@
 //
 // 本文件在原课程项目基础上二次开发（已获授权）。
 // 改造部分 © 2026 XbhbxZty
-/**
- * Copyright © 2026 深圳市深维智见教育科技有限公司 版权所有
- * 未经授权，禁止转售或仿制。
- */
-
 import classNames from 'classnames'
 import { Marked, Renderer, TokenizerAndRendererExtension } from 'marked'
 import { useMemo } from 'react'
@@ -17,8 +12,15 @@ export default function Markdown(props: {
   className?: string
   value?: string
   extensions?: TokenizerAndRendererExtension[]
+  /**
+   * 是否启用 GitHub 风格 Markdown（表格、删除线等）。
+   *
+   * 默认 false 以保持既有页面的渲染行为不变；尽调报告里的风险评级块、
+   * 授信额度测算与证据溯源附录都是表格，必须开启才能读。
+   */
+  gfm?: boolean
 }) {
-  const { value, extensions, className, ...otherProps } = props
+  const { value, extensions, className, gfm, ...otherProps } = props
 
   const html = useMemo(() => {
     const renderer = new Renderer()
@@ -38,12 +40,12 @@ export default function Markdown(props: {
       extensions: props.extensions,
     })
     const html = marked.parse(props.value ?? '', {
-      gfm: false,
+      gfm: props.gfm ?? false,
       renderer,
     })
 
     return html
-  }, [value, extensions])
+  }, [value, extensions, gfm])
 
   return (
     <div

@@ -3,11 +3,6 @@
 //
 // 本文件在原课程项目基础上二次开发（已获授权）。
 // 改造部分 © 2026 XbhbxZty
-/**
- * Copyright © 2026 深圳市深维智见教育科技有限公司 版权所有
- * 未经授权，禁止转售或仿制。
- */
-
 import IconBid from '@/assets/layout/bid.svg'
 import IconHistory from '@/assets/layout/history.svg'
 import IconHome from '@/assets/layout/home.svg'
@@ -60,6 +55,12 @@ export function Nav() {
         label: '首页',
         icon: IconHome,
         href: '/',
+      },
+      {
+        key: 'due-diligence',
+        label: '贷前尽调',
+        icon: IconDatabase,
+        href: '/due-diligence',
       },
       {
         key: 'newchat',

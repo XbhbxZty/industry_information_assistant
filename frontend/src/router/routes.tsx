@@ -3,11 +3,6 @@
 //
 // 本文件在原课程项目基础上二次开发（已获授权）。
 // 改造部分 © 2026 XbhbxZty
-/**
- * Copyright © 2026 深圳市深维智见教育科技有限公司 版权所有
- * 未经授权，禁止转售或仿制。
- */
-
 import { AuthGuard } from '@/components/auth-guard'
 import { BaseLayout } from '@/layout/base'
 import NotFound from '@/pages/404'
@@ -18,6 +13,7 @@ import Index from '@/pages/index'
 import KnowledgePage from '@/pages/knowledge'
 import MemoryPage from '@/pages/memory'
 import DatabasePage from '@/pages/database'
+import DueDiligencePage from '@/pages/due-diligence'
 import NewsPage from '@/pages/news'
 import BiddingPage from '@/pages/bidding'
 import {
@@ -39,6 +35,10 @@ export const routes: IRouteObject[] = [
   {
     path: '/',
     Component: Index,
+  },
+  {
+    path: '/due-diligence',
+    Component: DueDiligencePage,
   },
   {
     path: '/chat',
