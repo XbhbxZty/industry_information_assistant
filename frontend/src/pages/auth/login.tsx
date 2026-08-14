@@ -1,3 +1,8 @@
+// Copyright © 2026 深圳市深维智见教育科技有限公司 版权所有
+// 未经授权，禁止转售或仿制。
+//
+// 本文件在原课程项目基础上二次开发（已获授权）。
+// 改造部分 © 2026 XbhbxZty
 /**
  * Copyright © 2026 深圳市深维智见教育科技有限公司 版权所有
  * 未经授权，禁止转售或仿制。
@@ -73,7 +78,7 @@ export default function LoginPage() {
                 <path d="M24 4V24M24 24L4 14M24 24L44 14M24 24V44" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
               </svg>
             </div>
-            <h1 className={styles['brand-title']}>行业信息助手</h1>
+            <h1 className={styles['brand-title']}>尽调智核</h1>
             <p className={styles['brand-subtitle']}>Intelligence Assistant</p>
             <div className={styles['brand-features']}>
               <div className={styles['feature-item']}>

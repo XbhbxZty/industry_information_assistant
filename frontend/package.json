@@ -1,5 +1,5 @@
 {
-  "name": "gsk",
+  "name": "duediligence-copilot",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -49,5 +49,6 @@
     "typescript-plugin-css-modules": "^5.1.0",
     "vite": "^6.1.0",
     "vite-plugin-mock": "^3.0.2"
-  }
+  },
+  "description": "尽调智核 · DueDiligence Copilot —— 贷前企业尽职调查系统前端"
 }

@@ -1,3 +1,8 @@
+// Copyright © 2026 深圳市深维智见教育科技有限公司 版权所有
+// 未经授权，禁止转售或仿制。
+//
+// 本文件在原课程项目基础上二次开发（已获授权）。
+// 改造部分 © 2026 XbhbxZty
 /**
  * Copyright © 2026 深圳市深维智见教育科技有限公司 版权所有
  * 未经授权，禁止转售或仿制。
@@ -58,7 +63,7 @@ export default function Index() {
     <div className={styles['index-page']}>
       <div className={styles.header}>
         <img className={styles.bg} src={IconBg} />
-        <div className={styles.title}>Hi～欢迎来到行业咨询助手</div>
+        <div className={styles.title}>Hi～欢迎使用尽调智核</div>
         <div className={styles.desc}>
           大模型驱动的行业资讯助手，为不同类型用户提供更便捷的AI应用开发平台
         </div>

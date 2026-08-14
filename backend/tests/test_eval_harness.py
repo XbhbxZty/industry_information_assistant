@@ -1,3 +1,5 @@
+# Copyright © 2026 XbhbxZty
+# 本文件为「尽调智核」迭代中新增，不含原课程项目代码。
 """Critic 评测装置自身的行为断言。"""
 import asyncio
 import os
