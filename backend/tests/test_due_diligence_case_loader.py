@@ -26,12 +26,14 @@ from service import due_diligence_case as case_module  # noqa: E402
 from service.due_diligence_case import (  # noqa: E402
     CasePackageError,
     CaseValidationError,
+    DueDiligenceCase,
     EnterpriseClaim,
     SCHEMA_VERSION,
     SourceOutcome,
     SourceQueryResult,
     is_valid_unified_credit_code,
     load_due_diligence_case,
+    validate_loaded_due_diligence_case,
 )
 
 
@@ -234,6 +236,29 @@ def test_canonical_loader_is_oracle_blind_and_does_not_import_eval(tmp_path: Pat
         if isinstance(node, ast.ImportFrom)
     ]
     assert not any(module == "eval" or module.startswith("eval.") for module in imports)
+
+
+def test_loader_issues_exact_case_capability_and_rejects_copies_or_mutations(tmp_path: Path):
+    _write_case(tmp_path)
+    case = load_due_diligence_case(tmp_path)
+    assert validate_loaded_due_diligence_case(case) is case
+
+    copied = DueDiligenceCase(
+        manifest=case.manifest,
+        loan_application=case.loan_application,
+        entities=case.entities,
+        relationships=case.relationships,
+        claims=case.claims,
+        sources=case.sources,
+        query_results=case.query_results,
+        materials=case.materials,
+    )
+    with pytest.raises(CaseValidationError, match="not issued"):
+        validate_loaded_due_diligence_case(copied)
+
+    object.__setattr__(case, "sources", ())
+    with pytest.raises(CaseValidationError, match="no longer matches"):
+        validate_loaded_due_diligence_case(case)
 
 
 def test_manifest_is_canonical_strict_and_rejects_wire_coercion(tmp_path: Path):

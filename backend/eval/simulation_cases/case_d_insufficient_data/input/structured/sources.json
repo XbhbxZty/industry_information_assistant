@@ -4,8 +4,8 @@
     {"source_id":"d-src-legal-credit","source_channel":"public","source_type":"court_and_enforcement_query","issuer":"模拟司法查询【纯虚构】","subject_entity_id":"ent-d-supplier","query_scope":"核验诉讼、失信和被执行信息。"},
     {"source_id":"d-src-credit","source_channel":"authorized","source_type":"enterprise_credit_report","issuer":"模拟企业征信报告【纯虚构】","subject_entity_id":"ent-d-supplier","query_scope":"核验融资和保理余额。"},
     {"source_id":"d-src-registry","source_channel":"public","source_type":"movable_and_receivable_registry","issuer":"模拟动产融资统一登记查询【纯虚构】","subject_entity_id":"ent-d-supplier","query_scope":"核验动产抵押及应收账款转让或质押登记。"},
-    {"source_id":"d-src-bank","source_channel":"enterprise_submitted","source_type":"bank_statement","issuer":"临界机电服务（重庆）有限公司【纯虚构】","subject_entity_id":"ent-d-supplier","query_scope":"核验交易回款和融资资金流。"},
-    {"source_id":"d-src-trade","source_channel":"enterprise_submitted","source_type":"trade_documents","issuer":"临界机电服务（重庆）有限公司【纯虚构】","subject_entity_id":"ent-d-supplier","query_scope":"核验合同、发票、发货、验收、对账和付款方确权。"},
+    {"source_id":"d-src-bank","source_channel":"enterprise_submitted","source_type":"bank_statement","issuer":"临界机电服务（重庆）有限公司【纯虚构】","issuer_entity_id":"ent-d-supplier","subject_entity_id":"ent-d-supplier","query_scope":"核验交易回款和融资资金流。"},
+    {"source_id":"d-src-trade","source_channel":"enterprise_submitted","source_type":"trade_documents","issuer":"临界机电服务（重庆）有限公司【纯虚构】","issuer_entity_id":"ent-d-supplier","subject_entity_id":"ent-d-supplier","query_scope":"核验合同、发票、发货、验收、对账和付款方确权。"},
     {"source_id":"d-src-site","source_channel":"site_visit","source_type":"site_visit_observation","issuer":"模拟现场走访【纯虚构】","subject_entity_id":"ent-d-supplier","query_scope":"核验经营场所、库存和实际履约能力。"}
   ],
   "query_results":[

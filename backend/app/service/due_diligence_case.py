@@ -7,15 +7,20 @@ only files it can open are the explicit input files in the canonical manifest.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import re
 from collections.abc import Mapping
+from dataclasses import dataclass, field as dataclass_field
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 from pathlib import Path, PurePosixPath, PureWindowsPath
+import secrets
+import threading
 from types import MappingProxyType
 from typing import Any, Literal
+import weakref
 
 from pydantic import (
     BaseModel,
@@ -394,12 +399,15 @@ class SourceDescriptor(_StrictModel):
     source_channel: SourceChannel
     source_type: str = Field(min_length=1, max_length=128)
     issuer: str = Field(min_length=1, max_length=256)
+    issuer_entity_id: str | None = None
     subject_entity_id: str
     query_scope: str = Field(min_length=1, max_length=2048)
 
-    @field_validator("source_id", "subject_entity_id")
+    @field_validator("source_id", "subject_entity_id", "issuer_entity_id")
     @classmethod
-    def _validate_ids(cls, value: str, info: Any) -> str:
+    def _validate_ids(cls, value: str | None, info: Any) -> str | None:
+        if value is None:
+            return None
         return _require_identifier(value, info.field_name)
 
 
@@ -731,6 +739,20 @@ class DueDiligenceCase(_StrictModel):
         for source in self.sources:
             if source.subject_entity_id not in entity_ids:
                 raise ValueError(f"source {source.source_id} references an unknown entity")
+            if source.issuer_entity_id is not None:
+                issuer_entity = next(
+                    (entity for entity in self.entities
+                     if entity.entity_id == source.issuer_entity_id),
+                    None,
+                )
+                if issuer_entity is None:
+                    raise ValueError(
+                        f"source {source.source_id} issuer_entity_id references an unknown entity"
+                    )
+                if source.issuer != issuer_entity.name:
+                    raise ValueError(
+                        f"source {source.source_id} issuer must exactly match issuer_entity_id name"
+                    )
             result = result_by_source[source.source_id]
             for field_id in result.queried_field_ids:
                 if (source.subject_entity_id, field_id) not in known_subject_fields:
@@ -745,6 +767,298 @@ class DueDiligenceCase(_StrictModel):
                 result, self.manifest.cutoff_date, f"source {source.source_id}"
             )
         return self
+
+
+@dataclass(frozen=True)
+class AuthorizedCaseMaterial:
+    """One material whose bytes were resolved and re-verified by the loader.
+
+    This is intentionally a narrow capability, not another path-bearing manifest.
+    Downstream consumers receive the already-read bytes and immutable descriptor
+    metadata, so they never need (and must not be given) a case-root path from
+    which they could discover answer-layer files.
+    """
+
+    case_id: str
+    subject_entity_id: str
+    subject_name: str
+    material_id: str
+    material_type: str
+    relative_path: str
+    content_bytes: bytes = dataclass_field(repr=False)
+    sha256: str
+    provenance: str
+    source_channel: str
+    issuer: str
+    cutoff_date: str
+    date_kind: str
+    factual_date: str | None
+    document_date: str | None
+    publication_date: str | None
+    observed_at: str | None
+    reporting_period_start: str | None
+    reporting_period_end: str | None
+    date_unknown_reason: str | None
+
+    def to_metadata(self) -> dict[str, Any]:
+        """Return auditable metadata without serialising the raw material bytes."""
+
+        return {
+            "case_id": self.case_id,
+            "subject_entity_id": self.subject_entity_id,
+            "subject_name": self.subject_name,
+            "material_id": self.material_id,
+            "material_type": self.material_type,
+            "relative_path": self.relative_path,
+            "sha256": self.sha256,
+            "provenance": self.provenance,
+            "source_channel": self.source_channel,
+            "issuer": self.issuer,
+            "cutoff_date": self.cutoff_date,
+            "date_kind": self.date_kind,
+            "factual_date": self.factual_date,
+            "document_date": self.document_date,
+            "publication_date": self.publication_date,
+            "observed_at": self.observed_at,
+            "reporting_period_start": self.reporting_period_start,
+            "reporting_period_end": self.reporting_period_end,
+            "date_unknown_reason": self.date_unknown_reason,
+        }
+
+
+@dataclass(frozen=True)
+class LoadedDueDiligenceCasePackage:
+    """Validated production case plus the loader-authorized material capability.
+
+    ``to_metadata`` deliberately excludes raw bytes and has no oracle/reference
+    representation.  It is safe to persist in an audit record, unlike an
+    arbitrary case-root directory.
+    """
+
+    case: DueDiligenceCase
+    materials: tuple[AuthorizedCaseMaterial, ...]
+    # Issued only by ``load_due_diligence_case_package``.  It is excluded from
+    # repr/equality and from ``to_metadata``; a process-local registry also
+    # binds the seal to this exact object identity so ``dataclasses.replace``
+    # cannot manufacture another usable capability.
+    _seal: str = dataclass_field(default="", repr=False, compare=False)
+
+    @property
+    def case_id(self) -> str:
+        return self.case.manifest.case_id
+
+    @property
+    def primary_subject_id(self) -> str:
+        return self.case.manifest.primary_subject_id
+
+    @property
+    def cutoff_date(self) -> str:
+        return self.case.manifest.cutoff_date.isoformat()
+
+    def to_metadata(self) -> dict[str, Any]:
+        return {
+            "case_id": self.case_id,
+            "primary_subject_id": self.primary_subject_id,
+            "cutoff_date": self.cutoff_date,
+            "materials": [material.to_metadata() for material in self.materials],
+        }
+
+
+# A package is a capability issued by this loader, not merely a structurally
+# similar dataclass.  The random key is intentionally process-local.  This is a
+# defence against accidental or untrusted in-process callers constructing or
+# replacing a package; it does not purport to defeat code that can read private
+# process memory.
+_PACKAGE_SEAL_KEY = secrets.token_bytes(32)
+_PACKAGE_SEAL_LOCK = threading.RLock()
+_PACKAGE_SEAL_REGISTRY: dict[
+    int, tuple[weakref.ReferenceType[LoadedDueDiligenceCasePackage], str]
+] = {}
+
+# A ``DueDiligenceCase`` is also a loader-issued capability.  Pydantic's
+# ``model_copy`` intentionally skips validation, which is useful for internal
+# transformations but must never turn a caller-made object into production
+# evidence input.  Keep the seal outside the model, bind it to exact object
+# identity, and re-hash its complete JSON semantics at every trust boundary.
+_CASE_SEAL_KEY = secrets.token_bytes(32)
+_CASE_SEAL_LOCK = threading.RLock()
+_CASE_SEAL_REGISTRY: dict[
+    int, tuple[weakref.ReferenceType[DueDiligenceCase], str]
+] = {}
+
+
+def _canonical_json(value: Any) -> bytes:
+    return json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+
+
+def _case_seal(case: DueDiligenceCase) -> str:
+    return hmac.new(
+        _CASE_SEAL_KEY,
+        _canonical_json(case.model_dump(mode="json")),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _register_loaded_due_diligence_case(case: DueDiligenceCase) -> None:
+    """Issue a process-local seal for exactly one loader-returned case object."""
+
+    seal = _case_seal(case)
+    case_id = id(case)
+
+    def _cleanup(reference: weakref.ReferenceType[DueDiligenceCase]) -> None:
+        with _CASE_SEAL_LOCK:
+            registered = _CASE_SEAL_REGISTRY.get(case_id)
+            if registered is not None and registered[0] is reference:
+                _CASE_SEAL_REGISTRY.pop(case_id, None)
+
+    reference = weakref.ref(case, _cleanup)
+    with _CASE_SEAL_LOCK:
+        _CASE_SEAL_REGISTRY[case_id] = (reference, seal)
+
+
+def validate_loaded_due_diligence_case(case: DueDiligenceCase) -> DueDiligenceCase:
+    """Require an unmodified, exact case object issued by this process loader."""
+
+    if not isinstance(case, DueDiligenceCase):
+        raise TypeError("expected DueDiligenceCase")
+    with _CASE_SEAL_LOCK:
+        registered = _CASE_SEAL_REGISTRY.get(id(case))
+    if registered is None or registered[0]() is not case:
+        raise CaseValidationError("due-diligence case was not issued by this loader")
+    if not hmac.compare_digest(registered[1], _case_seal(case)):
+        raise CaseValidationError("due-diligence case no longer matches its loader seal")
+    return case
+
+
+def _package_material_payload(material: AuthorizedCaseMaterial) -> dict[str, Any]:
+    metadata = material.to_metadata()
+    metadata["actual_bytes_sha256"] = hashlib.sha256(material.content_bytes).hexdigest()
+    return metadata
+
+
+def _package_seal_payload(package: LoadedDueDiligenceCasePackage) -> bytes:
+    return _canonical_json({
+        "case": package.case.model_dump(mode="json"),
+        "materials": [_package_material_payload(material) for material in package.materials],
+    })
+
+
+def _package_seal(package: LoadedDueDiligenceCasePackage) -> str:
+    return hmac.new(_PACKAGE_SEAL_KEY, _package_seal_payload(package), hashlib.sha256).hexdigest()
+
+
+def _register_package_seal(package: LoadedDueDiligenceCasePackage) -> None:
+    """Issue and identity-register the process-local package capability."""
+
+    seal = _package_seal(package)
+    object.__setattr__(package, "_seal", seal)
+    package_id = id(package)
+
+    def _cleanup(reference: weakref.ReferenceType[LoadedDueDiligenceCasePackage]) -> None:
+        with _PACKAGE_SEAL_LOCK:
+            registered = _PACKAGE_SEAL_REGISTRY.get(package_id)
+            if registered is not None and registered[0] is reference:
+                _PACKAGE_SEAL_REGISTRY.pop(package_id, None)
+
+    reference = weakref.ref(package, _cleanup)
+    with _PACKAGE_SEAL_LOCK:
+        _PACKAGE_SEAL_REGISTRY[package_id] = (reference, seal)
+
+
+def _iso(value: date | None) -> str | None:
+    return value.isoformat() if value is not None else None
+
+
+def _validate_authorized_material_binding(
+    case: DueDiligenceCase,
+    material: AuthorizedCaseMaterial,
+    descriptor: MaterialDescriptor,
+) -> None:
+    """Require every material field to remain bound to the validated manifest."""
+
+    if not isinstance(material, AuthorizedCaseMaterial):
+        raise CaseValidationError("package contains a non-authorized material")
+    expected_date_kind, expected_factual_date = _material_date_state(descriptor)
+    period = descriptor.reporting_period
+    expected = {
+        "case_id": case.manifest.case_id,
+        "subject_entity_id": descriptor.subject_entity_id,
+        "material_id": descriptor.material_id,
+        "material_type": descriptor.material_type,
+        "relative_path": descriptor.relative_path,
+        "sha256": descriptor.sha256,
+        "provenance": descriptor.provenance,
+        "source_channel": descriptor.source_channel.value,
+        "issuer": descriptor.issuer,
+        "cutoff_date": case.manifest.cutoff_date.isoformat(),
+        "date_kind": expected_date_kind,
+        "factual_date": expected_factual_date,
+        "document_date": _iso(descriptor.document_date),
+        "publication_date": _iso(descriptor.publication_date),
+        "observed_at": _iso(descriptor.observed_at),
+        "reporting_period_start": _iso(period.start_date) if period is not None else None,
+        "reporting_period_end": _iso(period.end_date) if period is not None else None,
+        "date_unknown_reason": descriptor.date_unknown_reason,
+    }
+    for field_name, value in expected.items():
+        if value is None and field_name == "sha256":
+            raise CaseValidationError(
+                f"material {descriptor.material_id} has no declared sha256 for authorized RAG"
+            )
+        if getattr(material, field_name) != value:
+            raise CaseValidationError(
+                f"authorized material {descriptor.material_id} does not match declared {field_name}"
+            )
+    if not isinstance(material.content_bytes, bytes):
+        raise CaseValidationError(f"authorized material {descriptor.material_id} bytes are invalid")
+    actual_sha256 = hashlib.sha256(material.content_bytes).hexdigest()
+    if actual_sha256 != descriptor.sha256:
+        raise CaseValidationError(
+            f"authorized material {descriptor.material_id} bytes do not match declared sha256"
+        )
+
+
+def validate_loaded_due_diligence_case_package(
+    package: LoadedDueDiligenceCasePackage,
+) -> LoadedDueDiligenceCasePackage:
+    """Validate the loader-issued package seal and every descriptor-to-byte binding."""
+
+    if not isinstance(package, LoadedDueDiligenceCasePackage):
+        raise TypeError("expected LoadedDueDiligenceCasePackage")
+    with _PACKAGE_SEAL_LOCK:
+        registered = _PACKAGE_SEAL_REGISTRY.get(id(package))
+    if registered is None or registered[0]() is not package:
+        raise CaseValidationError("case-material package was not issued by this loader")
+    if not hmac.compare_digest(registered[1], package._seal):
+        raise CaseValidationError("case-material package seal is invalid")
+    if not isinstance(package.case, DueDiligenceCase):
+        raise CaseValidationError("case-material package has no validated production case")
+    validate_loaded_due_diligence_case(package.case)
+    if not isinstance(package.materials, tuple):
+        raise CaseValidationError("case-material package materials must be an immutable tuple")
+
+    descriptors = {descriptor.material_id: descriptor for descriptor in package.case.materials}
+    material_ids = [material.material_id for material in package.materials
+                    if isinstance(material, AuthorizedCaseMaterial)]
+    if len(material_ids) != len(package.materials) or len(material_ids) != len(set(material_ids)):
+        raise CaseValidationError("case-material package contains invalid or duplicate material ids")
+    if set(material_ids) != set(descriptors):
+        raise CaseValidationError("case-material package materials do not exactly match case declarations")
+    entities = {entity.entity_id: entity for entity in package.case.entities}
+    for material in package.materials:
+        descriptor = descriptors[material.material_id]
+        _validate_authorized_material_binding(package.case, material, descriptor)
+        entity = entities.get(material.subject_entity_id)
+        if entity is None or material.subject_name != entity.name:
+            raise CaseValidationError(
+                f"authorized material {material.material_id} subject does not match declared entity"
+            )
+
+    if not hmac.compare_digest(_package_seal(package), package._seal):
+        raise CaseValidationError("case-material package content no longer matches its loader seal")
+    return package
 
 
 def _validate_factual_dates(item: Any, cutoff_date: date, label: str) -> None:
@@ -902,7 +1216,7 @@ def load_due_diligence_case(case_root: str | Path) -> DueDiligenceCase:
         material_path = _resolve_declared_input(root, material.relative_path)
         _validate_material_sha256(material_path, material)
     try:
-        return DueDiligenceCase(
+        case = DueDiligenceCase(
             manifest=manifest,
             loan_application=application,
             entities=entity_bundle.entities,
@@ -914,9 +1228,105 @@ def load_due_diligence_case(case_root: str | Path) -> DueDiligenceCase:
         )
     except ValidationError as exc:
         raise CaseValidationError(f"invalid assembled case {manifest.case_id}: {exc}") from exc
+    _register_loaded_due_diligence_case(case)
+    return validate_loaded_due_diligence_case(case)
+
+
+def _material_date_state(material: MaterialDescriptor) -> tuple[str, str | None]:
+    """Select the latest concrete fact date without relabelling its meaning."""
+
+    candidates: list[tuple[str, date]] = [
+        (kind, value)
+        for kind, value in (
+            ("document_date", material.document_date),
+            ("publication_date", material.publication_date),
+            ("observed_at", material.observed_at),
+        )
+        if value is not None
+    ]
+    if material.reporting_period is not None:
+        candidates.append(("reporting_period_end", material.reporting_period.end_date))
+    if candidates:
+        # The list order makes equal-date ties stable while preserving the exact
+        # semantic kind of the selected material date.
+        kind, value = max(enumerate(candidates), key=lambda item: (item[1][1], -item[0]))[1]
+        return kind, value.isoformat()
+    return "unknown", None
+
+
+def load_due_diligence_case_package(
+    case_root: str | Path,
+) -> LoadedDueDiligenceCasePackage:
+    """Load a case and materialise only the loader-authorized material bytes.
+
+    This is the sole filesystem boundary for the offline case-material retriever.
+    It first calls :func:`load_due_diligence_case`, then resolves each *already
+    validated* descriptor through the existing anti-traversal/anti-symlink
+    resolver and repeats the required SHA-256 check while reading the bytes.
+    No caller downstream receives ``case_root``.
+    """
+
+    case = load_due_diligence_case(case_root)
+    root = _package_root(case_root)
+    entities = {entity.entity_id: entity for entity in case.entities}
+    authorized: list[AuthorizedCaseMaterial] = []
+
+    for material in case.materials:
+        # The general loader permits an absent digest for backwards-compatible
+        # metadata validation.  An auditable RAG corpus cannot: without a
+        # declared digest, later readers cannot prove which material was used.
+        if material.sha256 is None:
+            raise CaseValidationError(
+                f"material {material.material_id} requires sha256 for authorized RAG materialisation"
+            )
+        path = _resolve_declared_input(root, material.relative_path)
+        content = path.read_bytes()
+        actual_sha256 = hashlib.sha256(content).hexdigest()
+        if actual_sha256 != material.sha256:
+            raise CaseValidationError(
+                f"material {material.material_id} sha256 changed after production validation"
+            )
+
+        entity = entities.get(material.subject_entity_id)
+        if entity is None:  # Defensive: DueDiligenceCase has already checked it.
+            raise CaseValidationError(
+                f"material {material.material_id} references an unknown subject entity"
+            )
+        date_kind, factual_date = _material_date_state(material)
+        period = material.reporting_period
+        authorized.append(AuthorizedCaseMaterial(
+            case_id=case.manifest.case_id,
+            subject_entity_id=material.subject_entity_id,
+            subject_name=entity.name,
+            material_id=material.material_id,
+            material_type=material.material_type,
+            relative_path=material.relative_path,
+            content_bytes=content,
+            sha256=actual_sha256,
+            provenance=material.provenance,
+            source_channel=material.source_channel.value,
+            issuer=material.issuer,
+            cutoff_date=case.manifest.cutoff_date.isoformat(),
+            date_kind=date_kind,
+            factual_date=factual_date,
+            document_date=(material.document_date.isoformat()
+                           if material.document_date is not None else None),
+            publication_date=(material.publication_date.isoformat()
+                              if material.publication_date is not None else None),
+            observed_at=(material.observed_at.isoformat()
+                         if material.observed_at is not None else None),
+            reporting_period_start=(period.start_date.isoformat() if period is not None else None),
+            reporting_period_end=(period.end_date.isoformat() if period is not None else None),
+            date_unknown_reason=material.date_unknown_reason,
+        ))
+
+    package = LoadedDueDiligenceCasePackage(case=case, materials=tuple(authorized))
+    _register_package_seal(package)
+    return validate_loaded_due_diligence_case_package(package)
 
 
 __all__ = [
+    "AuthorizedCaseMaterial",
     "CaseEntity",
     "CasePackageError",
     "CaseRole",
@@ -929,6 +1339,7 @@ __all__ = [
     "EntityRelationship",
     "InputFileSet",
     "LoanApplication",
+    "LoadedDueDiligenceCasePackage",
     "MaterialDescriptor",
     "Measurement",
     "MeasurementUnit",
@@ -942,4 +1353,7 @@ __all__ = [
     "SourceQueryResult",
     "is_valid_unified_credit_code",
     "load_due_diligence_case",
+    "load_due_diligence_case_package",
+    "validate_loaded_due_diligence_case",
+    "validate_loaded_due_diligence_case_package",
 ]
