@@ -74,21 +74,37 @@ def retrieve_content(
 
 
 def retrieve_from_knowledge_base(
-    kb_name: str,
+    kb_id: str,
     question: str,
     top_k: int = 5,
 ) -> List[Dict[str, Any]]:
     """
-    从知识库检索内容
+    从指定知识库检索内容。
+
+    ## 参数从 kb_name 改成了 kb_id（BC-53）
+
+    按**名字**定位知识库有两个问题，第二个是安全问题：
+
+    1. `kb.name` 只在单个用户内唯一，也可被改名——按名找到的可能不是
+       调用方以为的那个知识库，或者根本找不到
+    2. 更要紧的是：一个只接受名字的检索入口，**无法做授权判断**。
+       调用方传什么名字就查什么，谁的都能查
+
+    因此本函数现在只接受知识库 UUID，且**调用方有责任先确认该 UUID
+    属于当前用户**——正确做法是走 `service/kb_scope.resolve_kb_scope()`，
+    它从 PostgreSQL 按登录用户解析可检索范围。
 
     Args:
-        kb_name: 知识库名称
+        kb_id: 知识库 UUID
         question: 查询问题
         top_k: 返回结果数量
 
     Returns:
         检索结果列表
     """
-    # 将知识库名称转换为集合名称
-    collection_name = f"kb_{kb_name}".lower().replace(" ", "_")
-    return retrieve_content(collection_name, question, top_k)
+    try:
+        from service.kb_scope import collection_name_for
+    except ImportError:
+        from app.service.kb_scope import collection_name_for
+
+    return retrieve_content(collection_name_for(kb_id), question, top_k)

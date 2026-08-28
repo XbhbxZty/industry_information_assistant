@@ -1,0 +1,57 @@
+{
+  "business_scenario": "发票抬头仍使用历史名称或供应商口语写“海尔集团”的应收账款保理；依据统一社会信用代码、合同抬头、注册地址等确认真正债务人",
+  "business_types": [
+    "factoring"
+  ],
+  "case_id": "case_09",
+  "counts": {
+    "checklist_items": 31,
+    "post_cutoff_claims": 0,
+    "reference_claims": 57,
+    "sources": 15
+  },
+  "difficulty": "中等",
+  "label_policy": {
+    "generated_by": "deep_research",
+    "grade": "silver",
+    "human_review_status": "not_reviewed",
+    "raw_sources_retrievable_by_agent_after_verification": true,
+    "reference_retrievable_by_agent": false
+  },
+  "original_document": "D:/pythoncode/industry_information_assistant/industry_information_assistant/backend/eval/real_cases/case_09_海尔智家_公开尽调案例包.md",
+  "original_sha256": "d55d2fba4a0869937cb06b0a3130e7ef3569ef2b8b2724258fc10dfb19e5367f",
+  "primary_business_type": "factoring",
+  "research_cutoff": "2025-05-31",
+  "schema_version": "real-case-v1",
+  "subject": {
+    "former_legal_names": [
+      "青岛琴岛海尔电冰箱股份有限公司",
+      "青岛海尔电冰箱股份有限公司",
+      "青岛海尔股份有限公司"
+    ],
+    "legal_name": "海尔智家股份有限公司",
+    "legal_representative_as_of_cutoff": "李华刚",
+    "listings": {
+      "A": {
+        "exchange": "上海证券交易所",
+        "former_short_name": "青岛海尔",
+        "short_name": "海尔智家",
+        "ticker": "600690"
+      },
+      "D": {
+        "former_short_name": "Qingdao Haier",
+        "listing_history_status": "conflicting",
+        "short_name": "Haier Smart Home",
+        "ticker": "690D"
+      },
+      "H": {
+        "exchange": "香港联合交易所",
+        "short_name": "海尔智家",
+        "ticker": "6690"
+      }
+    },
+    "registered_address": "青岛市崂山区海尔工业园内",
+    "registered_capital_rmb": 9382913334,
+    "unified_social_credit_code": "91370200264574251E"
+  }
+}

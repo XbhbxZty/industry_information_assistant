@@ -1,0 +1,41 @@
+{
+  "business_scenario": "合同签于“TCL集团”时期但融资时主体已更名为“TCL科技”，或发票债务人为TCL华星/TCL中环等独立法人而申请人错误使用母集团信用作为付款保证",
+  "business_types": [],
+  "case_id": "case_10",
+  "counts": {
+    "checklist_items": 30,
+    "post_cutoff_claims": 0,
+    "reference_claims": 54,
+    "sources": 13
+  },
+  "difficulty": "困难",
+  "label_policy": {
+    "generated_by": "deep_research",
+    "grade": "silver",
+    "human_review_status": "not_reviewed",
+    "raw_sources_retrievable_by_agent_after_verification": true,
+    "reference_retrievable_by_agent": false
+  },
+  "original_document": "D:/pythoncode/industry_information_assistant/industry_information_assistant/backend/eval/real_cases/case_10_TCL科技集团股份有限公司_公开尽调案例包.md",
+  "original_sha256": "e90b78be4e29793bb6529ccd853f9450982939e1ee8e730415546c834cd69639",
+  "primary_business_type": null,
+  "research_cutoff": "2024-12-31",
+  "schema_version": "real-case-v1",
+  "subject": {
+    "actual_controller": "无实际控制人",
+    "historical_names": [
+      "TCL集团有限公司",
+      "广东TCL集团股份有限公司",
+      "TCL集团股份有限公司",
+      "TCL科技集团股份有限公司"
+    ],
+    "name": "TCL科技集团股份有限公司",
+    "registration_status": {
+      "note": "未取得截至2024-12-31的市场监管机关实时登记状态快照",
+      "status": "unverified"
+    },
+    "stock_code": "000100",
+    "stock_exchange": "深圳证券交易所",
+    "uscc": "91441300195971850Y"
+  }
+}

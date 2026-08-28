@@ -1,0 +1,101 @@
+{
+  "confidence": {
+    "overall_reference_assessment": 0.84
+  },
+  "credit_amount": null,
+  "eval_only": true,
+  "generated_reference": true,
+  "hard_gate_triggers": [
+    "specific_transaction_debtor_identity_not_verified",
+    "receivable_title_confirmation_assignment_pledge_duplicate_financing_not_verified",
+    "underlying_contract_invoice_delivery_acceptance_not_verified",
+    "official_enforcement_credit_registry_checks_incomplete_for_real_underwriting"
+  ],
+  "human_review_status": "not_reviewed",
+  "key_risk_factors": [
+    "集团担保及资产池额度较大",
+    "资产池可纳入应收账款及票据，需关注权利负担和重复融资",
+    "受限资产披露存在内部口径冲突",
+    "短期借款从2023年末到2025Q1明显增加",
+    "跨境经营及外汇风险",
+    "收购整合风险",
+    "关联交易、财务公司和保理子公司增加主体及资金边界复杂度",
+    "前五供应商采购金额存在年报内部数值冲突"
+  ],
+  "label_grade": "silver",
+  "missing_critical_evidence": [
+    "specific_transaction_debtor_identity",
+    "underlying_contract_and_purchase_order",
+    "invoice_delivery_acceptance",
+    "receivable_confirmation",
+    "receivable_assignment_and_pledge_registry",
+    "duplicate_financing_check",
+    "asset_pool_occupancy",
+    "repayment_account_and_bank_flow",
+    "tax_records",
+    "enterprise_credit_report",
+    "completed_official_enforcement_and_credit_registry_checks"
+  ],
+  "mitigating_factors": [
+    "2022-2024收入、归母净利润和经营现金流均增长",
+    "2024经营现金流净额高于归母净利润",
+    "2024年度标准无保留审计意见",
+    "未披露持续经营重大不确定性",
+    "公开客户和供应商集中度未显示极端集中",
+    "A/H关键财务口径可以交叉解释",
+    "公开披露无逾期短期借款及逾期担保"
+  ],
+  "normalized": {
+    "adverse_risk_gates": [
+      "receivable_title_confirmation_assignment_pledge_duplicate_financing_not_verified",
+      "underlying_contract_invoice_delivery_acceptance_not_verified",
+      "official_enforcement_credit_registry_checks_incomplete_for_real_underwriting"
+    ],
+    "assessment_confidence": {
+      "calibrated_probability": false,
+      "ordinal_score": {
+        "overall_reference_assessment": 0.84
+      },
+      "raw": {
+        "overall_reference_assessment": 0.84
+      }
+    },
+    "corporate_risk_level": null,
+    "decision_status": "manual_review",
+    "information_gates": [
+      "specific_transaction_debtor_identity_not_verified"
+    ],
+    "risk_level_raw": "中",
+    "risk_scope": null,
+    "transaction_readiness": "insufficient_evidence",
+    "transaction_risk_level": null
+  },
+  "reasoning_claim_ids": [
+    "C012",
+    "C013",
+    "C014",
+    "C024",
+    "C031",
+    "C032",
+    "C040",
+    "C041",
+    "C044",
+    "C045",
+    "C049",
+    "C050",
+    "C051",
+    "C052",
+    "C053",
+    "C054",
+    "C055",
+    "C059",
+    "C060",
+    "C061",
+    "C062",
+    "C066",
+    "C067"
+  ],
+  "recommended_action": "人工复核",
+  "risk_level": "中",
+  "usage_limitation": "仅供研究及离线评测，不构成真实金融审批结果"
+}

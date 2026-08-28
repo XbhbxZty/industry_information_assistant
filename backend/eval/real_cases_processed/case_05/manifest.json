@@ -1,0 +1,59 @@
+{
+  "business_scenario": [
+    "家电/消费电子供应商持有苏宁体系应收账款申请保理",
+    "核心企业反向保理准入",
+    "已有供应商敞口是否续作"
+  ],
+  "business_types": [
+    "factoring"
+  ],
+  "case_id": "case_05",
+  "counts": {
+    "checklist_items": 26,
+    "post_cutoff_claims": 0,
+    "reference_claims": 83,
+    "sources": 16
+  },
+  "difficulty": "困难",
+  "label_policy": {
+    "generated_by": "deep_research",
+    "grade": "silver",
+    "human_review_status": "not_reviewed",
+    "raw_sources_retrievable_by_agent_after_verification": true,
+    "reference_retrievable_by_agent": false
+  },
+  "original_document": "D:/pythoncode/industry_information_assistant/industry_information_assistant/backend/eval/real_cases/case_05_苏宁易购_企业尽职调查公开数据案例包.md",
+  "original_sha256": "9e07e52f2668df049b37e110f1a04721b95ea1c633d605a79c183006f8d92cb5",
+  "primary_business_type": "factoring",
+  "research_cutoff": "2025-08-31",
+  "schema_version": "real-case-v1",
+  "subject": {
+    "control_status": "无控股股东、无实际控制人",
+    "control_status_since": "2021-07-30",
+    "exact_legal_establishment_date_status": "unverified",
+    "exchange": "深圳证券交易所",
+    "legal_representative": "任峻",
+    "major_shareholders_2024_12_31": [
+      {
+        "name": "杭州灏月企业管理有限公司",
+        "percentage": 20.09
+      },
+      {
+        "name": "张近东",
+        "percentage": 17.7
+      },
+      {
+        "name": "江苏新新零售创新基金二期（有限合伙）",
+        "percentage": 17.04
+      }
+    ],
+    "name": "苏宁易购集团股份有限公司",
+    "registered_capital_cny_10k": 926476.7618,
+    "registration_status": "unverified",
+    "stock_code": "002024",
+    "unified_social_credit_code": "91320000608950987L",
+    "verified_former_names": [
+      "苏宁云商集团股份有限公司"
+    ]
+  }
+}

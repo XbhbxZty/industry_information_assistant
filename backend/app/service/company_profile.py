@@ -22,13 +22,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 try:
-    from config.dd_checklist import CHECKLIST_BY_ID
+    from config.dd_checklist import CHECKLIST_BY_ID, NO_RECORD_VALUE
     from config.verification_policy import POLICY
     from service.verification import (
         parse_iso, stamp_initial_profile_origin, verify_evidence_chain,
     )
 except ImportError:  # 兼容以 app 为包根的导入方式
-    from app.config.dd_checklist import CHECKLIST_BY_ID
+    from app.config.dd_checklist import CHECKLIST_BY_ID, NO_RECORD_VALUE
     from app.config.verification_policy import POLICY
     from app.service.verification import (
         parse_iso, stamp_initial_profile_origin, verify_evidence_chain,
@@ -60,7 +60,31 @@ def _load_raw() -> Dict[str, Any]:
 
 
 def list_companies() -> List[Dict[str, Any]]:
-    return _load_raw().get("companies", [])
+    """加载档案，并**在加载时校验键名与取值词表**（BC-80）。
+
+    未知键会被消费方静默忽略，而 `coverage.queried` 又声明「这项查过了」，
+    于是「读不到」被洗成「查过且无记录」——一个肯定的否定结论。
+    实测代价：一家有 5.4 亿违规担保的企业被判「未发现对外担保」。
+
+    校验失败**拒绝返回该条档案**而不是记条日志：
+    日志没人看，错误的授信建议有人签字。
+    """
+    from service.profile_schema import validate_profile
+
+    companies = _load_raw().get("companies", [])
+    clean = []
+    for company in companies:
+        problems = validate_profile(company)
+        if problems:
+            for problem in problems:
+                logger.error("[company_profile] 档案校验失败：%s", problem)
+            logger.error(
+                "[company_profile] 已拒绝加载该条档案（%s）——"
+                "带未知键的档案会让消费方输出错误的阴性结论",
+                company.get("name"))
+            continue
+        clean.append(company)
+    return clean
 
 
 def find_company(query: str) -> Optional[Dict[str, Any]]:
@@ -500,7 +524,7 @@ def fill_field_checks(
             else:
                 # 事件型字段（涉诉/失信/担保/舆情…）：可以合法地不存在
                 chk["status"] = "verified"
-                chk["value"] = "经查询，无相关记录"
+                chk["value"] = NO_RECORD_VALUE
                 chk["sources"] = []
                 chk["failure_reason"] = ""
 
@@ -515,7 +539,7 @@ def fill_field_checks(
         # 主体归属未确认的线索：不能算已核实，但必须在报告中披露
         if fid in pending_attribution and pending_attribution[fid]:
             leads = "；".join(pending_attribution[fid])
-            if chk["status"] == "verified" and chk["value"] == "经查询，无相关记录":
+            if chk["status"] == "verified" and chk["value"] == NO_RECORD_VALUE:
                 chk["status"] = "unverified"
                 chk["value"] = None
             chk["failure_reason"] = (
@@ -589,6 +613,7 @@ def verify_field_checks(
     evidence_store: Optional[Dict[str, Dict]] = None,
     *,
     allow_legacy_profile_replay: Optional[bool] = None,
+    as_of: str = "",
 ):
     """
     完整的证据链校验入口（v0.6）。
@@ -599,6 +624,8 @@ def verify_field_checks(
 
     `allow_legacy_profile_replay` 不传时取 `config.verification_policy.POLICY`，
     而不是就地写一个默认值：这是授信口径开关，必须在统一配置里可见（BC-33）。
+
+    `as_of` 是研究截止日，留空即不施加时点闸门（行为与引入前一致）。
     """
     legacy = (POLICY.allow_legacy_profile_replay
               if allow_legacy_profile_replay is None else allow_legacy_profile_replay)
@@ -606,6 +633,7 @@ def verify_field_checks(
         company, field_checks, evidence_store,
         profile_replay_fn=replay_from_profile,
         allow_legacy_profile_replay=legacy,
+        as_of=as_of,
     )
 
 

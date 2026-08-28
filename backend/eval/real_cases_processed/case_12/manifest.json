@@ -1,0 +1,40 @@
+{
+  "business_scenario": "电缆、光伏供应链供应商授信",
+  "business_types": [
+    "supply_chain_finance"
+  ],
+  "case_id": "case_12",
+  "counts": {
+    "checklist_items": 32,
+    "post_cutoff_claims": 2,
+    "reference_claims": 54,
+    "sources": 15
+  },
+  "difficulty": "高难",
+  "label_policy": {
+    "generated_by": "deep_research",
+    "grade": "silver",
+    "human_review_status": "not_reviewed",
+    "raw_sources_retrievable_by_agent_after_verification": true,
+    "reference_retrievable_by_agent": false
+  },
+  "original_document": "D:/pythoncode/industry_information_assistant/industry_information_assistant/backend/eval/real_cases/case_12_江苏中利集团股份有限公司_尽调案例包.md",
+  "original_sha256": "1803f6d08c7e0fdd2717c0a467406c97164ea6dae4fef8a9eed51bd59e7ef00b",
+  "primary_business_type": "supply_chain_finance",
+  "research_cutoff": "2024-05-31",
+  "schema_version": "real-case-v1",
+  "subject": {
+    "actual_controller": "王柏兴",
+    "controlling_shareholder_conflict": {
+      "annual_report_and_audit_wording": "王柏兴",
+      "jiangsu_csrc_2024_88_wording": "江苏中利控股集团有限公司"
+    },
+    "controlling_shareholder_status": "conflicting",
+    "exchange": "深圳证券交易所",
+    "former_name": "中利科技集团股份有限公司",
+    "legal_representative": "王伟峰",
+    "name": "江苏中利集团股份有限公司",
+    "stock_code": "002309",
+    "unified_social_credit_code": "913205007317618904"
+  }
+}

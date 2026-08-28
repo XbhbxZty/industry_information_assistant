@@ -145,6 +145,7 @@ class StructuredEvidence(TypedDict, total=False):
     field_id: str
     source_adapter: str        # 产出该证据的适配器标识，必须已注册
     retrieved_at: str          # ISO 时间戳，缺失或非法即 fail-closed
+    as_of_date: str            # 该证据所述事实的发布/事件日期，用于研究截止日闸门
     value: Any                 # verified 时的结构化取值
     conflict_values: List[Dict[str, Any]]   # conflicting 时各来源取值
     profile_patch: Dict[str, Any]           # 可合并进评分数据视图的档案片段
@@ -186,6 +187,11 @@ REASON_PATCH_VALUE_MISMATCH = "profile_patch_value_mismatch"
 REASON_PATCH_RAW_MISMATCH = "profile_patch_raw_mismatch"
 REASON_EVIDENCE_INACTIVE = "evidence_inactive"
 
+# —— 研究截止日（P0-3）——
+REASON_POST_CUTOFF_EVIDENCE = "post_cutoff_evidence"
+REASON_AS_OF_DATE_UNKNOWN = "as_of_date_unknown"
+REASON_INVALID_AS_OF_DATE = "invalid_as_of_date"
+
 
 def _fail(field_check: Dict, reason: str, detail: str, **extra) -> Dict[str, Any]:
     return {
@@ -217,6 +223,63 @@ def _timestamp_key(ts: Any) -> Optional[datetime]:
     if parsed.tzinfo is None:
         return parsed
     return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+# ------------------------------------------------------------ 研究截止日闸门
+
+def _end_of_day(d: datetime) -> datetime:
+    """把只给到日的截止日按当日 23:59:59.999999 处理，避免误杀当天的证据。"""
+    if (d.hour, d.minute, d.second, d.microsecond) == (0, 0, 0, 0):
+        return d.replace(hour=23, minute=59, second=59, microsecond=999999)
+    return d
+
+
+def check_as_of(evidence: Dict[str, Any], as_of: str) -> Optional[Tuple[str, str]]:
+    """
+    判断一条证据相对研究截止日是否可用。
+
+    ## retrieved_at 不能拿来做这个判断
+
+    `retrieved_at` 是**我们什么时候取到的**，`as_of_date` 是**这条事实什么时候
+    发布/发生的**。做回溯评测时，今天（2026-08）跑一个截止日为 2025-05-31 的
+    案子，所有证据的 retrieved_at 都是今天——拿它比截止日会把每一条都判成越界，
+    整个机制退化成"永远不给评级"。
+
+    要卡的是另一件事：**2025-07 才披露的半年报，不得进入 2025-05-31 时点的判断**。
+    这正是案例包 `as_of_eligible` 的语义，也是它把 S011/S012 单独放进
+    `post_cutoff_outcomes` 而非 `sources` 的原因。
+
+    ## 缺 as_of_date 时为什么不放行
+
+    "不知道这条事实是什么时候的"和"知道它在截止日之前"是两件事。放行等于
+    默认后者，而这正是回溯评测要防的信息泄漏。因此缺失记为**降级**：
+    不阻断，但由 `apply_as_of_gate()` 剥夺自动低风险资格，交人工判断。
+
+    Returns:
+        None 表示可用；否则 (reason, detail)。
+    """
+    if not as_of:
+        return None
+    cutoff = _timestamp_key(as_of)
+    if cutoff is None:
+        return (REASON_INVALID_AS_OF_DATE,
+                f"研究截止日 {as_of!r} 不是合法 ISO 日期，无法施加时点闸门")
+    cutoff = _end_of_day(cutoff)
+
+    raw_date = evidence.get("as_of_date")
+    if not raw_date:
+        return (REASON_AS_OF_DATE_UNKNOWN,
+                f"证据未声明发布/事件日期，无法判断它是否晚于研究截止日 {as_of}")
+
+    ev_date = _timestamp_key(raw_date)
+    if ev_date is None:
+        return (REASON_INVALID_AS_OF_DATE,
+                f"证据的 as_of_date {raw_date!r} 不是合法 ISO 日期")
+    if ev_date > cutoff:
+        return (REASON_POST_CUTOFF_EVIDENCE,
+                f"该证据的事实日期 {raw_date} 晚于研究截止日 {as_of}，"
+                f"不得用于该时点的判断（可另作后验回测）")
+    return None
 
 
 # 字段证据只能修改评分卡消费的对应档案切片。共享容器进一步限制子字段，
@@ -333,6 +396,7 @@ def record_structured_evidence(
     profile_patch: Optional[Dict[str, Any]] = None,
     raw: Dict[str, Any],
     retrieved_at: str,
+    as_of_date: str = "",
     failure_reason: str = "",
     supersedes_evidence_ids: Optional[List[str]] = None,
     supersede_reason: str = "",
@@ -375,6 +439,13 @@ def record_structured_evidence(
     cur = _timestamp_key(retrieved_at)
     if cur is None:
         raise ValueError(f"retrieved_at {retrieved_at!r} 不是合法 ISO 时间")
+    # as_of_date 可以缺（旧适配器还没声明），但给了就必须合法——
+    # 一个解析不出来的日期比没有更危险：它看起来像已经声明过了。
+    if as_of_date and _timestamp_key(as_of_date) is None:
+        raise ValueError(
+            f"as_of_date {as_of_date!r} 不是合法 ISO 日期。该字段表示证据所述事实的"
+            f"发布/事件日期，与 retrieved_at（何时取到）不是一回事"
+        )
 
     field_id = field_check.get("field_id")
     if not field_id:
@@ -451,6 +522,7 @@ def record_structured_evidence(
         "field_id": field_id,
         "source_adapter": source_adapter,
         "retrieved_at": retrieved_at,
+        "as_of_date": as_of_date,
         "value": value,
         "conflict_values": list(conflict_values or []),
         "profile_patch": deepcopy(profile_patch) if profile_patch else {},
@@ -478,6 +550,9 @@ def record_structured_evidence(
             for e in (conflict_values or [])
         ]
     new_check["retrieved_at"] = retrieved_at
+    # 事实/发布日期与取证时间语义不同，二者都要随当前结论进入清单。
+    # Writer 引用事实日期，审计附录仍保留何时抓取；不得用运行日冒充发布日期。
+    new_check["as_of_date"] = as_of_date
 
     for old_id in previous_ids:
         old = evidence_store.get(old_id)
@@ -549,7 +624,12 @@ class ReplayReport:
         return {"mismatches": self.mismatches, "degradations": self.degradations}
 
 
-def _replay_structured(check: Dict, evidence_store: Dict[str, Dict]) -> Optional[Dict[str, Any]]:
+def _replay_structured(
+    check: Dict,
+    evidence_store: Dict[str, Dict],
+    as_of: str = "",
+    degradations: Optional[List[Dict[str, Any]]] = None,
+) -> Optional[Dict[str, Any]]:
     """
     按结构化证据重放。
 
@@ -622,6 +702,23 @@ def _replay_structured(check: Dict, evidence_store: Dict[str, Dict]) -> Optional
                 check, REASON_EVIDENCE_MISSING_RAW,
                 f"证据 {ev.get('evidence_id')} 缺少 raw，人工复核无从追溯原始返回",
             )
+        # —— 研究截止日：越界即阻断，日期不明只降级 ——
+        # 越界是硬错误（用了截止日之后才存在的信息，判断本身失效）；
+        # 日期不明是信息不足（可能合规也可能不合规），交人工判断。
+        problem = check_as_of(ev, as_of)
+        if problem is not None:
+            reason, detail = problem
+            entry = _fail(
+                check, reason,
+                f"证据 {ev.get('evidence_id')}：{detail}",
+                evidence_as_of_date=ev.get("as_of_date", ""),
+                research_as_of=as_of,
+            )
+            if reason == REASON_AS_OF_DATE_UNKNOWN:
+                if degradations is not None:
+                    degradations.append(entry)
+            else:
+                return entry
         # 写入时由注册投影器生成还不够：检查点/证据库可能事后漂移。
         # 重放必须再次从 raw 投影并与存储 patch 比对（BC-36）。
         try:
@@ -721,6 +818,7 @@ def verify_evidence_chain(
     *,
     profile_replay_fn=None,
     allow_legacy_profile_replay: bool = False,
+    as_of: str = "",
 ) -> ReplayReport:
     """
     按 `verification_origin` 分发重放依据，校验证据链完整性。
@@ -735,6 +833,11 @@ def verify_evidence_chain(
             **默认 False**：来源未迁移的检查点不得继续形成自动授信等级。
             置 True 仅用于显式迁移工具与非决策读取；即便如此，该情况**始终**
             进入 degradations，且下游必须施加来源闸门（BC-33）。
+        as_of:
+            研究截止日（ISO 日期）。留空表示不施加时点闸门，行为与引入本参数
+            之前完全一致。给定时：证据事实日期晚于该日 → mismatch；
+            证据未声明事实日期 → degradation。判据是 `as_of_date` 而非
+            `retrieved_at`，理由见 `check_as_of()`。
     """
     evidence_store = evidence_store or {}
     report = ReplayReport()
@@ -781,7 +884,9 @@ def verify_evidence_chain(
                     "缺少 retrieved_at；无法判断证据时效，不予采信",
                 ))
                 continue
-            problem = _replay_structured(check, evidence_store)
+            problem = _replay_structured(
+                check, evidence_store, as_of, report.degradations
+            )
             if problem:
                 report.mismatches.append(problem)
             continue
@@ -801,6 +906,19 @@ def verify_evidence_chain(
                 f"retrieved_at {ts!r} 不是合法 ISO 时间",
             ))
             continue
+        elif as_of:
+            # 档案是**查询时点的快照**：登记状态、涉诉记录都反映抓取当时的情形。
+            # 因此对初始档案而言，取证时间就是事实日期——这是这条路径可以拿
+            # retrieved_at 比截止日的唯一理由，结构化适配器不适用（见 check_as_of）。
+            problem = check_as_of({"as_of_date": ts}, as_of)
+            if problem is not None:
+                reason, detail = problem
+                report.mismatches.append(_fail(
+                    check, reason,
+                    f"初始档案快照时间 {ts}：{detail}",
+                    research_as_of=as_of,
+                ))
+                continue
         need_profile_replay.append(check)
 
     # —— 档案重放：一次性批量比对 ——

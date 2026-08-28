@@ -1,0 +1,129 @@
+{
+  "confidence": {
+    "overall_reference_assessment": 0.86
+  },
+  "credit_amount": null,
+  "eval_only": true,
+  "generated_reference": true,
+  "hard_gate_triggers": [
+    {
+      "name": "失信/执行状态",
+      "reasoning_claim_ids": [
+        "C045",
+        "C047"
+      ],
+      "status": "pending_hard_verification"
+    },
+    {
+      "name": "逾期金融债务",
+      "reasoning_claim_ids": [
+        "C038"
+      ],
+      "status": "triggered_for_review"
+    },
+    {
+      "name": "拟融资应收账款权利完整性",
+      "reasoning_claim_ids": [
+        "C056",
+        "C057"
+      ],
+      "status": "pending_hard_verification"
+    }
+  ],
+  "human_review_status": "not_reviewed",
+  "key_risk_factors": [
+    "历史司法重整及债务危机",
+    "历史重大资金占用与信息披露违法",
+    "2024扣非净利润仍大额亏损",
+    "2024年末仍存在逾期短期借款",
+    "年报披露时公司属于失信被执行人",
+    "应收账款存在较明显长账龄部分",
+    "重整后持续盈利证据期过短"
+  ],
+  "label_grade": "silver",
+  "missing_critical_evidence": [
+    "2025-05-31失信及被执行状态一手证明",
+    "逾期借款截止日清偿或展期证明",
+    "银行流水",
+    "企业征信",
+    "纳税数据",
+    "应收账款质押转让及保理登记",
+    "合同发票物流验收资料",
+    "债务人确权",
+    "历史回款",
+    "重复融资核验"
+  ],
+  "mitigating_factors": [
+    "司法重整已经执行完毕",
+    "控制权已变更",
+    "历史资金占用已完成重整处置",
+    "资产负债率显著下降",
+    "短期借款显著下降",
+    "2024财务审计为标准无保留",
+    "2024内控审计为标准无保留",
+    "2025Q1扣非利润和经营现金流为正"
+  ],
+  "normalized": {
+    "adverse_risk_gates": [
+      {
+        "name": "失信/执行状态",
+        "reasoning_claim_ids": [
+          "C045",
+          "C047"
+        ],
+        "status": "pending_hard_verification"
+      },
+      {
+        "name": "逾期金融债务",
+        "reasoning_claim_ids": [
+          "C038"
+        ],
+        "status": "triggered_for_review"
+      },
+      {
+        "name": "拟融资应收账款权利完整性",
+        "reasoning_claim_ids": [
+          "C056",
+          "C057"
+        ],
+        "status": "pending_hard_verification"
+      }
+    ],
+    "assessment_confidence": {
+      "calibrated_probability": false,
+      "ordinal_score": {
+        "overall_reference_assessment": 0.86
+      },
+      "raw": {
+        "overall_reference_assessment": 0.86
+      }
+    },
+    "corporate_risk_level": null,
+    "decision_status": "manual_review",
+    "information_gates": [],
+    "risk_level_raw": "高",
+    "risk_scope": null,
+    "transaction_readiness": "insufficient_evidence",
+    "transaction_risk_level": null
+  },
+  "reasoning_claim_ids": [
+    "C016",
+    "C017",
+    "C019",
+    "C021",
+    "C032",
+    "C036",
+    "C038",
+    "C042",
+    "C044",
+    "C045",
+    "C047",
+    "C051",
+    "C052",
+    "C056",
+    "C057"
+  ],
+  "recommended_action": "人工复核",
+  "research_only": true,
+  "risk_level": "高"
+}

@@ -1,0 +1,25 @@
+[
+  {
+    "as_of_eligible": false,
+    "event": "2025年度财务结果",
+    "facts": {
+      "attributable_net_profit_cny": 9312304150,
+      "operating_cash_flow_cny": 12055090552,
+      "revenue_cny": 45787435563,
+      "total_assets_cny": 70062354686
+    },
+    "publication_date": "2026-03-18",
+    "source_ids": [
+      "SRC12"
+    ],
+    "use": "仅用于回测，不参与2025-05-31风险判断"
+  },
+  {
+    "as_of_eligible": false,
+    "conclusion": "后验年报仍重复披露该事件并称福耀美国不是调查目标；不足以证明调查已经结案或仍在持续",
+    "event": "2025年年报继续披露2024年福耀美国搜查事项",
+    "source_ids": [
+      "SRC12"
+    ]
+  }
+]

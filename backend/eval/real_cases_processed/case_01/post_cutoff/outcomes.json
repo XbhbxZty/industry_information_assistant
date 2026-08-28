@@ -1,0 +1,25 @@
+[
+  {
+    "as_of_eligible": false,
+    "facts": {
+      "2025_h1_attributable_net_profit_cny_thousand": 30485139,
+      "2025_h1_operating_cash_flow_cny_thousand": 58687066,
+      "2025_h1_total_assets_cny_thousand": 867181431
+    },
+    "publication_date": "2025-07-31",
+    "source_id": "S011",
+    "use": "仅供后验回测，不得用于2025-05-31时点判断"
+  },
+  {
+    "as_of_eligible": false,
+    "facts": {
+      "2025_attributable_net_profit_cny_thousand": 72201282,
+      "2025_audit_opinion": "标准无保留意见",
+      "2025_operating_cash_flow_cny_thousand": 133219982,
+      "2025_revenue_cny_thousand": 423701834
+    },
+    "publication_date": "2026-03-10",
+    "source_id": "S012",
+    "use": "仅供后验回测，不得反哺截止日评级"
+  }
+]

@@ -91,6 +91,41 @@ def test_非法等级被拒绝():
         assert "override_level" in str(e)
 
 
+def test_人工改判必须填写理由():
+    for comment in (None, "", "   "):
+        try:
+            apply_human_review(
+                _assessment(True, level="高风险"),
+                {"approved": True, "reviewer": "风控-王五",
+                 "comment": comment, "override_level": "低风险"},
+            )
+            raise AssertionError("无理由的人工改判不应被接受")
+        except ValueError as e:
+            assert "理由" in str(e)
+
+
+def test_复核不通过不得同时改判且必须填写理由():
+    invalid = (
+        {"approved": False, "reviewer": "风控-李四", "comment": "退回",
+         "override_level": "低风险"},
+        {"approved": False, "reviewer": "风控-李四", "comment": "   "},
+    )
+    for decision in invalid:
+        try:
+            apply_human_review(_assessment(True), decision)
+            raise AssertionError(f"矛盾或无理由的拒绝不应被接受：{decision}")
+        except ValueError:
+            pass
+
+
+def test_复核通过字段必须是明确布尔值():
+    try:
+        apply_human_review(_assessment(True), {**_APPROVE, "approved": "false"})
+        raise AssertionError("字符串 false 不得被 bool() 误判为通过")
+    except ValueError as e:
+        assert "布尔" in str(e)
+
+
 def test_人工下调等级必须保留规则引擎原始结论():
     """
     ⭐ 复核人可以推翻规则——业务上必需。但改写必须留痕：
@@ -118,6 +153,14 @@ def test_复核通过但不调整等级时保持规则结论():
     assert out["level"] == "中风险"
     assert out["human_review"]["override_level"] is None
     assert out["human_review"]["engine_level"] == "中风险"
+
+
+def test_复核记录保留不可变用户标识():
+    out = apply_human_review(
+        _assessment(True),
+        {**_APPROVE, "reviewer_id": "user-123"},
+    )
+    assert out["human_review"]["reviewer_id"] == "user-123"
 
 
 def test_已复核不把requires_human_review改回假():
@@ -225,15 +268,14 @@ def test_复核结论写回报告正文():
 
 
 def test_未署名的复核结论不被静默采纳():
-    """非法结论宁可停在未复核状态，也不能当作已复核放行"""
-    evs, _ = _trace(_DD_QUERY, requires_review=True,
-                    resume_with={"approved": True, "comment": "忘了填名字"})
+    """非法结论必须保持暂停，绝不能越过卡点发出终局事件。"""
+    evs, cp = _trace(_DD_QUERY, requires_review=True,
+                     resume_with={"approved": True, "comment": "忘了填名字"})
     final = evs[-1]
-    assert final["type"] == "research_complete"
-    assert not (final["risk_assessment"].get("human_review") or {}).get("completed"), \
-        "非法结论不得被记为已复核"
-    assert any("复核结论非法" in e for e in final["errors"]), \
-        f"必须显式披露结论被拒：{final['errors']}"
+    assert final["type"] == "error"
+    assert "复核结论非法" in final["content"]
+    assert "research_complete" not in _types(evs), "非法结论不得 fail-open 为完成"
+    assert cp.statuses == ["paused"], f"非法结论后必须继续保持暂停：{cp.statuses}"
 
 
 def test_生产检查点必须实现异步接口():

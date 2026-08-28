@@ -1,0 +1,213 @@
+{
+  "case_count": 12,
+  "cases": [
+    {
+      "case_id": "case_01",
+      "error_count": 0,
+      "metrics": {
+        "checklist_rows": 31,
+        "embedded_claim_rows": 31,
+        "embedded_source_rows": 12,
+        "markdown_claim_rows": 58,
+        "markdown_source_rows": 12,
+        "normalized_claim_rows": 58,
+        "normalized_source_rows": 12,
+        "post_cutoff_claim_rows": 0,
+        "reference_claim_rows": 58
+      },
+      "status": "passed_with_warnings",
+      "warning_count": 3
+    },
+    {
+      "case_id": "case_02",
+      "error_count": 0,
+      "metrics": {
+        "checklist_rows": 36,
+        "embedded_claim_rows": 68,
+        "embedded_source_rows": 11,
+        "markdown_claim_rows": 68,
+        "markdown_source_rows": 11,
+        "normalized_claim_rows": 68,
+        "normalized_source_rows": 11,
+        "post_cutoff_claim_rows": 0,
+        "reference_claim_rows": 68
+      },
+      "status": "passed_with_warnings",
+      "warning_count": 1
+    },
+    {
+      "case_id": "case_03",
+      "error_count": 0,
+      "metrics": {
+        "checklist_rows": 36,
+        "embedded_claim_rows": 28,
+        "embedded_source_rows": 9,
+        "markdown_claim_rows": 51,
+        "markdown_source_rows": 12,
+        "normalized_claim_rows": 51,
+        "normalized_source_rows": 12,
+        "post_cutoff_claim_rows": 0,
+        "reference_claim_rows": 51
+      },
+      "status": "passed_with_warnings",
+      "warning_count": 5
+    },
+    {
+      "case_id": "case_04",
+      "error_count": 0,
+      "metrics": {
+        "checklist_rows": 25,
+        "embedded_claim_rows": 0,
+        "embedded_source_rows": 0,
+        "markdown_claim_rows": 67,
+        "markdown_source_rows": 10,
+        "normalized_claim_rows": 67,
+        "normalized_source_rows": 10,
+        "post_cutoff_claim_rows": 3,
+        "reference_claim_rows": 64
+      },
+      "status": "passed_with_warnings",
+      "warning_count": 4
+    },
+    {
+      "case_id": "case_05",
+      "error_count": 0,
+      "metrics": {
+        "checklist_rows": 26,
+        "embedded_claim_rows": 17,
+        "embedded_source_rows": 12,
+        "markdown_claim_rows": 83,
+        "markdown_source_rows": 16,
+        "normalized_claim_rows": 83,
+        "normalized_source_rows": 16,
+        "post_cutoff_claim_rows": 0,
+        "reference_claim_rows": 83
+      },
+      "status": "passed_with_warnings",
+      "warning_count": 4
+    },
+    {
+      "case_id": "case_06",
+      "error_count": 0,
+      "metrics": {
+        "checklist_rows": 35,
+        "embedded_claim_rows": 33,
+        "embedded_source_rows": 13,
+        "markdown_claim_rows": 61,
+        "markdown_source_rows": 13,
+        "normalized_claim_rows": 61,
+        "normalized_source_rows": 13,
+        "post_cutoff_claim_rows": 3,
+        "reference_claim_rows": 58
+      },
+      "status": "passed_with_warnings",
+      "warning_count": 3
+    },
+    {
+      "case_id": "case_07",
+      "error_count": 0,
+      "metrics": {
+        "checklist_rows": 28,
+        "embedded_claim_rows": 42,
+        "embedded_source_rows": 15,
+        "markdown_claim_rows": 42,
+        "markdown_source_rows": 15,
+        "normalized_claim_rows": 42,
+        "normalized_source_rows": 15,
+        "post_cutoff_claim_rows": 2,
+        "reference_claim_rows": 40
+      },
+      "status": "passed_with_warnings",
+      "warning_count": 2
+    },
+    {
+      "case_id": "case_08",
+      "error_count": 0,
+      "metrics": {
+        "checklist_rows": 32,
+        "embedded_claim_rows": 22,
+        "embedded_source_rows": 17,
+        "markdown_claim_rows": 60,
+        "markdown_source_rows": 17,
+        "normalized_claim_rows": 60,
+        "normalized_source_rows": 17,
+        "post_cutoff_claim_rows": 0,
+        "reference_claim_rows": 60
+      },
+      "status": "passed_with_warnings",
+      "warning_count": 3
+    },
+    {
+      "case_id": "case_09",
+      "error_count": 0,
+      "metrics": {
+        "checklist_rows": 31,
+        "embedded_claim_rows": 19,
+        "embedded_source_rows": 15,
+        "markdown_claim_rows": 57,
+        "markdown_source_rows": 15,
+        "normalized_claim_rows": 57,
+        "normalized_source_rows": 15,
+        "post_cutoff_claim_rows": 0,
+        "reference_claim_rows": 57
+      },
+      "status": "passed_with_warnings",
+      "warning_count": 3
+    },
+    {
+      "case_id": "case_10",
+      "error_count": 0,
+      "metrics": {
+        "checklist_rows": 30,
+        "embedded_claim_rows": 10,
+        "embedded_source_rows": 13,
+        "markdown_claim_rows": 54,
+        "markdown_source_rows": 13,
+        "normalized_claim_rows": 54,
+        "normalized_source_rows": 13,
+        "post_cutoff_claim_rows": 0,
+        "reference_claim_rows": 54
+      },
+      "status": "passed_with_warnings",
+      "warning_count": 2
+    },
+    {
+      "case_id": "case_11",
+      "error_count": 0,
+      "metrics": {
+        "checklist_rows": 22,
+        "embedded_claim_rows": 17,
+        "embedded_source_rows": 12,
+        "markdown_claim_rows": 74,
+        "markdown_source_rows": 13,
+        "normalized_claim_rows": 74,
+        "normalized_source_rows": 13,
+        "post_cutoff_claim_rows": 0,
+        "reference_claim_rows": 74
+      },
+      "status": "passed_with_warnings",
+      "warning_count": 5
+    },
+    {
+      "case_id": "case_12",
+      "error_count": 0,
+      "metrics": {
+        "checklist_rows": 32,
+        "embedded_claim_rows": 48,
+        "embedded_source_rows": 15,
+        "markdown_claim_rows": 56,
+        "markdown_source_rows": 15,
+        "normalized_claim_rows": 56,
+        "normalized_source_rows": 15,
+        "post_cutoff_claim_rows": 2,
+        "reference_claim_rows": 54
+      },
+      "status": "passed_with_warnings",
+      "warning_count": 4
+    }
+  ],
+  "failed_count": 0,
+  "generated_at": "2026-08-16T14:20:34.034988+00:00",
+  "schema_version": "real-case-v1",
+  "source_directory": "D:/pythoncode/industry_information_assistant/industry_information_assistant/backend/eval/real_cases"
+}

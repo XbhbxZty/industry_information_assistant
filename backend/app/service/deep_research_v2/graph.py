@@ -97,8 +97,17 @@ def build_complete_event(state: Dict[str, Any], references: List[Dict[str, Any]]
         "final_report": state.get("final_report", ""),
         "quality_score": state.get("quality_score", 0.0),
         "facts_count": len(state.get("facts", [])),
+        # ⚠️ 只数 A 层／普通研究路径的图表。**尽调模式下它恒为 0**——
+        #    B 层的图表在 `investigation.charts`（物理隔离，见 DUAL_TRACK_PLAN）。
+        #    名字是通用的，读的人会当成"这轮产出了几张图"，拿到 0 就
+        #    得出"图表没接上"——实测这个误判发生过。所以并排给出 B 层的数。
         "charts_count": len(state.get("charts", [])),
+        "investigation_charts_count": len(
+            (state.get("investigation") or {}).get("charts") or []),
         "iterations": state.get("iteration", 0),
+        # ⚠️ 同上：这是 A 层／普通研究路径的引用列表，**尽调模式下恒为 0**。
+        #    尽调的溯源走 `evidence_store`（就在下面）与报告里的证据溯源附录。
+        #    实测一轮：references 0 条、evidence_store 13 条、附录存在。
         "references": references,
         # 核查清单结果（v0.2）：核实率是该轮唯一的可验收产出
         "completeness": state.get("completeness", {}),
@@ -112,6 +121,41 @@ def build_complete_event(state: Dict[str, Any], references: List[Dict[str, Any]]
         # 证据链降级与执行错误（v0.6a 复核补充）：终局事件此前不带这些，
         # 调用方只等最终结果就看不到"这份评级建立在来源不明的数据上"（BC-33）
         "errors": state.get("errors", []),
+        # 研究截止日（P0-3）：报告"以哪天为准"必须随终局事件给出，
+        # 否则事后无法判断当时该不该看到某条信息，回溯评测也无从对齐时点
+        "as_of": state.get("as_of", ""),
+        # 检索故障（P0-2）：与 errors 分开给，因为它约束的是另一件事——
+        # 哪些"未发现记录"其实是"没查成"。合并进 errors 会让调用方
+        # 只能靠字符串匹配把它捞出来
+        "search_failures": state.get("search_failures", []),
+        # 章节级抽取故障（BC-56）：同样与 errors 分开给。它约束的是
+        # "哪些章节的空证据是故障所致"——评测器要据此判定本轮是否可计分，
+        # 前端要据此提示复核人这一章不可信。
+        "section_failures": state.get("section_failures", []),
+        # 检索计划不足（BC-62）：不是故障，但覆盖率低时必须能回答
+        # "是资料里没有，还是这一章根本只查了一次"。跨轮次比较分数前先看这个。
+        "query_plan_shortfalls": state.get("query_plan_shortfalls", []),
+        # 抽取窗口丢弃：与检索计划不足同一性质——不是故障，但覆盖率低时
+        # 必须能回答"这一章的材料是不是根本没送进模型"。
+        "extraction_window_drops": state.get("extraction_window_drops", []),
+        # 跨通道一致性无法判定（BC-68）：与 errors 分开给。errors 里的是
+        # **确实矛盾**，这里的是"两边都有取值但比不了"——混在一起，
+        # 复核人就无法区分"要去核对"和"我们没能力核对"。
+        "cross_channel_undecidable": state.get("cross_channel_undecidable", []),
+        # 文本证据候选的接纳/拒绝统计。评测若只看到最终核实率而看不到
+        # 拒绝原因，就无法区分“资料确实缺失”和“解析器没吃进去”。
+        "rag_evidence_summary": state.get("rag_evidence_summary", {}),
+        # 调查层（B 层）。**与上面所有键在语义上完全隔离**：它不参与评级、
+        # 额度与完整度，也不进证据附录。单独给出而不是并进 charts，
+        # 是为了让调用方无法在不知情的情况下把它当成裁决依据。
+        "investigation": state.get("investigation", {}),
+        # 跨层一致性判定（阶段 2）。终局事件必须带上它——
+        # 阶段 2 的验收要求「连续运行的不一致记录**可导出**」，
+        # 只写进检查点是不够的：评测器与聚合脚本读的是终局事件。
+        "cross_layer_verdict": state.get("cross_layer_verdict", {}),
+        # 调查层语料丢弃（BC-75）。与 extraction_window_drops 一样单独给出：
+        # 覆盖率低时必须能回答"是材料里没有，还是材料没送进模型"。
+        "investigation_corpus_drops": state.get("investigation_corpus_drops", []),
     }
 
 
@@ -454,6 +498,10 @@ class DeepResearchGraph:
         只在节点边界响应取消等于取消按钮在最需要的时候失灵。
         """
         logger.info(f"[Graph] node agent start: {agent.name}")
+        # 研究截止日下发给 Agent（P0-3）。在这一处统一注入，而不是让六个
+        # Agent 各自在 process() 开头记得同步——漏掉任何一个，那个 Agent
+        # 的提示词里就没有时点约束，而这种遗漏在输出里看不出来。
+        agent.as_of = state.get("as_of", "") or ""
         task = asyncio.create_task(agent.process(state))
         while not task.done():
             if self._cancelled(state):
@@ -641,12 +689,17 @@ class DeepResearchGraph:
         # —— 以下只在恢复后执行 ——
         logger.info(f"[Graph] 收到复核结论: {decision}")
         try:
-            state["risk_assessment"] = apply_human_review(assessment, decision or {})
+            state["risk_assessment"] = apply_human_review(
+                assessment, decision or {},
+                # 与初次评级同源的数据，供覆盖等级后重算额度（BC-70）
+                scoring_view=state.get("scoring_view"),
+                field_checks=state.get("field_checks"),
+            )
         except ValueError as e:
-            # 结论不合法（如未署名）不得静默放行：宁可停在未复核状态
+            # 正常入口会在 resume_review 中预校验并保持 paused。这里是最后一道
+            # 防线：即使有人绕过入口直接驱动 Command，也绝不能走到 completed。
             logger.error(f"[Graph] 复核结论非法: {e}")
-            state.setdefault("errors", []).append(f"人工复核结论非法，未采纳: {e}")
-            return state
+            raise ValueError(f"人工复核结论非法，未采纳: {e}") from e
 
         self._sync_risk_block(state)
         self._emit({
@@ -736,7 +789,13 @@ class DeepResearchGraph:
         resume: bool = False,
         user_id: str = None,
         search_web: bool = True,
-        search_local: bool = False
+        search_local: bool = False,
+        as_of: str = "",
+        kb_scope: Optional[List[Dict[str, Any]]] = None,
+        subject_name: str = "",
+        business_type: str = "",
+        due_diligence: Optional[bool] = None,
+        investigation: Optional[bool] = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         执行研究流程（流式输出）
@@ -748,6 +807,9 @@ class DeepResearchGraph:
             user_id: 用户ID（用于检查点）
             search_web: 是否启用网络搜索（默认True）
             search_local: 是否启用本地知识库搜索（默认False）
+            as_of: 研究截止日（ISO 日期）。默认空 = 不设时点闸门
+            kb_scope: 本地知识库检索范围。**必须由调用层按用户授权解析后传入**，
+                     图层不自行拼装集合名（见 service/kb_scope.py）
 
         Yields:
             SSE 事件字典
@@ -769,7 +831,13 @@ class DeepResearchGraph:
             state = create_initial_state(
                 query, session_id,
                 search_web=search_web,
-                search_local=search_local
+                search_local=search_local,
+                as_of=as_of,
+                kb_scope=kb_scope,
+                subject_name=subject_name,
+                business_type=business_type,
+                due_diligence=due_diligence,
+                investigation=investigation,
             )
             state["max_iterations"] = self.max_iterations
 
@@ -782,6 +850,9 @@ class DeepResearchGraph:
                 "session_id": session_id,
                 "search_web": search_web,
                 "search_local": search_local,
+                # 截止日要进终局事件与前端：一份没写明"以哪天为准"的尽调报告，
+                # 事后无法判断当时该不该看到某条信息
+                "as_of": as_of,
                 "company_name": state.get("company_name", ""),
                 "timestamp": datetime.now().isoformat()
             }
@@ -818,24 +889,50 @@ class DeepResearchGraph:
             from service.company_profile import (
                 find_company, profile_to_facts, build_credit_context, fill_field_checks
             )
-            from config.dd_checklist import build_field_checks, compute_completeness
+            from config.dd_checklist import (
+                build_field_checks, compute_completeness, resolve_scenario,
+            )
         except ImportError:
             try:
                 from app.service.company_profile import (
                     find_company, profile_to_facts, build_credit_context, fill_field_checks
                 )
-                from app.config.dd_checklist import build_field_checks, compute_completeness
+                from app.config.dd_checklist import (
+                    build_field_checks, compute_completeness, resolve_scenario,
+                )
             except ImportError:
                 logger.warning("[graph] company_profile 模块不可用，跳过档案注入")
                 return None
 
         company = find_company(query)
         if not company:
-            logger.info("[graph] 未识别到尽调对象，按普通研究流程执行")
-            return None
+            if not state.get("due_diligence_mode"):
+                logger.info("[graph] 未识别到尽调对象，按普通研究流程执行")
+                return None
+
+            # RAG/上传文件中的企业不应被 companies.json 这份测试档案挡在尽调
+            # 流程之外。动态档案只声明主体与业务背景，绝不伪造工商或财务字段。
+            subject = (state.get("subject_name") or "").strip()
+            if not subject:
+                subject = self._infer_due_diligence_subject(query)
+            if not subject:
+                subject = "待核实主体"
+                state.setdefault("errors", []).append(
+                    "尽调模式未明确提供 subject_name，主体暂记为‘待核实主体’，须人工确认"
+                )
+            company = {
+                "name": subject,
+                "registration": {},
+                "coverage": {"queried": [], "not_queried_reason": {}},
+                "_dynamic_rag_subject": True,
+            }
+            state["subject_name"] = subject
+            logger.info(f"[graph] 外部资料尽调主体 {subject}：初始化固定二十项清单")
 
         state["company_name"] = company["name"]
         state["credit_context"] = build_credit_context(company)
+        if company.get("_dynamic_rag_subject") and state.get("business_type"):
+            state["credit_context"] += f"\n业务类型：{state['business_type']}。申请金额、期限与用途未提供。"
         # 原始档案要留在 state 里：风险评分卡消费的是结构化数值（负债率、被执行笔数…），
         # facts 里的自然语言无法还原这些字段
         state["company_profile"] = company
@@ -844,7 +941,20 @@ class DeepResearchGraph:
         state["facts"].extend(facts)
 
         # 核查清单：生成骨架 → 用档案填充 → 统计核实率
-        checks = build_field_checks(checked_at=datetime.now().isoformat())
+        #
+        # 场景扩展项由 business_type / credit_application 的产品名**确定性**选出
+        # （BC-58），不由模型决定字段集合。核心二十项恒在，扩展只做加法。
+        scenario = resolve_scenario(
+            state.get("business_type"),
+            state.get("business_scenario"),
+            (company.get("credit_application") or {}).get("product"),
+        )
+        if scenario:
+            state["business_scenario_resolved"] = scenario
+            logger.info(f"[graph] 业务场景 {scenario}：在核心二十项之外启用场景扩展清单")
+        checks = build_field_checks(
+            checked_at=datetime.now().isoformat(), scenario=scenario
+        )
         fill_field_checks(company, facts, checks)
         before = compute_completeness(checks)
 
@@ -884,6 +994,23 @@ class DeepResearchGraph:
         )
         return company
 
+    @staticmethod
+    def _infer_due_diligence_subject(query: str) -> str:
+        """从常见尽调问句中保守提取主体；显式 subject_name 始终优先。"""
+        import re
+
+        text = re.sub(r"\s+", " ", query or "").strip()
+        patterns = (
+            r"(?:对|针对)\s*([^，。；]{2,80}?)(?:开展|进行|做)(?:贷前)?(?:尽职调查|尽调)",
+            r"请(?:对)?\s*([^，。；]{2,80}?)(?:开展|进行|做)(?:贷前)?(?:尽职调查|尽调)",
+            r"([^，。；]{2,80}?(?:股份有限公司|有限责任公司|有限公司))",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                return match.group(1).strip(" ：:，,")
+        return ""
+
     # ------------------------------------------------------- 检查点与 UI 状态
 
     def _build_ui_state(self, state: ResearchState) -> Dict[str, Any]:
@@ -903,6 +1030,11 @@ class DeepResearchGraph:
             ui["charts"] = state["charts"]
         if state.get("final_report"):
             ui["streaming_report"] = state["final_report"]
+
+        # 调查层随 UI 状态一起持久化：刷新页面后图表与调查发现要能重建，
+        # 否则复核人看到的界面与他签字时看到的不一致。
+        if state.get("investigation"):
+            ui["investigation"] = state["investigation"]
 
         kg = state.get("knowledge_graph") or {}
         if kg.get("nodes") or kg.get("edges"):
@@ -944,6 +1076,42 @@ class DeepResearchGraph:
                 "source": "web",
             })
         return out
+
+    def _verify_review_persisted(self, state: ResearchState, session_id: str) -> None:
+        """复核结论写入后回读校验（BC-69 举一反三第 3 条）。
+
+        只在**真的发生过人工复核**时执行：这是本系统里权限最高的人工操作
+        （复核人可以覆盖机器判定的风险等级），也恰恰是原先唯一没有回读校验的
+        写入路径。低频、高风险，值得多一次读。
+
+        校验失败只记 error 不抛：报告已经产出，此时中断没有意义；
+        但这条必须**大声留痕**——审计链断了而无人知晓，比断了更糟。
+        """
+        review = ((state.get("risk_assessment") or {}).get("human_review")) or {}
+        if not review.get("reviewer"):
+            return
+        try:
+            saved = self.checkpoint_service.load_checkpoint(session_id) or {}
+        except Exception as e:  # 回读本身失败也要留痕
+            logger.error(f"[BC-69] 复核结论回读失败 session={session_id}: {e}")
+            return
+
+        saved_review = ((saved.get("risk_assessment") or {}).get("human_review")) or {}
+        expected_level = (state.get("risk_assessment") or {}).get("level")
+        saved_level = (saved.get("risk_assessment") or {}).get("level")
+        problems = []
+        if saved_review.get("reviewer") != review.get("reviewer"):
+            problems.append(
+                f"复核人未落盘（期望 {review.get('reviewer')}，实际 {saved_review.get('reviewer')}）")
+        if saved_level != expected_level:
+            problems.append(f"等级未落盘（期望 {expected_level}，实际 {saved_level}）")
+        if problems:
+            logger.error(
+                f"[BC-69] 审计链断裂 session={session_id}: " + "；".join(problems))
+        else:
+            logger.info(
+                f"[BC-69] 复核结论已落盘校验通过 session={session_id}, "
+                f"复核人={review.get('reviewer')}, 等级={expected_level}")
 
     def _save_step_checkpoint(self, state: ResearchState, step_info: Dict[str, Any]) -> None:
         """
@@ -1028,6 +1196,17 @@ class DeepResearchGraph:
                    "content": f"会话 {session_id} 没有待复核的中断点（可能已完成或从未暂停）"}
             return
 
+        # 在恢复 Command 前先做完整业务校验。非法结论必须让检查点继续保持
+        # paused；若先恢复再校验，LangGraph 已越过 interrupt，旧实现甚至会
+        # 继续发 research_complete，形成未复核却完成的 fail-open。
+        assessment = (snapshot.values or {}).get("risk_assessment") or {}
+        try:
+            apply_human_review(assessment, decision or {})
+        except ValueError as e:
+            logger.warning(f"[Graph] 拒绝非法复核结论: session={session_id}, error={e}")
+            yield {"type": "error", "content": f"人工复核结论非法，未采纳: {e}"}
+            return
+
         logger.info(f"[Graph] 恢复复核: session={session_id}, 断点={snapshot.next}")
         yield {
             "type": "research_resumed",
@@ -1086,7 +1265,27 @@ class DeepResearchGraph:
 
             final_state["phase"] = ResearchPhase.COMPLETED.value
             if self.checkpoint_service and session_id:
+                # ⚠️ 必须先落**完整状态**再改状态位（BC-69）。
+                #
+                # 原实现只调 `update_status(completed)`：状态位变了，
+                # `final_report` 与 `state_json` 一个字没写。后果是人工复核的
+                # 结论——谁批的、把等级从什么覆盖成什么、理由是什么——
+                # 只存在于 SSE 推送里，**持久层查不到**。
+                #
+                # 前四次同形缺陷（BC-31/48/49/64）都是"完全没接"，一跑就露；
+                # 这次是"接了一半"：功能看起来正常（前端确实显示了复核后的报告），
+                # 可用性正常、可审计性为零。而这个项目的核心业务约束正是
+                # "出坏账要追责"，追责要问的恰恰是这条记录。
+                #
+                # `save_checkpoint` 只写 phase/state_json/final_report，
+                # 不碰 status，两者可安全共存。
+                self._save_checkpoint(
+                    final_state,
+                    final_state.get("_user_id"),
+                    self._build_ui_state(final_state),
+                )
                 self.checkpoint_service.update_status(session_id, "completed")
+                self._verify_review_persisted(final_state, session_id)
 
             logger.info(
                 f"[Graph] ===== 研究完成 ===== facts={len(final_state.get('facts', []))}, "

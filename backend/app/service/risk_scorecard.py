@@ -60,6 +60,7 @@ GATE_CONFLICT = "conflict_escalation"
 GATE_DISHONESTY_VETO = "dishonesty_veto"
 GATE_ENFORCEMENT_VETO = "enforcement_veto"
 GATE_PROVENANCE = "provenance_degraded"
+GATE_AS_OF_UNKNOWN = "as_of_date_unknown"
 GATE_UNRATABLE = "unratable"
 GATE_HUMAN_OVERRIDE = "human_review_override"
 GATE_HUMAN_REJECTED = "human_review_rejected"
@@ -208,7 +209,18 @@ def score(
 
     fins = company.get("financials") or []
     revenue_series = [f["revenue"] for f in fins if f.get("revenue") is not None]
-    latest = fins[-1] if fins else {}
+    # ⚠️ 不能写 `fins[-1]`（BC-79 的第二个入口）。
+    #
+    #    `credit_advice` 里那份同样的代码，让一家营收腰斩、连亏两年、
+    #    四家子公司破产重整的企业拿到 2.5 亿授信建议——因为它取到的是
+    #    三年前那一期。这里也一样：涉诉金额占营收的比例会按错误的营收算
+    #    （实测 18600 万被算成「占营收 1.8%」，用的是 2021 年的 103.8 亿；
+    #    按 2023 年的 40.5 亿应为 4.6%）。
+    #
+    #    **同一条纪律，另一个入口。** 复用 credit_advice 的实现，
+    #    而不是再抄一份——再抄一份就是在等第三个入口。
+    from service.credit_advice import _latest as _latest_period
+    latest = _latest_period(company)
 
     dim_scores: Dict[str, float] = {}
     triggered: List[Dict[str, Any]] = []
@@ -461,18 +473,43 @@ def apply_provenance_gate(
     Args:
         floor: 存在降级时允许达到的最优等级。默认「中风险」。
     """
-    if not degradations:
+    # 事实日期不明属于**时点**问题，不是来源问题。混在一起报，闸门理由就会
+    # 指向错误的方向——BC-18 的教训：一个措辞永远对不上的告警会被学会无视。
+    as_of_unknown = [d for d in degradations
+                     if d.get("reason") == "as_of_date_unknown"]
+    provenance = [d for d in degradations
+                  if d.get("reason") != "as_of_date_unknown"]
+
+    if provenance:
+        if result.get("level") != INSUFFICIENT:
+            result["level"] = _level_at_least(result.get("level", "低风险"), floor)
+        result["requires_human_review"] = True
+        fields = sorted({d.get("field_id") for d in provenance if d.get("field_id")})
+        shown = "、".join(fields[:6]) + ("…" if len(fields) > 6 else "")
+        result["gates_applied"] = list(result.get("gates_applied") or []) + [
+            f"{len(provenance)} 项核实来源或取证时间不明（{shown}），"
+            f"等级下限提升至{floor}并强制人工复核；完成来源迁移后方可重新评级"
+        ]
+        result["gate_kinds"] = list(result.get("gate_kinds") or []) + [GATE_PROVENANCE]
+
+    if as_of_unknown:
+        if result.get("level") != INSUFFICIENT:
+            result["level"] = _level_at_least(result.get("level", "低风险"), floor)
+        result["requires_human_review"] = True
+        fields = sorted({d.get("field_id") for d in as_of_unknown if d.get("field_id")})
+        shown = "、".join(fields[:6]) + ("…" if len(fields) > 6 else "")
+        cutoff = next((d.get("research_as_of") for d in as_of_unknown
+                       if d.get("research_as_of")), "")
+        result["gates_applied"] = list(result.get("gates_applied") or []) + [
+            f"{len(as_of_unknown)} 项证据未声明事实发生/发布日期（{shown}），"
+            f"无法确认其是否早于研究截止日{cutoff or ''}，"
+            f"等级下限提升至{floor}并强制人工复核"
+        ]
+        result["gate_kinds"] = list(result.get("gate_kinds") or []) + [GATE_AS_OF_UNKNOWN]
+
+    if not provenance and not as_of_unknown:
         return result
-    if result.get("level") != INSUFFICIENT:
-        result["level"] = _level_at_least(result.get("level", "低风险"), floor)
-    result["requires_human_review"] = True
-    fields = sorted({d.get("field_id") for d in degradations if d.get("field_id")})
-    shown = "、".join(fields[:6]) + ("…" if len(fields) > 6 else "")
-    result["gates_applied"] = list(result.get("gates_applied") or []) + [
-        f"{len(degradations)} 项核实来源或取证时间不明（{shown}），"
-        f"等级下限提升至{floor}并强制人工复核；完成来源迁移后方可重新评级"
-    ]
-    result["gate_kinds"] = list(result.get("gate_kinds") or []) + [GATE_PROVENANCE]
+
     result["provenance_degradations"] = degradations
     result["credit_advice"] = _advice(result["level"])
     return result
@@ -492,9 +529,77 @@ def needs_human_review(assessment: Optional[Dict[str, Any]]) -> bool:
     return bool(assessment.get("requires_human_review"))
 
 
+def _recompute_credit_after_override(
+    out: Dict[str, Any],
+    scoring_view: Optional[Dict[str, Any]],
+    field_checks: Optional[List[Dict]],
+    engine_level: str,
+    reviewer: str,
+    comment: str,
+) -> None:
+    """人工覆盖等级后重算额度（BC-70）。
+
+    ## 为什么必须重算
+
+    额度系数**由等级决定**。实测同一主体：低风险 720 万、中风险 144 万、
+    高风险不予授信——差 5 倍。原实现覆盖等级后只换了 `credit_advice`
+    这句话术，带金额的 `credit_recommendation` 仍是按机器原判算的，
+    于是报告里出现"等级低风险、额度按中风险"的内部矛盾。
+
+    BC-49 修的是"额度要在**闸门**之后算"；人工覆盖是另一条会改变等级的
+    路径，当时没被覆盖到——同一条纪律的又一个入口。
+
+    ## 拿不到重算依据时，宁可作废也不留旧数字
+
+    重算需要评分视图与清单（与初次评级**同源**，用原始档案会丢掉适配器
+    查到的担保）。旧检查点没存 `scoring_view`，此时不能把按旧等级算出的
+    金额继续摆在新等级旁边——那是一个会被直接采信的错误数字。
+    显式置为不可用并写明原因，比留着安静的错误好。
+
+    ## 覆盖前的金额保留在留痕里
+
+    复核人把等级调低会让额度上浮（本项目选择"额度随人工跟着调高"）。
+    这是一次实质的授信放大，必须能回答"放大了多少、谁批的"。
+    """
+    previous = out.get("credit_recommendation")
+    previous_amount = (previous or {}).get("suggested_amount")
+
+    if not scoring_view or not field_checks:
+        out["credit_recommendation"] = {
+            "recommendable": False,
+            "reason": (
+                f"人工复核将等级由「{engine_level}」调整为「{out['level']}」，"
+                "但本次运行缺少评分视图，无法按新等级重算额度。"
+                "原额度依据的是调整前的等级，已作废，须重新测算后出具。"
+            ),
+            "based_on_level": out["level"],
+            "superseded_amount": previous_amount,
+            "superseded_level": engine_level,
+        }
+        return
+
+    # 惰性导入：credit_advice 依赖本模块的 INSUFFICIENT，模块级导入会成环。
+    try:
+        from service.credit_advice import recommend_credit
+    except ImportError:
+        from app.service.credit_advice import recommend_credit
+
+    fresh = recommend_credit(scoring_view, field_checks, out)
+    fresh["superseded_amount"] = previous_amount
+    fresh["superseded_level"] = engine_level
+    fresh["override_note"] = (
+        f"额度按人工复核后的等级「{out['level']}」重算"
+        f"（复核人 {reviewer}）；机器原判「{engine_level}」对应额度 "
+        f"{previous_amount if previous_amount is not None else '不予授信'}。"
+    )
+    out["credit_recommendation"] = fresh
+
+
 def apply_human_review(
     result: Dict[str, Any],
     decision: Dict[str, Any],
+    scoring_view: Optional[Dict[str, Any]] = None,
+    field_checks: Optional[List[Dict]] = None,
     reviewed_at: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
@@ -519,12 +624,19 @@ def apply_human_review(
     if not reviewer:
         raise ValueError("复核结论必须署名：没有复核人的确认无法追责")
 
-    approved = bool(decision.get("approved"))
+    if not isinstance(decision.get("approved"), bool):
+        raise ValueError("approved 必须是明确的布尔值")
+    approved = decision["approved"]
     override = (decision.get("override_level") or "").strip() or None
+    comment = (decision.get("comment") or "").strip()
     if override and override not in LEVELS and override != INSUFFICIENT:
         raise ValueError(
             f"override_level 必须是 {LEVELS + [INSUFFICIENT]} 之一，收到 {override!r}"
         )
+    if not approved and override:
+        raise ValueError("复核不通过时不得同时调整风险等级")
+    if not approved and not comment:
+        raise ValueError("复核不通过必须填写理由")
 
     out = dict(result or {})
     engine_level = out.get("level", INSUFFICIENT)
@@ -532,18 +644,23 @@ def apply_human_review(
     kinds = list(out.get("gate_kinds") or [])
 
     if override and override != engine_level:
+        if not comment:
+            raise ValueError("调整风险等级必须填写理由")
         out["level"] = override
         gates.append(
             f"人工复核将风险等级由「{engine_level}」调整为「{override}」"
-            f"（复核人 {reviewer}）：{decision.get('comment') or '未填写理由'}"
+            f"（复核人 {reviewer}）：{comment}"
         )
         kinds.append(GATE_HUMAN_OVERRIDE)
     if not approved:
-        gates.append(f"人工复核未通过（复核人 {reviewer}）：{decision.get('comment') or '未填写理由'}")
+        gates.append(f"人工复核未通过（复核人 {reviewer}）：{comment}")
         kinds.append(GATE_HUMAN_REJECTED)
         out["credit_advice"] = "复核未通过，不得出具授信建议；须按复核意见整改后重新提交"
+        out["credit_recommendation"] = None
     elif override and override != engine_level:
         out["credit_advice"] = _advice(out["level"])
+        _recompute_credit_after_override(
+            out, scoring_view, field_checks, engine_level, reviewer, comment)
 
     out["gates_applied"] = gates
     out["gate_kinds"] = kinds
@@ -552,7 +669,8 @@ def apply_human_review(
         "completed": True,
         "approved": approved,
         "reviewer": reviewer,
-        "comment": decision.get("comment") or "",
+        "reviewer_id": decision.get("reviewer_id"),
+        "comment": comment,
         "override_level": override,
         # 规则引擎的原始结论。永远保留，永远不被覆盖。
         "engine_level": engine_level,

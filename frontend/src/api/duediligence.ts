@@ -23,6 +23,7 @@ export interface FieldCheck {
   verification_origin?: string
   source_adapter?: string
   retrieved_at?: string
+  as_of_date?: string
   evidence_ids?: string[]
 }
 
@@ -43,6 +44,9 @@ export interface CreditRecommendation {
   range_low: number | null
   range_high: number | null
   basis: { method: string; value: number; detail: string }[]
+  /** 无法测算的口径及原因（BC-72）。**必须呈现**——少一个口径就是少一道
+   *  上限约束，读者要能分辨"算出来不利"与"根本没算" */
+  unavailable_bases?: { method: string; reason: string }[]
   deductions: { item: string; amount: number; detail: string }[]
   adjustments: { factor: string; multiplier: number; detail: string }[]
   application_amount: number | null
@@ -73,6 +77,7 @@ export interface RiskAssessment {
     completed: boolean
     approved: boolean
     reviewer: string
+    reviewer_id?: string
     comment: string
     override_level: string | null
     /** 规则引擎的原始结论。人工可以改判，但原始值永远保留——
@@ -80,6 +85,73 @@ export interface RiskAssessment {
     engine_level: string
     reviewed_at: string
   }
+}
+
+/** 调查层（B 层）图表的两种类别。**呈现上必须能一眼区分**——
+ *  一张图比一句话权威得多，读者不会去核对趋势图下面的脚注。
+ *  deterministic: 解析自已核实字段，与证据附录同源
+ *  exploratory:   来自未通过证据闸门的调查材料，不作为授信依据 */
+export type ChartClass = 'deterministic' | 'exploratory'
+
+export interface InvestigationChart {
+  id: string
+  chart_class: ChartClass
+  chart_type: 'line' | 'bar' | 'stacked_bar' | 'graph'
+  /** 带徽标的标题（探索性图表以徽标开头） */
+  title: string
+  /** 不带徽标的原名，供图例等处使用 */
+  plain_title: string
+  subtitle?: string
+  unit?: string
+  series: { period: string; value: number; text?: string; total?: number; missing?: number }[]
+  graph?: { nodes: Record<string, unknown>[]; edges: Record<string, unknown>[] }
+  provenance: {
+    field_id?: string
+    field_name?: string
+    source_value?: string
+    evidence_ids?: string[]
+    sources?: { title?: string; url?: string; published_at?: string; retrieved_at?: string }[]
+  }
+  note: string
+}
+
+export interface InvestigationFinding {
+  claim: string
+  dimension: string
+  source: { title?: string; url?: string; publisher?: string; published_at?: string; retrieved_at?: string }
+  subject_confirmed: boolean
+  verified: boolean
+}
+
+/** B 层未能产出的部分。**必须呈现**——少一节的原因要写明是
+ *  「查了没有」还是「没查成」，否则读者会以为这一节本来就不存在 */
+export interface InvestigationFailure {
+  stage: string
+  kind: 'not_found' | 'error' | 'disabled'
+  reason: string
+  detail?: string
+}
+
+/** 探索性实体关系图谱。**每条边都带来源**——一条关系边就是一条断言，
+ *  画成图之后比写成文字更容易被采信，因此它和文字发现走同一道准入 */
+export interface InvestigationGraph {
+  nodes: { id: string; label: string; is_subject?: boolean; exploratory?: boolean }[]
+  edges: {
+    source: string
+    target: string
+    relation: string
+    exploratory?: boolean
+    origin?: { title?: string; publisher?: string; published_at?: string; retrieved_at?: string }
+  }[]
+}
+
+/** 调查层（B 层）。与 A 层物理隔离：不参与评级、额度与证据附录 */
+export interface Investigation {
+  enabled: boolean
+  charts: InvestigationChart[]
+  graph: InvestigationGraph
+  findings: InvestigationFinding[]
+  failures: InvestigationFailure[]
 }
 
 /** 复核卡片的载荷，由后端 interrupt payload 推出 */
@@ -99,7 +171,6 @@ export interface HumanReviewRequest {
 }
 
 export interface ReviewDecision {
-  reviewer: string
   approved: boolean
   comment?: string
   /** 人工改判后的等级。留空表示沿用规则引擎结论 */
@@ -108,12 +179,27 @@ export interface ReviewDecision {
 
 /** 发起尽调（SSE 流） */
 export function startDueDiligence(
-  params: { query: string; session_id?: string },
+  params: {
+    query: string
+    session_id?: string
+    subject_name?: string
+    business_type?: string
+    kb_name?: string
+    as_of?: string
+    search_modes?: ('web' | 'local')[]
+    /** 调查层探索性抽取。留空 = 随尽调模式默认开启 */
+    investigation?: boolean
+  },
   options?: AxiosRequestConfig,
 ) {
-  return request.post<ReadableStream>(
+  return request.post<ReadableStream<Uint8Array>>(
     '/research/stream',
-    { ...params, search_modes: [], version: 'v2' },
+    {
+      ...params,
+      search_modes: params.search_modes ?? [],
+      due_diligence: true,
+      version: 'v2',
+    },
     {
       headers: { Accept: 'text/event-stream' },
       responseType: 'stream',
@@ -130,7 +216,7 @@ export function submitReview(
   decision: ReviewDecision,
   options?: AxiosRequestConfig,
 ) {
-  return request.post<ReadableStream>(`/research/review/${sessionId}`, decision, {
+  return request.post<ReadableStream<Uint8Array>>(`/research/review/${sessionId}`, decision, {
     headers: { Accept: 'text/event-stream' },
     responseType: 'stream',
     adapter: 'fetch',

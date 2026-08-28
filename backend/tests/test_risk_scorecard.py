@@ -373,7 +373,10 @@ def test_人工复核改写也带标识():
     assert GATE_HUMAN_OVERRIDE in ov["gate_kinds"]
     assert len(ov["gate_kinds"]) == len(ov["gates_applied"])
 
-    rj = apply_human_review(_run(_CLEAN), {"approved": False, "reviewer": "李四"})
+    rj = apply_human_review(
+        _run(_CLEAN),
+        {"approved": False, "reviewer": "李四", "comment": "退回补充材料"},
+    )
     assert GATE_HUMAN_REJECTED in rj["gate_kinds"]
 
 

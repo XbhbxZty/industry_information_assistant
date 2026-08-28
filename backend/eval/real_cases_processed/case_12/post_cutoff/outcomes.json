@@ -1,0 +1,27 @@
+[
+  {
+    "event": "苏州市中级人民法院正式裁定受理江苏中利集团股份有限公司重整",
+    "event_date": "2024-11-08",
+    "source_ids": [
+      "S014",
+      "S015"
+    ],
+    "usable_for_cutoff_assessment": false
+  },
+  {
+    "event": "公司披露未能在江苏证监局责令改正期限内清收18.05亿元被占用资金",
+    "event_date": "2024-11",
+    "source_ids": [
+      "S014"
+    ],
+    "usable_for_cutoff_assessment": false
+  },
+  {
+    "event": "法院批准江苏中利集团股份有限公司重整计划并终止重整程序",
+    "event_date": "2024-12-11",
+    "source_ids": [
+      "S015"
+    ],
+    "usable_for_cutoff_assessment": false
+  }
+]

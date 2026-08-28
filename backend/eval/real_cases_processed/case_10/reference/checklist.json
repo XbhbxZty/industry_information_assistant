@@ -1,0 +1,522 @@
+[
+  {
+    "check_id": "CHK001",
+    "conclusion": "`TCL科技集团股份有限公司 / 91441300195971850Y / 000100`可相互关联",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S01",
+      "S12"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S01",
+      "S12"
+    ],
+    "hard_gate": null,
+    "item": "当前法人名称、USCC、上市代码",
+    "manual_review": null,
+    "missing_evidence": "截止日工商实时快照",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK002",
+    "conclusion": "历史“TCL集团”等名称属于同一法人连续更名",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S01"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S01"
+    ],
+    "hard_gate": false,
+    "item": "曾用名连续性",
+    "manual_review": false,
+    "missing_evidence": "无重大缺口",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK003",
+    "conclusion": "发行人更名后既有债券名称可以继续保留旧称",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S02",
+      "S03"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S02",
+      "S03"
+    ],
+    "hard_gate": false,
+    "item": "历史债券名称连续性",
+    "manual_review": false,
+    "missing_evidence": "无",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK004",
+    "conclusion": "章程载明公司永久存续，但未取得2024-12-31市场监管实时状态快照",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S01"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S01"
+    ],
+    "hard_gate": null,
+    "item": "登记状态",
+    "manual_review": true,
+    "missing_evidence": "官方登记状态查询结果",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK005",
+    "conclusion": "已披露李东生",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S12"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S12"
+    ],
+    "hard_gate": false,
+    "item": "法定代表人",
+    "manual_review": true,
+    "missing_evidence": "截止日市场监管快照",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK006",
+    "conclusion": "披露口径为“无实际控制人”",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S09",
+      "S12"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S09",
+      "S12"
+    ],
+    "hard_gate": false,
+    "item": "实际控制人",
+    "manual_review": false,
+    "missing_evidence": "—",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK007",
+    "conclusion": "李东生及一致行动方为第一大股东组合，不应自动写成实际控制人",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S08",
+      "S09"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S08",
+      "S09"
+    ],
+    "hard_gate": false,
+    "item": "第一大股东与实控人区分",
+    "manual_review": false,
+    "missing_evidence": "—",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK008",
+    "conclusion": "`002129 / 911200001034137808`，为不同上市法人，由TCL科技间接控制",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S09"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S09"
+    ],
+    "hard_gate": null,
+    "item": "TCL中环主体识别",
+    "manual_review": true,
+    "missing_evidence": "交易时最新工商信息",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK009",
+    "conclusion": "截止日前公告明确其为独立公司主体",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S07",
+      "S08"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S07",
+      "S08"
+    ],
+    "hard_gate": true,
+    "item": "TCL华星主体识别",
+    "manual_review": true,
+    "missing_evidence": "交易时须取得其完整USCC；本包所取得政府USCC材料为截止日后公开",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK010",
+    "conclusion": "独立持牌财务公司，USCC及金融许可证明确",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S07"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S07"
+    ],
+    "hard_gate": null,
+    "item": "TCL科技集团财务有限公司主体识别",
+    "manual_review": true,
+    "missing_evidence": "具体结算/承兑/贷款合同",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK011",
+    "conclusion": "属关联法人体系，不等同于TCL科技上市公司本体",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S05"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S05"
+    ],
+    "hard_gate": true,
+    "item": "TCL实业/关联保理主体识别",
+    "manual_review": true,
+    "missing_evidence": "具体保理合同及权利链",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK012",
+    "conclusion": "收入稳定增长，但盈利波动大；经营现金流连续为正",
+    "conflict": "无实质冲突",
+    "direct_source_ids": [
+      "S03",
+      "S04"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S03",
+      "S04"
+    ],
+    "hard_gate": false,
+    "item": "2021-2023财务趋势",
+    "manual_review": true,
+    "missing_evidence": "2024全年报告在截止日尚未公开",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK013",
+    "conclusion": "可取得2024Q3数据，但未经审计",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S08"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S08"
+    ],
+    "hard_gate": false,
+    "item": "2024截止日前最新财务",
+    "manual_review": true,
+    "missing_evidence": "2024全年经审计数据在截止日不可得",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK014",
+    "conclusion": "2023年审计报告为标准公允反映表述",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S04"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S04"
+    ],
+    "hard_gate": null,
+    "item": "审计意见",
+    "manual_review": false,
+    "missing_evidence": "2024年度审计报告截止日不可得",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK015",
+    "conclusion": "2023净额220.04亿元，94.18%一年以内，前五名占45.30%",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S04"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S04"
+    ],
+    "hard_gate": null,
+    "item": "应收账款规模、账龄、集中度",
+    "manual_review": true,
+    "missing_evidence": "本案具体债权账龄及付款方",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK016",
+    "conclusion": "存在集团及供应商应收账款保理、转让机制",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S05",
+      "S04"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S05",
+      "S04"
+    ],
+    "hard_gate": true,
+    "item": "公开保理/转让安排",
+    "manual_review": true,
+    "missing_evidence": "某笔债权是否已保理/转让/质押",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK017",
+    "conclusion": "其他上市公司披露存在无追索权金单保理实践",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S11"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S11"
+    ],
+    "hard_gate": null,
+    "item": "“简单汇”平台外部使用证据",
+    "manual_review": true,
+    "missing_evidence": "本案是否使用该平台",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK018",
+    "conclusion": "无公开资料可证明本案合同",
+    "conflict": "—",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": true,
+    "item": "具体合同真实性及签约主体",
+    "manual_review": true,
+    "missing_evidence": "合同原件、签章、授权",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK019",
+    "conclusion": "未提供本案发票，不能判断为TCL科技、TCL华星或TCL中环",
+    "conflict": "—",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": true,
+    "item": "发票债务人",
+    "manual_review": true,
+    "missing_evidence": "发票原件/电子底账、购方USCC",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK020",
+    "conclusion": "公共信息不能验证本案基础交易履行",
+    "conflict": "—",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": true,
+    "item": "交付、物流、验收",
+    "manual_review": true,
+    "missing_evidence": "PO、送货单、签收单、验收单、物流",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK021",
+    "conclusion": "无本案债务人确权资料",
+    "conflict": "—",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": true,
+    "item": "应收确权",
+    "manual_review": true,
+    "missing_evidence": "对账单、确权书、付款承诺",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK022",
+    "conclusion": "集团存在保理业务并不能说明本笔债权状态",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S05",
+      "S04"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S05",
+      "S04"
+    ],
+    "hard_gate": true,
+    "item": "是否已质押/转让/重复融资",
+    "manual_review": true,
+    "missing_evidence": "动产融资登记、保理台账、转让通知、平台状态",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK023",
+    "conclusion": "集团关系及合并报表本身不构成某一子公司债务的合同保证证据",
+    "conflict": "—",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": null,
+    "item": "所谓TCL科技母集团付款保证",
+    "manual_review": true,
+    "missing_evidence": "保证合同、董事会/授权文件、金额期限范围",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK024",
+    "conclusion": "本次未取得能够代表完整法定查询范围的截止日清单",
+    "conflict": "—",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": null,
+    "item": "重大诉讼/仲裁完整情况",
+    "manual_review": true,
+    "missing_evidence": "法院、交易所及企业案件明细核验",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK025",
+    "conclusion": "未形成可审计的官方全量查询快照，不能写“无记录”",
+    "conflict": "—",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": null,
+    "item": "被执行/失信/限制消费/终本",
+    "manual_review": true,
+    "missing_evidence": "中国执行信息公开网等官方查询快照",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK026",
+    "conclusion": "未取得截止日市场监管/信用中国完整主体查询结果",
+    "conflict": "—",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": null,
+    "item": "行政处罚/经营异常",
+    "manual_review": true,
+    "missing_evidence": "官方主体查询记录",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK027",
+    "conclusion": "本次材料不足以形成完整否定性结论",
+    "conflict": "—",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": null,
+    "item": "监管处分/公开谴责",
+    "manual_review": true,
+    "missing_evidence": "深交所/证监会完整纪律处分查询",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK028",
+    "conclusion": "个别债券正常付息公告及2022偿付率不能证明所有债务从未违约",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S02",
+      "S03"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S02",
+      "S03"
+    ],
+    "hard_gate": true,
+    "item": "债券违约/贷款逾期总体结论",
+    "manual_review": true,
+    "missing_evidence": "全量债券受托报告、债务逾期披露、银行征信",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK029",
+    "conclusion": "非公开数据，未获取且不得虚构",
+    "conflict": "—",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": null,
+    "item": "银行流水/税务/企业征信",
+    "manual_review": true,
+    "missing_evidence": "授权后私域资料",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK030",
+    "conclusion": "S10、P01全部排除于2024-12-31当时的风险判断",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S10",
+      "P01"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S10",
+      "P01"
+    ],
+    "hard_gate": null,
+    "item": "截止日控制",
+    "manual_review": false,
+    "missing_evidence": "—",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  }
+]

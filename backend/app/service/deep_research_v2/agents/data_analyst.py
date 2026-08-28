@@ -328,7 +328,12 @@ class DataAnalyst(BaseAgent):
                 # v0.6：按 verification_origin 分发重放依据，而非一律用初始档案。
                 # 结构化适配器核实的字段本就无法由初始档案重放，旧实现会把
                 # 合法增量证据误判为不一致并全面 fail-closed。
-                report = verify_field_checks(profile, checks, evidence_store)
+                # 研究截止日：留空即不施加时点闸门。给定时，晚于该日的证据
+                # 直接 fail-closed，事实日期不明的转降级（见 verification.check_as_of）
+                report = verify_field_checks(
+                    profile, checks, evidence_store,
+                    as_of=state.get("as_of", "") or "",
+                )
                 # 降级必须显式披露，不能只进日志（BC-02 的教训）
                 for d in report.degradations:
                     state.setdefault("errors", []).append(
@@ -383,6 +388,12 @@ class DataAnalyst(BaseAgent):
                     # 用原始 profile 会让适配器查到的担保不参与扣减（BC-31 同形）。
                     # 必须在闸门之后：等级被闸门改过，额度系数要跟着改。
                     result["credit_recommendation"] = recommend_credit(view, checks, result)
+                    # 合并后的评分视图必须留在 state（BC-70）。
+                    # 人工复核覆盖等级后要按同一份数据重算额度——
+                    # 用原始 profile 重算会丢掉适配器查到的担保，
+                    # 重算出来的数字与初次评级不同源，等于制造第二处口径。
+                    # 它同时补上一个可审计缺口：评分卡实际读到的是哪份数据。
+                    state["scoring_view"] = view
             except Exception as e:
                 # 打分本身出错同样不得静默：没有评级 ≠ 没有风险
                 result = unratable(f"风险评分执行失败（{type(e).__name__}: {e}），不予评级", completeness)
@@ -435,6 +446,22 @@ class DataAnalyst(BaseAgent):
         # 0. 风险评分（纯规则）。刻意放在所有 LLM 调用之前——
         #    下面任何一步失败都不能影响评级的产出（BC-17）
         self.assess_risk(state)
+
+        if state.get("due_diligence_mode"):
+            # 当前数据点/图表/知识图谱没有独立 evidence_id，不能让 Scout 的
+            # 候选事实绕过证据桥进入过程页。尽调模式只运行规则评分；待派生
+            # 产物具备字段级 lineage 后再开放。
+            state["data_points"] = []
+            state["insights"] = []
+            state["charts"] = []
+            state["knowledge_graph"] = {"nodes": [], "edges": []}
+            self.add_message(state, "research_step", {
+                "step_type": "analyzing", "title": "数据分析",
+                "subtitle": "尽调模式：无独立证据 ID 的派生分析已跳过",
+                "status": "completed",
+                "stats": {"results_count": 0, "charts_count": 0, "entities_count": 0},
+            })
+            return state
 
         # 1. 提取结构化数据
         extracted_data = await self._extract_data(state)

@@ -1,0 +1,96 @@
+{
+  "confidence": {
+    "overall_reference_assessment": 0.94
+  },
+  "credit_amount": null,
+  "eval_only": true,
+  "generated_reference": true,
+  "hard_gate_triggers": [
+    "持续经营重大不确定性",
+    "大额逾期应付款",
+    "大额银行及金融机构借款契约条件违背",
+    "商业承兑汇票到期未偿",
+    "大额集团内担保",
+    "大量资产受限",
+    "单笔应收真实性及权属未核验"
+  ],
+  "human_review_status": "not_reviewed",
+  "key_risk_factors": [
+    "经营性盈利能力仍弱",
+    "流动性缺口巨大",
+    "供应商历史债务规模显著",
+    "金融机构债务契约压力",
+    "集团信用支持资源已被较多占用",
+    "关联保理需要重复融资核验",
+    "诉讼和合同纠纷风险"
+  ],
+  "label_grade": "silver",
+  "missing_critical_evidence": [
+    "基础合同",
+    "采购订单",
+    "发票",
+    "物流及验收证明",
+    "对账及确权",
+    "应收账款到期日和历史回款",
+    "退货返利折让及抵销情况",
+    "应收转让质押保理登记",
+    "最新金融机构豁免及展期文件",
+    "完整法院执行查询",
+    "银行流水征信及税务资料"
+  ],
+  "mitigating_factors": [
+    "供应商合作仍在继续并存在恢复和扩大合作",
+    "2025H1经营现金流为正",
+    "截至半年报报出日相关银行及金融机构未要求立即还款",
+    "商业承兑汇票未偿规模较历史水平有所下降",
+    "仍存在银行和供应链融资合作渠道"
+  ],
+  "normalized": {
+    "adverse_risk_gates": [
+      "持续经营重大不确定性",
+      "大额逾期应付款",
+      "大额银行及金融机构借款契约条件违背",
+      "商业承兑汇票到期未偿",
+      "大额集团内担保",
+      "大量资产受限"
+    ],
+    "assessment_confidence": {
+      "calibrated_probability": false,
+      "ordinal_score": {
+        "overall_reference_assessment": 0.94
+      },
+      "raw": {
+        "overall_reference_assessment": 0.94
+      }
+    },
+    "corporate_risk_level": null,
+    "decision_status": "blocked",
+    "information_gates": [
+      "单笔应收真实性及权属未核验"
+    ],
+    "risk_level_raw": "高",
+    "risk_scope": null,
+    "transaction_readiness": "insufficient_evidence",
+    "transaction_risk_level": null
+  },
+  "reasoning_claim_ids": [
+    "C027",
+    "C038",
+    "C040",
+    "C057",
+    "C058",
+    "C060",
+    "C062",
+    "C063",
+    "C065",
+    "C066",
+    "C067",
+    "C069",
+    "C070",
+    "C079",
+    "C080"
+  ],
+  "recommended_action": "暂缓",
+  "research_only": true,
+  "risk_level": "高"
+}

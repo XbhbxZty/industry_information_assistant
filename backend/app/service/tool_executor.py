@@ -232,33 +232,17 @@ class ToolExecutor:
         if not query or not kb_name:
             return []
 
-        try:
-            from service.retrieval_service import retrieve_from_knowledge_base
-            results = await asyncio.to_thread(
-                retrieve_from_knowledge_base,
-                kb_name=kb_name,
-                question=query,
-                top_k=top_k
-            )
-
-            # 转换为统一格式
-            formatted_results = []
-            for r in results:
-                formatted_results.append({
-                    'url': f"local://{kb_name}/{r.get('document_id', 'unknown')}",
-                    'name': r.get('document_name', 'N/A'),
-                    'summary': r.get('content_with_weight', ''),
-                    'snippet': r.get('content_with_weight', '')[:200] if r.get('content_with_weight') else '',
-                    'siteName': f"知识库: {kb_name}",
-                    'siteIcon': '',
-                    'source': 'local'
-                })
-
-            return formatted_results
-
-        except Exception as e:
-            logging.error(f"Knowledge search error: {e}")
-            return []
+        # ⚠️ 已停止工作，且这是有意的（BC-53）。
+        # 本工具只拿得到知识库**名字**、没有用户身份，做的是无授权的按名查找。
+        # 集合命名改为 kb_<知识库UUID> 后按名字无法定位集合。
+        # 正确路径见 service/kb_scope.resolve_kb_scope()；V1 链路按
+        # MIGRATION_PLAN Stage 0.4 整体删除，不再为它补这条能力。
+        logging.error(
+            f"[V1] 本地知识库检索已停用：按名字（{kb_name!r}）定位知识库无法做授权判断，"
+            f"集合命名已改为 kb_<UUID>。本次返回空结果，"
+            f"**不代表知识库中没有相关内容**"
+        )
+        return []
 
     # ========== Text2SQL ==========
     async def execute_text2sql(self, params: Dict[str, Any], context: ReActContext) -> Dict[str, Any]:

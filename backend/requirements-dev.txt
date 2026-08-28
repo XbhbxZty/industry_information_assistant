@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# Deterministic regression suite
+pytest>=8,<9

@@ -7,12 +7,23 @@ from typing import Dict, Any, Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from starlette.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_500_INTERNAL_SERVER_ERROR
+from starlette.status import (
+    HTTP_200_OK,
+    HTTP_400_BAD_REQUEST,
+    HTTP_403_FORBIDDEN,
+    HTTP_500_INTERNAL_SERVER_ERROR,
+)
 import logging
+
+from sqlalchemy.orm import Session
 
 from service import ResearchService, ServiceConfig
 from service.dr_g import serialize_event  # 导入序列化函数
+from service.kb_scope import resolve_kb_scope
+from core.database import get_db
 from core.redis_client import cache  # 导入 Redis 缓存
+from models.user import User
+from router.auth_router import get_current_user_required
 
 # V2 导入
 from service.deep_research_v2.service import DeepResearchV2Service
@@ -37,6 +48,19 @@ class ResearchRequest(BaseModel):
     search_local: Optional[bool] = None  # 是否搜索本地知识库 (兼容旧版)
     search_modes: Optional[list] = None  # 搜索模式: ['web', 'local'] (新版)
     version: Optional[Literal["v1", "v2"]] = "v2"  # 版本选择 (v2: 多智能体架构，推荐)
+    # 研究截止日（ISO 日期，如 "2025-05-31"）。留空 = 不设时点闸门。
+    # 设定后，晚于该日发布/发生的事实不得进入判断——用于回溯评测与报告可复现。
+    # 见 service/verification.py::check_as_of
+    as_of: Optional[str] = None
+    # 尽调入口不再依赖 companies.json 命中。前端可显式声明主体与业务场景；
+    # 老客户端不传时，服务层仍会按查询中的“尽调/授信/保理”等语义兜底。
+    subject_name: Optional[str] = None
+    business_type: Optional[str] = None
+    due_diligence: Optional[bool] = None
+    # 调查层（B 层）开关。留空 = 随尽调模式默认开启（计划 9.1）。
+    # 它只控制**探索性**抽取；确定性图表来自已核实字段，不受此开关影响，
+    # 也不该受——那些图与证据附录同源，关掉它们等于让报告少说已核实的事。
+    investigation: Optional[bool] = None
 
     class Config:
         json_schema_extra = {
@@ -67,18 +91,17 @@ class HumanReviewRequest(BaseModel):
     """
     风控复核结论（v0.6 人机协同）
 
-    `reviewer` 必填且不得为空：没有署名的复核等于没有复核——
-    出坏账追责时无法确定是谁批的。
+    复核人身份不接受客户端传入，而是由服务端从登录 Token 中取得。
+    这样既能留痕，也不能通过篡改请求体冒充其他复核人。
     """
-    reviewer: str                                   # 复核人，必填
     approved: bool                                  # 是否通过
     comment: Optional[str] = ""                     # 复核意见
     override_level: Optional[str] = None            # 人工调整后的风险等级
 
     class Config:
+        extra = "forbid"
         json_schema_extra = {
             "example": {
-                "reviewer": "风控部-张三",
                 "approved": True,
                 "comment": "已复核司法数据源缺口，要求追加担保后可授信",
                 "override_level": None,
@@ -103,10 +126,48 @@ def get_research_service_v2():
     # 直接创建服务，配置从 llm_config.py 读取
     return DeepResearchV2Service()
 
+
+def _resolve_scope(
+    db: Session,
+    current_user: User,
+    kb_name: Optional[str],
+    search_local: bool,
+) -> list:
+    """
+    解析本次研究可检索的本地知识库。
+
+    未启用本地检索时返回空列表——不去查库，也不会因此产生检索故障
+    （Scout 只在 `search_local=True` 时走本地路径）。
+
+    ⚠️ 范围永远按**登录用户**解析，不接受客户端传集合名。
+    超级用户在这里也不放宽：检查点复核需要跨用户可见性，
+    而把别人上传的财报召回进自己的尽调报告是另一回事。
+    """
+    if not search_local:
+        return []
+    scope = resolve_kb_scope(db, str(current_user.id), kb_name)
+    if not scope.entries:
+        # 不在这里抛错：启用了本地检索却没有知识库是常见情形，
+        # 应当由 Scout 记为检索故障并写进报告，而不是让整个研究请求失败。
+        logger.warning(f"[research] 本地检索范围为空：{scope.failure_reason}")
+    return scope.as_state()
+
+
+def _assert_checkpoint_access(info: Dict[str, Any], current_user: User) -> None:
+    """检查点仅允许归属用户访问；超级用户承担跨用户复核/运维职责。"""
+    owner_id = info.get("user_id")
+    if current_user.is_superuser:
+        return
+    if not owner_id or str(owner_id) != str(current_user.id):
+        # 对历史遗留的无归属检查点同样失败关闭，不能把旧数据变成公共数据。
+        raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="无权访问该研究会话")
+
 @router.post("/stream", status_code=HTTP_200_OK)
 async def stream_research(
     request: ResearchRequest,
-    services: Dict[str, Any] = Depends(get_research_service)
+    services: Dict[str, Any] = Depends(get_research_service),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
 ):
     """
     深度研究接口 - 流式输出
@@ -126,10 +187,23 @@ async def stream_research(
     """
     # 根据版本选择服务
     if request.version == "v2":
+        if request.session_id:
+            from service.checkpoint_service import get_checkpoint_service
+            existing = get_checkpoint_service().get_checkpoint_info(request.session_id)
+            if existing:
+                _assert_checkpoint_access(existing, current_user)
+                raise HTTPException(
+                    status_code=HTTP_400_BAD_REQUEST,
+                    detail="该 session_id 已存在，请使用恢复接口而不是覆盖检查点",
+                )
         search_web = request.get_search_web()
         search_local = request.get_search_local()
         logger.info(f"Using DeepResearch V2 for query: {request.query[:50]}... (session_id: {request.session_id}, search_web={search_web}, search_local={search_local})")
         service_v2 = get_research_service_v2()
+        # 本地检索范围在**这一层**解析：授权信息在 PostgreSQL 的
+        # KnowledgeBase.user_id 里，Milvus schema 中没有 user_id。
+        # 检索层拿不到做这个判断的信息，就不该由它拼装集合名。
+        kb_scope = _resolve_scope(db, current_user, request.kb_name, search_local)
 
         async def generate_sse_v2():
             try:
@@ -139,7 +213,14 @@ async def stream_research(
                     kb_name=request.kb_name,
                     search_web=search_web,
                     search_local=search_local,
-                    max_iterations=request.max_iterations
+                    max_iterations=request.max_iterations,
+                    user_id=str(current_user.id),
+                    as_of=request.as_of or "",
+                    kb_scope=kb_scope,
+                    subject_name=request.subject_name or "",
+                    business_type=request.business_type or "",
+                    due_diligence=request.due_diligence,
+                    investigation=request.investigation,
                 ):
                     yield event
             except Exception as e:
@@ -183,8 +264,11 @@ async def stream_research_get(
     kb_name: Optional[str] = Query(None, description="本地知识库名称"),
     search_web: bool = Query(True, description="是否搜索网络"),
     search_local: bool = Query(True, description="是否搜索本地知识库"),
+    as_of: str = Query("", description="研究截止日（ISO 日期）。留空=不设时点闸门"),
     version: str = Query("v1", description="版本: v1 或 v2"),
-    services: Dict[str, Any] = Depends(get_research_service)
+    services: Dict[str, Any] = Depends(get_research_service),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
 ):
     """
     深度研究接口 - GET方式流式输出
@@ -208,6 +292,7 @@ async def stream_research_get(
     if version == "v2":
         logger.info(f"Using DeepResearch V2 (GET) for query: {query[:50]}...")
         service_v2 = get_research_service_v2()
+        kb_scope = _resolve_scope(db, current_user, kb_name, search_local)
 
         async def generate_sse_v2():
             try:
@@ -218,7 +303,10 @@ async def stream_research_get(
                     kb_name=kb_name,
                     search_web=search_web,
                     search_local=search_local,
-                    max_iterations=max_iterations
+                    max_iterations=max_iterations,
+                    user_id=str(current_user.id),
+                    as_of=as_of,
+                    kb_scope=kb_scope,
                 ):
                     yield event
             except Exception as e:
@@ -257,12 +345,17 @@ async def stream_research_get(
 
 
 @router.get("/test-wizard", status_code=HTTP_200_OK)
-async def test_wizard_endpoint():
+async def test_wizard_endpoint(
+    current_user: User = Depends(get_current_user_required),
+):
     """
     测试 CodeWizard 数据分析功能（绕过搜索阶段）
 
     使用模拟数据直接测试图表生成功能。
     """
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="仅超级用户可运行 Wizard 测试")
+
     from service.deep_research_v2.agents.wizard import CodeWizard
     from service.deep_research_v2.state import ResearchState, ResearchPhase, create_initial_state
     from config.llm_config import get_config
@@ -343,7 +436,10 @@ async def test_wizard_endpoint():
 
 
 @router.post("/cancel/{session_id}", status_code=HTTP_200_OK)
-async def cancel_research(session_id: str):
+async def cancel_research(
+    session_id: str,
+    current_user: User = Depends(get_current_user_required),
+):
     """
     取消正在进行的研究任务
 
@@ -354,11 +450,21 @@ async def cancel_research(session_id: str):
         取消确认信息
     """
     try:
+        from service.checkpoint_service import get_checkpoint_service
+        info = get_checkpoint_service().get_checkpoint_info(session_id)
+        if not info:
+            raise HTTPException(
+                status_code=HTTP_400_BAD_REQUEST,
+                detail=f"会话 {session_id} 不存在",
+            )
+        _assert_checkpoint_access(info, current_user)
         # 设置取消标志到 Redis，有效期 5 分钟
         cancel_key = f"{CANCEL_KEY_PREFIX}{session_id}"
         cache.set(cancel_key, {"cancelled": True}, expire=300)
         logger.info(f"Research cancelled for session: {session_id}")
         return {"success": True, "message": "Research cancellation requested"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to cancel research: {e}")
         raise HTTPException(status_code=HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -393,7 +499,10 @@ def clear_cancel_flag(session_id: str):
 # ============ 检查点 API ============
 
 @router.get("/checkpoint/{session_id}", status_code=HTTP_200_OK)
-async def get_checkpoint(session_id: str):
+async def get_checkpoint(
+    session_id: str,
+    current_user: User = Depends(get_current_user_required),
+):
     """
     获取研究检查点信息
 
@@ -408,15 +517,21 @@ async def get_checkpoint(session_id: str):
         checkpoint_service = get_checkpoint_service()
         info = checkpoint_service.get_checkpoint_info(session_id)
         if info:
+            _assert_checkpoint_access(info, current_user)
             return {"success": True, "checkpoint": info}
         return {"success": False, "message": "No checkpoint found"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to get checkpoint: {e}")
         raise HTTPException(status_code=HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get("/checkpoint/{session_id}/full", status_code=HTTP_200_OK)
-async def get_full_checkpoint(session_id: str):
+async def get_full_checkpoint(
+    session_id: str,
+    current_user: User = Depends(get_current_user_required),
+):
     """
     获取完整的研究检查点（包含 UI 状态和报告）
 
@@ -434,10 +549,15 @@ async def get_full_checkpoint(session_id: str):
     try:
         from service.checkpoint_service import get_checkpoint_service
         checkpoint_service = get_checkpoint_service()
+        info = checkpoint_service.get_checkpoint_info(session_id)
+        if info:
+            _assert_checkpoint_access(info, current_user)
         full_data = checkpoint_service.load_full_checkpoint(session_id)
         if full_data:
             return {"success": True, "checkpoint": full_data}
         return {"success": False, "message": "No checkpoint found"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to get full checkpoint: {e}")
         raise HTTPException(status_code=HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -446,7 +566,8 @@ async def get_full_checkpoint(session_id: str):
 @router.get("/checkpoints", status_code=HTTP_200_OK)
 async def list_checkpoints(
     status: Optional[str] = Query(None, description="过滤状态: running/paused/completed/failed"),
-    limit: int = Query(20, ge=1, le=100, description="返回数量限制")
+    limit: int = Query(20, ge=1, le=100, description="返回数量限制"),
+    current_user: User = Depends(get_current_user_required),
 ):
     """
     列出研究检查点
@@ -461,15 +582,24 @@ async def list_checkpoints(
     try:
         from service.checkpoint_service import get_checkpoint_service
         checkpoint_service = get_checkpoint_service()
-        checkpoints = checkpoint_service.list_checkpoints(status=status, limit=limit)
+        checkpoints = checkpoint_service.list_checkpoints(
+            user_id=None if current_user.is_superuser else str(current_user.id),
+            status=status,
+            limit=limit,
+        )
         return {"success": True, "checkpoints": checkpoints, "total": len(checkpoints)}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to list checkpoints: {e}")
         raise HTTPException(status_code=HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.delete("/checkpoint/{session_id}", status_code=HTTP_200_OK)
-async def delete_checkpoint(session_id: str):
+async def delete_checkpoint(
+    session_id: str,
+    current_user: User = Depends(get_current_user_required),
+):
     """
     删除研究检查点
 
@@ -482,17 +612,25 @@ async def delete_checkpoint(session_id: str):
     try:
         from service.checkpoint_service import get_checkpoint_service
         checkpoint_service = get_checkpoint_service()
+        info = checkpoint_service.get_checkpoint_info(session_id)
+        if info:
+            _assert_checkpoint_access(info, current_user)
         success = checkpoint_service.delete_checkpoint(session_id)
         if success:
             return {"success": True, "message": "Checkpoint deleted"}
         return {"success": False, "message": "Checkpoint not found"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to delete checkpoint: {e}")
         raise HTTPException(status_code=HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.post("/resume/{session_id}", status_code=HTTP_200_OK)
-async def resume_research(session_id: str):
+async def resume_research(
+    session_id: str,
+    current_user: User = Depends(get_current_user_required),
+):
     """
     恢复研究任务（从检查点）
 
@@ -512,6 +650,7 @@ async def resume_research(session_id: str):
                 status_code=HTTP_400_BAD_REQUEST,
                 detail="No checkpoint found for this session"
             )
+        _assert_checkpoint_access(info, current_user)
 
         if info.get("status") == "completed":
             raise HTTPException(
@@ -527,7 +666,8 @@ async def resume_research(session_id: str):
                 async for event in service_v2.research(
                     query=info.get("query", ""),
                     session_id=session_id,
-                    resume=True
+                    resume=True,
+                    user_id=str(current_user.id),
                 ):
                     yield event
             except Exception as e:
@@ -547,7 +687,11 @@ async def resume_research(session_id: str):
         raise HTTPException(status_code=HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @router.post("/review/{session_id}", status_code=HTTP_200_OK)
-async def submit_human_review(session_id: str, request: HumanReviewRequest):
+async def submit_human_review(
+    session_id: str,
+    request: HumanReviewRequest,
+    current_user: User = Depends(get_current_user_required),
+):
     """
     提交风控复核结论，从复核卡点继续执行（v0.6 人机协同）
 
@@ -561,7 +705,7 @@ async def submit_human_review(session_id: str, request: HumanReviewRequest):
 
     Args:
         session_id: 会话ID，与发起尽调时一致
-        request: 复核结论（复核人必填）
+        request: 复核结论；复核人由登录身份确定，不接受客户端指定
 
     Returns:
         流式响应：从断点继续直到 research_complete
@@ -574,6 +718,7 @@ async def submit_human_review(session_id: str, request: HumanReviewRequest):
                 status_code=HTTP_400_BAD_REQUEST,
                 detail=f"会话 {session_id} 不存在"
             )
+        _assert_checkpoint_access(info, current_user)
         if info.get("status") != "paused":
             # 不在暂停态就提交复核，多半是前端状态过期或重复提交。
             # 直接放行会让一份没有中断点的会话收到复核结论却无处安放。
@@ -583,11 +728,16 @@ async def submit_human_review(session_id: str, request: HumanReviewRequest):
             )
 
         service_v2 = get_research_service_v2()
+        decision = request.model_dump()
+        decision["reviewer"] = current_user.username
+        decision["reviewer_id"] = str(current_user.id)
 
         async def generate_sse():
             try:
                 async for chunk in service_v2.submit_review(
-                    session_id, request.model_dump()
+                    session_id,
+                    decision,
+                    user_id=str(current_user.id),
                 ):
                     yield chunk
             except Exception as e:

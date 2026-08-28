@@ -1,0 +1,27 @@
+{
+  "case_id": "case_10",
+  "errors": [],
+  "metrics": {
+    "checklist_rows": 30,
+    "embedded_claim_rows": 10,
+    "embedded_source_rows": 13,
+    "markdown_claim_rows": 54,
+    "markdown_source_rows": 13,
+    "normalized_claim_rows": 54,
+    "normalized_source_rows": 13,
+    "post_cutoff_claim_rows": 0,
+    "reference_claim_rows": 54
+  },
+  "schema_version": "real-case-v1",
+  "status": "passed_with_warnings",
+  "warnings": [
+    {
+      "code": "embedded_json_claims_incomplete",
+      "detail": "embedded=10, normalized_markdown_merge=54"
+    },
+    {
+      "code": "raw_sources_not_downloaded",
+      "detail": "this pass creates an acquisition queue; source files still require download and hashing"
+    }
+  ]
+}

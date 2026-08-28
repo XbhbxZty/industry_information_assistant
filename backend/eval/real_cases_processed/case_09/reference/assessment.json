@@ -1,0 +1,92 @@
+{
+  "confidence": {
+    "overall_reference_assessment": 0.94
+  },
+  "credit_amount": null,
+  "eval_only": true,
+  "generated_reference": true,
+  "hard_gate_triggers": [
+    "未取得具体合同、发票及债务人确权",
+    "若实际材料仅写海尔集团且无法通过信用代码确认债务人",
+    "合同、发票、签章、验收主体不一致",
+    "未完成目标应收既有转让、质押、保理登记核验",
+    "依赖集团保证但不存在针对目标债权的保证文件"
+  ],
+  "human_review_status": "not_reviewed",
+  "key_risk_factors": [
+    "集团内多法人主体高度相似",
+    "历史法人名称与股票简称易混淆",
+    "财务公司结算角色可能被误认成债务人",
+    "公开存在应收及票据质押",
+    "司法及信用官方实时查询未完成"
+  ],
+  "label_grade": "silver",
+  "missing_critical_evidence": [
+    "原合同及补充协议",
+    "发票",
+    "采购订单",
+    "物流签收和验收",
+    "对账及确权",
+    "历史回款流水",
+    "债权转让通知和回执",
+    "动产融资统一登记查询",
+    "目标债权保证合同",
+    "官方司法及信用主体查询结果"
+  ],
+  "mitigating_factors": [
+    "真实曾用名链证据完整",
+    "A/H/D身份可交叉验证",
+    "2024年度标准无保留审计意见",
+    "2022-2024收入、归母净利润和经营现金流总体增长",
+    "2024内部控制自评未发现重大缺陷"
+  ],
+  "normalized": {
+    "adverse_risk_gates": [
+      "合同、发票、签章、验收主体不一致",
+      "依赖集团保证但不存在针对目标债权的保证文件"
+    ],
+    "assessment_confidence": {
+      "calibrated_probability": false,
+      "ordinal_score": {
+        "overall_reference_assessment": 0.94
+      },
+      "raw": {
+        "overall_reference_assessment": 0.94
+      }
+    },
+    "corporate_risk_level": null,
+    "decision_status": "blocked",
+    "information_gates": [
+      "未取得具体合同、发票及债务人确权",
+      "若实际材料仅写海尔集团且无法通过信用代码确认债务人",
+      "未完成目标应收既有转让、质押、保理登记核验"
+    ],
+    "risk_level_raw": "无法判断",
+    "risk_scope": null,
+    "transaction_readiness": "insufficient_evidence",
+    "transaction_risk_level": null
+  },
+  "reasoning_claim_ids": [
+    "C001",
+    "C004",
+    "C005",
+    "C012",
+    "C016",
+    "C017",
+    "C019",
+    "C020",
+    "C021",
+    "C038",
+    "C043",
+    "C049",
+    "C050",
+    "C051",
+    "C052",
+    "C053",
+    "C055",
+    "C056"
+  ],
+  "recommended_action": "暂缓",
+  "risk_level": "无法判断",
+  "secondary_action": "人工复核"
+}

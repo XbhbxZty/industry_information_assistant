@@ -1,0 +1,107 @@
+{
+  "confidence": {
+    "overall_reference_assessment": 0.94
+  },
+  "credit_amount": null,
+  "eval_only": true,
+  "generated_reference": true,
+  "hard_gate_triggers": [
+    "拟保理债权实际债务人未确认",
+    "项目公司债务拟依赖上市主体信用但无法律责任连接文件",
+    "旧债重整申报和确认状态不明",
+    "拟主张共益债或优先受偿但缺少法律及程序依据",
+    "基础交易真实性、确权及唯一性未完成",
+    "2024年末负净资产及持续经营重大不确定性",
+    "2024年度保留审计意见",
+    "巨额逾期有息债务"
+  ],
+  "human_review_status": "not_reviewed",
+  "key_risk_factors": [
+    "司法重整计划仍处执行和监督阶段",
+    "2022至2024连续巨额亏损",
+    "2025Q1归母权益继续为负",
+    "2024年末逾期有息债务本金494.48亿元",
+    "复杂项目公司体系",
+    "历史诉讼执行和担保责任",
+    "普通债权票面值与预计重整清偿价值存在显著差距"
+  ],
+  "label_grade": "silver",
+  "missing_critical_evidence": [
+    "具体项目公司主体信息",
+    "原始合同及补充协议",
+    "发票、验收、结算和对账",
+    "债务人确权",
+    "金科股份保证或债务加入文件",
+    "担保授权文件",
+    "管理人债权确认资料",
+    "动产融资统一登记及历史保理查询",
+    "抵销及反索赔资料",
+    "2025-05-31投资款实缴证明",
+    "银行流水、征信及税务资料"
+  ],
+  "mitigating_factors": [
+    "截至截止日前两家公司重整计划均已获法院批准",
+    "司法程序已由计划审批不确定性转入执行阶段",
+    "存在26.28亿元重整投资安排",
+    "计划提交时首期7.88亿元履约保证金已足额支付",
+    "建立重整计划监督及服务信托机制"
+  ],
+  "normalized": {
+    "adverse_risk_gates": [
+      "项目公司债务拟依赖上市主体信用但无法律责任连接文件",
+      "旧债重整申报和确认状态不明",
+      "拟主张共益债或优先受偿但缺少法律及程序依据",
+      "2024年末负净资产及持续经营重大不确定性",
+      "2024年度保留审计意见",
+      "巨额逾期有息债务"
+    ],
+    "assessment_confidence": {
+      "calibrated_probability": false,
+      "ordinal_score": {
+        "overall_reference_assessment": 0.94
+      },
+      "raw": {
+        "overall_reference_assessment": 0.94
+      }
+    },
+    "corporate_risk_level": null,
+    "decision_status": "blocked",
+    "information_gates": [
+      "拟保理债权实际债务人未确认",
+      "基础交易真实性、确权及唯一性未完成"
+    ],
+    "risk_level_raw": "高",
+    "risk_scope": null,
+    "transaction_readiness": "insufficient_evidence",
+    "transaction_risk_level": null
+  },
+  "reasoning_claim_ids": [
+    "C008",
+    "C009",
+    "C010",
+    "C013",
+    "C014",
+    "C015",
+    "C017",
+    "C018",
+    "C019",
+    "C020",
+    "C021",
+    "C024",
+    "C025",
+    "C026",
+    "C029",
+    "C030",
+    "C031",
+    "C032",
+    "C033",
+    "C034",
+    "C035",
+    "C037",
+    "C039",
+    "C040"
+  ],
+  "recommended_action": "暂缓",
+  "research_use_only": true,
+  "risk_level": "高"
+}

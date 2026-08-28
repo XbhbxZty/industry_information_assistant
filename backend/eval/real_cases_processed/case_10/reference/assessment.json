@@ -1,0 +1,91 @@
+{
+  "confidence": {
+    "overall_reference_assessment": 0.89
+  },
+  "credit_amount": null,
+  "eval_only": true,
+  "generated_reference": true,
+  "hard_gate_triggers": [
+    "合同或发票债务人无法与完整法人名称及USCC唯一匹配",
+    "将TCL华星或TCL中环债务自动归入TCL科技",
+    "依赖母集团保证但无有效保证合同及授权",
+    "无法排除应收账款已保理、转让、质押或重复融资",
+    "基础交易证据链无法闭环",
+    "历史名称仅按字符串匹配而未核验法人连续性"
+  ],
+  "human_review_status": "not_reviewed",
+  "key_risk_factors": [
+    "历史名称连续变化与债券旧称并存",
+    "集团内存在多个独立TCL法人",
+    "TCL中环2024年前三季度经营结果与母集团合并口径明显分化",
+    "公开披露存在较大规模应收账款保理及终止确认",
+    "存在供应商对公司或控股子公司的应收权益转让机制",
+    "关联交易主体及交易规模较复杂",
+    "缺少交易级原始凭证"
+  ],
+  "label_grade": "silver",
+  "missing_critical_evidence": [
+    "合同及实际债务人USCC",
+    "发票",
+    "订单、物流、签收和验收",
+    "应收账款确权",
+    "保理、转让、质押及供应链平台状态",
+    "动产融资登记查询",
+    "母集团保证合同及授权",
+    "历史回款",
+    "银行流水",
+    "纳税资料",
+    "企业征信",
+    "完整司法执行和监管查询快照"
+  ],
+  "mitigating_factors": [
+    "历史名称连续性有法定披露证据",
+    "2023年度取得标准公允反映的审计意见",
+    "2021至2023年度经营现金流均为正",
+    "2024年前三季度合并经营现金流为正",
+    "主要集团法人可通过证券代码、USCC和控制关系进行区分"
+  ],
+  "normalized": {
+    "adverse_risk_gates": [
+      "将TCL华星或TCL中环债务自动归入TCL科技",
+      "依赖母集团保证但无有效保证合同及授权",
+      "基础交易证据链无法闭环"
+    ],
+    "assessment_confidence": {
+      "calibrated_probability": false,
+      "ordinal_score": {
+        "overall_reference_assessment": 0.89
+      },
+      "raw": {
+        "overall_reference_assessment": 0.89
+      }
+    },
+    "corporate_risk_level": null,
+    "decision_status": "blocked",
+    "information_gates": [
+      "合同或发票债务人无法与完整法人名称及USCC唯一匹配",
+      "无法排除应收账款已保理、转让、质押或重复融资",
+      "历史名称仅按字符串匹配而未核验法人连续性"
+    ],
+    "risk_level_raw": "高",
+    "risk_scope": "实体解析、应收账款可融资性及错误使用母集团信用的交易风险，不等同于TCL科技主体信用评级",
+    "transaction_readiness": "insufficient_evidence",
+    "transaction_risk_level": null
+  },
+  "reasoning_claim_ids": [
+    "C007",
+    "C008",
+    "C009",
+    "C014",
+    "C015",
+    "C020",
+    "C021",
+    "C039",
+    "C044",
+    "C050",
+    "C051"
+  ],
+  "recommended_action": "暂缓",
+  "risk_level": "高",
+  "risk_scope": "实体解析、应收账款可融资性及错误使用母集团信用的交易风险，不等同于TCL科技主体信用评级"
+}

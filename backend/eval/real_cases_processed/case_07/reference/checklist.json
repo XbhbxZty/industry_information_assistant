@@ -1,0 +1,522 @@
+[
+  {
+    "check_id": "CHK001",
+    "conclusion": "主体匹配清晰：金科股份≠重庆金科≠具体项目公司",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C001",
+      "C004",
+      "C032"
+    ],
+    "evidence_ids": [
+      "C001",
+      "C004",
+      "C032"
+    ],
+    "hard_gate": null,
+    "item": "主体名称/信用代码/上市代码",
+    "manual_review": true,
+    "missing_evidence": "项目公司代码需逐笔补充",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK002",
+    "conclusion": "法院管理人及正式重整计划为1994-03-29；年报业务介绍为1998年",
+    "conflict": "有",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C002"
+    ],
+    "evidence_ids": [
+      "C002"
+    ],
+    "hard_gate": false,
+    "item": "成立日期",
+    "manual_review": true,
+    "missing_evidence": "工商档案原始登记页",
+    "retrieval_attempt_ids": [],
+    "status": "conflicting"
+  },
+  {
+    "check_id": "CHK003",
+    "conclusion": "GSXT本轮403，不能写“存续/正常”作为已核验事实",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "X02"
+    ],
+    "hard_gate": false,
+    "item": "登记状态",
+    "manual_review": true,
+    "missing_evidence": "GSXT或市场监管登记证明",
+    "retrieval_attempt_ids": [
+      "X02"
+    ],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK004",
+    "conclusion": "周达",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C005"
+    ],
+    "evidence_ids": [
+      "C005"
+    ],
+    "hard_gate": false,
+    "item": "法定代表人",
+    "manual_review": false,
+    "missing_evidence": "—",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK005",
+    "conclusion": "截止年报/计划口径为黄红云",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C006"
+    ],
+    "evidence_ids": [
+      "C006"
+    ],
+    "hard_gate": false,
+    "item": "实际控制人",
+    "manual_review": true,
+    "missing_evidence": "—",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK006",
+    "conclusion": "一级子公司数量大，重庆金科自身又有74家一级子公司，层级复杂",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C007",
+      "C033"
+    ],
+    "evidence_ids": [
+      "C007",
+      "C033"
+    ],
+    "hard_gate": true,
+    "item": "集团/项目公司层级",
+    "manual_review": true,
+    "missing_evidence": "拟交易项目公司的完整股权链",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK007",
+    "conclusion": "2024-04-22受理",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C008"
+    ],
+    "evidence_ids": [
+      "C008"
+    ],
+    "hard_gate": true,
+    "item": "司法重整受理",
+    "manual_review": true,
+    "missing_evidence": "—",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK008",
+    "conclusion": "已终止重整程序，处于计划执行和长期监督阶段",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C009",
+      "C010"
+    ],
+    "evidence_ids": [
+      "C009",
+      "C010"
+    ],
+    "hard_gate": true,
+    "item": "截止日重整法律状态",
+    "manual_review": true,
+    "missing_evidence": "执行进度、管理人确认",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK009",
+    "conclusion": "连续三年归母净利润为负",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C013",
+      "C015"
+    ],
+    "evidence_ids": [
+      "C013",
+      "C015"
+    ],
+    "hard_gate": true,
+    "item": "2022-2024持续亏损",
+    "manual_review": true,
+    "missing_evidence": "—",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK010",
+    "conclusion": "2024年末-286.83亿元；2025Q1进一步至-303.00亿元",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C017",
+      "C024"
+    ],
+    "evidence_ids": [
+      "C017",
+      "C024"
+    ],
+    "hard_gate": true,
+    "item": "负净资产",
+    "manual_review": true,
+    "missing_evidence": "Q1后至5/31月度数据",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK011",
+    "conclusion": "审计师明确认定重大不确定性",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C021"
+    ],
+    "evidence_ids": [
+      "C021"
+    ],
+    "hard_gate": true,
+    "item": "持续经营不确定性",
+    "manual_review": true,
+    "missing_evidence": "后续整改及执行证据",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK012",
+    "conclusion": "2024年为保留意见",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C020"
+    ],
+    "evidence_ids": [
+      "C020"
+    ],
+    "hard_gate": true,
+    "item": "审计意见",
+    "manual_review": true,
+    "missing_evidence": "年报全文附注可进一步展开",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK013",
+    "conclusion": "2024年末698.29亿元本金中494.48亿元逾期",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C018",
+      "C019"
+    ],
+    "evidence_ids": [
+      "C018",
+      "C019"
+    ],
+    "hard_gate": true,
+    "item": "有息债务逾期",
+    "manual_review": true,
+    "missing_evidence": "逐家金融机构重组/偿债表",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK014",
+    "conclusion": "2025-03-31合并应付账款294.41亿元",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C025"
+    ],
+    "evidence_ids": [
+      "C025"
+    ],
+    "hard_gate": true,
+    "item": "应付账款压力",
+    "manual_review": true,
+    "missing_evidence": "供应商明细、账龄",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK015",
+    "conclusion": "已因部分非并表/破产原子公司融资连带保证计提13.29亿元信用减值",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C029"
+    ],
+    "evidence_ids": [
+      "C029"
+    ],
+    "hard_gate": true,
+    "item": "担保风险",
+    "manual_review": true,
+    "missing_evidence": "拟交易债权对应保证合同及决议",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK016",
+    "conclusion": "大量历史执行案件，责任主体组合不一致",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C036",
+      "C037"
+    ],
+    "evidence_ids": [
+      "C036",
+      "C037"
+    ],
+    "hard_gate": true,
+    "item": "重大诉讼/执行",
+    "manual_review": true,
+    "missing_evidence": "最新法院逐案核验",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK017",
+    "conclusion": "执行信息网访问超时；不能写无记录",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S08"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "X01",
+      "S08"
+    ],
+    "hard_gate": true,
+    "item": "失信/限制消费/终本官方全量核验",
+    "manual_review": true,
+    "missing_evidence": "执行信息公开网成功查询结果",
+    "retrieval_attempt_ids": [
+      "X01"
+    ],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK018",
+    "conclusion": "2025年受到责令改正、警示函",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C038"
+    ],
+    "evidence_ids": [
+      "C038"
+    ],
+    "hard_gate": false,
+    "item": "行政监管",
+    "manual_review": true,
+    "missing_evidence": "—",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK019",
+    "conclusion": "GSXT访问失败",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "X02"
+    ],
+    "hard_gate": false,
+    "item": "工商行政处罚/经营异常",
+    "manual_review": true,
+    "missing_evidence": "GSXT成功查询",
+    "retrieval_attempt_ids": [
+      "X02"
+    ],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK020",
+    "conclusion": "公共资料无法识别拟交易债权究竟由项目公司、重庆金科还是金科股份负担",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C032",
+      "C035",
+      "C037"
+    ],
+    "evidence_ids": [
+      "C032",
+      "C035",
+      "C037"
+    ],
+    "hard_gate": true,
+    "item": "拟保理应收实际债务人",
+    "manual_review": true,
+    "missing_evidence": "合同、订单、结算、确权、付款承诺",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK021",
+    "conclusion": "不能因项目带“金科”名称推定上市公司保证",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C035",
+      "C037"
+    ],
+    "evidence_ids": [
+      "C035",
+      "C037"
+    ],
+    "hard_gate": true,
+    "item": "上市主体保证/债务加入",
+    "manual_review": true,
+    "missing_evidence": "保证合同、债务加入协议、董事会/股东会决议、生效裁判",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK022",
+    "conclusion": "发生时间及申报状态未知",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C030",
+      "C031"
+    ],
+    "evidence_ids": [
+      "C030",
+      "C031"
+    ],
+    "hard_gate": true,
+    "item": "债权是否属于重整旧债",
+    "manual_review": true,
+    "missing_evidence": "债权发生日、申报回执、管理人确认表",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK023",
+    "conclusion": "未取得逐笔登记及历史转让资料",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": true,
+    "item": "债权转让/质押/重复融资",
+    "manual_review": true,
+    "missing_evidence": "动产融资统一登记查询、既往保理通知、质押文件",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK024",
+    "conclusion": "公开资料不能验证",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": true,
+    "item": "合同/发票/施工/验收真实性",
+    "manual_review": true,
+    "missing_evidence": "原合同、发票、工程量确认、验收、结算、对账",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK025",
+    "conclusion": "无债务人逐笔确权资料",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": true,
+    "item": "抗辩/抵销风险",
+    "manual_review": true,
+    "missing_evidence": "无争议/无抵销确认、确权函",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK026",
+    "conclusion": "截止日已不是法院受理至批准之间的“重整期间”；不能仅因“重整后新增融资”自动推定为共益债或超级优先债权",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S11"
+    ],
+    "evidence_claim_ids": [
+      "C009"
+    ],
+    "evidence_ids": [
+      "C009",
+      "S11"
+    ],
+    "hard_gate": true,
+    "item": "新融资是否取得特殊清偿地位",
+    "manual_review": true,
+    "missing_evidence": "交易法律依据、管理人意见、董事会决议、担保设立与登记",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK027",
+    "conclusion": "计划只足以验证26.28亿元安排及首期7.88亿元已支付，不能证明5/31全额到账",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C039",
+      "C040"
+    ],
+    "evidence_ids": [
+      "C039",
+      "C040"
+    ],
+    "hard_gate": true,
+    "item": "投资款是否截止日全部到账",
+    "manual_review": true,
+    "missing_evidence": "管理人截止5/31资金确认",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK028",
+    "conclusion": "未公开验证",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": null,
+    "item": "银行流水/企业征信/纳税",
+    "manual_review": true,
+    "missing_evidence": "私域授权材料",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  }
+]

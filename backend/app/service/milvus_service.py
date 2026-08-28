@@ -38,6 +38,21 @@ class MilvusService:
             print(f"连接 Milvus 失败: {e}")
             raise
 
+    def has_collection(self, collection_name: str) -> bool:
+        """
+        集合是否存在。
+
+        单独暴露出来，是为了让调用方能在检索**之前**区分
+        "集合不存在"与"集合存在但没有命中"。`search()` 对这两种情况
+        都返回空列表，调用方从返回值上无从分辨——本地知识库检索
+        整条链路失效了很久却没人发现，正是因为这个（见 kb_scope.py）。
+        """
+        try:
+            return utility.has_collection(collection_name)
+        except Exception as e:
+            print(f"检查集合 {collection_name} 是否存在时出错: {e}")
+            return False
+
     def create_collection(self, collection_name: str) -> Collection:
         """
         创建集合（如果不存在）
@@ -246,6 +261,87 @@ class MilvusService:
             "name": collection_name,
             "num_entities": collection.num_entities,
         }
+
+    def iter_all_rows(
+        self,
+        collection_name: str,
+        batch_size: int = 1000,
+        include_vector: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """
+        读出集合全部行（可含向量），供迁移搬运使用。
+
+        ⚠️ 只给迁移脚本用，不要在请求路径上调用。
+
+        带上向量是关键：搬运时无需重新调用 embedding 接口，
+        既省钱又保证迁移前后的向量**逐位相同**——重新向量化会引入
+        模型版本差异，让"迁移前后检索结果应当一致"这条断言不再成立。
+
+        Milvus 的 `query` 需要非空 expr，VARCHAR 主键用 `id != ""` 全匹配。
+        """
+        if not utility.has_collection(collection_name):
+            return []
+
+        fields = ["id", "doc_id", "kb_id", "filename", "content", "chunk_index"]
+        if include_vector:
+            fields.append("vector")
+
+        collection = Collection(collection_name)
+        collection.load()
+
+        rows: List[Dict[str, Any]] = []
+        offset = 0
+        while True:
+            batch = collection.query(
+                expr='id != ""',
+                output_fields=fields,
+                limit=batch_size,
+                offset=offset,
+            )
+            if not batch:
+                break
+            rows.extend(batch)
+            if len(batch) < batch_size:
+                break
+            offset += batch_size
+        return rows
+
+    def list_collections(self) -> List[str]:
+        """列出全部集合名。供迁移脚本盘点现状。"""
+        try:
+            return list(utility.list_collections())
+        except Exception as e:
+            print(f"列出集合失败: {e}")
+            return []
+
+    def get_document_chunks(
+        self,
+        collection_name: str,
+        doc_id: str,
+        limit: int = 4000,
+    ) -> List[Dict[str, Any]]:
+        """按 doc_id 取一份文档的全部切片（供报表口径判定）。
+
+        口径分节标题（`七、合并财务报表项目注释` / `十八、母公司财务报表主要
+        项目注释`）与被引用的数据行几乎从不在同一切片里——实测两者相隔
+        50 多个切片。只看被引切片永远判不出口径，必须能回溯同文档的前序内容。
+        """
+        if not utility.has_collection(collection_name):
+            print(f"集合 {collection_name} 不存在")
+            return []
+        try:
+            collection = Collection(collection_name)
+            collection.load()
+            rows = collection.query(
+                expr=f'doc_id == "{doc_id}"',
+                output_fields=["doc_id", "content", "chunk_index"],
+                limit=limit,
+            )
+            rows.sort(key=lambda row: row.get("chunk_index", 0))
+            return rows
+        except Exception as e:
+            print(f"按 doc_id 查询切片失败: {e}")
+            return []
 
     def get_chunks_by_filename(
         self,

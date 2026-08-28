@@ -1,0 +1,67 @@
+{
+  "source_case": "case_04",
+  "fictional_name": "浙江骏昇机械股份有限公司",
+  "fictional_short": "骏昇机械",
+  "credit_code": "91330500MA2FIC0004",
+  "chunks": 292,
+  "chunks_changed": 292,
+  "substitutions": [
+    {
+      "from": "ZHEJIANG DINGLI",
+      "to": "ZHEJIANG JUNSHENG"
+    },
+    {
+      "from": "DINGLI",
+      "to": "JUNSHENG"
+    },
+    {
+      "from": "dingli",
+      "to": "junsheng"
+    },
+    {
+      "from": "Dingli",
+      "to": "Junsheng"
+    },
+    {
+      "from": "CMEC",
+      "to": "OVMC"
+    },
+    {
+      "from": "Magni",
+      "to": "Marnи"
+    },
+    {
+      "from": "上海鼎策融资租赁有限公司",
+      "to": "上海骏策融资租赁有限公司"
+    },
+    {
+      "from": "鼎策",
+      "to": "骏策"
+    },
+    {
+      "from": "浙江绿色动力机械有限公司",
+      "to": "浙江青能动力机械有限公司"
+    },
+    {
+      "from": "cndingli",
+      "to": "cnjunsheng"
+    },
+    {
+      "from": "许树根",
+      "to": "许树声"
+    },
+    {
+      "from": "603338",
+      "to": "603004"
+    },
+    {
+      "from": "德清",
+      "to": "临溪"
+    },
+    {
+      "from": "鼎力",
+      "to": "骏昇"
+    }
+  ],
+  "note": "真实上市公司公开材料改名而来。数值与结构保留，主体标识全部替换。行业与地域信息保留——完全去标识做不到，也不是目标；目标是不把编造的司法/工商记录挂到一个真实具名主体上。"
+}

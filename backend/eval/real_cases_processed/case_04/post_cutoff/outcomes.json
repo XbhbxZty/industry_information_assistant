@@ -1,0 +1,15 @@
+[
+  {
+    "as_of_eligible": false,
+    "event_period": "2025H1",
+    "facts": {
+      "attributable_net_profit_cny": 1052121901.75,
+      "operating_cash_flow_cny": -133528099.61,
+      "revenue_cny": 4336118273.46,
+      "total_assets_cny": 16595567304.66
+    },
+    "interpretation": "Q1出现的现金转化压力在半年度仍未完全消失；仅用于后验回测，不进入2025-06-30时点参考风险判断。",
+    "publication_date": "2025-08-28",
+    "source_id": "S08"
+  }
+]

@@ -22,11 +22,19 @@ from ..state import ResearchState, ResearchPhase
 
 try:
     from service.risk_scorecard import RISK_BLOCK_END, RISK_BLOCK_MARKER, render_markdown
+    from service.investigation_layer import (
+        SECTION_MARKER as INVESTIGATION_MARKER,
+        canonicalize_investigation_section, render_investigation_section,
+    )
     from service.evidence_appendix import (
         APPENDIX_MARKER, canonicalize_appendix, format_provenance, render_appendix,
     )
 except ImportError:  # 兼容以 app 为包根的导入方式
     from app.service.risk_scorecard import RISK_BLOCK_END, RISK_BLOCK_MARKER, render_markdown
+    from app.service.investigation_layer import (
+        SECTION_MARKER as INVESTIGATION_MARKER,
+        canonicalize_investigation_section, render_investigation_section,
+    )
     from app.service.evidence_appendix import (
         APPENDIX_MARKER, canonicalize_appendix, format_provenance, render_appendix,
     )
@@ -156,7 +164,7 @@ class LeadWriter(BaseAgent):
    不得自行推断"周某为实际控制人"
 3. **禁止把「未核实」写成「无」**（见上表，这是最易犯的致命错误）
 4. **禁止把缺失当利好**。查不到负面信息 ≠ 没有负面信息
-5. 每个事实性陈述后标注来源与获取时间，格式：`（来源：工商登记信息，2026-08-09）`
+5. 每个事实性陈述后标注素材中给出的来源与证据日期，格式：`（来源：工商登记信息，YYYY-MM-DD）`；素材未给日期时明确写“日期未确认”，不得自行补日期
 
 ## 写作要求
 1. **客观中立**：陈述事实与风险，不做营销式表述
@@ -185,7 +193,7 @@ class LeadWriter(BaseAgent):
 
 ## 写作示例
 - ✅ 正确："2025年度资产负债率升至72.9%，较2023年上升17.1个百分点，
-  同期经营性现金流由+1240万元转为-1580万元（来源：企业自报未经审计，2026-08-09），
+  同期经营性现金流由+1240万元转为-1580万元（来源：企业自报未经审计，YYYY-MM-DD），
   需关注其偿债能力与数据可靠性。"
 - ✅ 正确："实际控制人未核实（原因：工商登记数据未包含实际控制人认定信息）。"
 - ❌ 错误："公司治理结构清晰，实际控制人为持股52%的周立群。"（素材未提供，属推断）
@@ -230,7 +238,7 @@ class LeadWriter(BaseAgent):
 - **禁止标题重复**：每个标题必须唯一，不要在正文中重复章节标题
 
 ### 2. 引用格式规则
-- 内部数据源：在事实后标注 `（来源：工商登记信息，2026-08-09）`
+- 内部数据源：在事实后标注 `（来源：工商登记信息，YYYY-MM-DD）`，日期只能采用素材给出的证据日期
 - 网络来源：使用 [来源名称](URL) 格式
 - 文末资料来源清单：列出全部数据源及获取时间
 
@@ -369,6 +377,22 @@ class LeadWriter(BaseAgent):
             "content": "开始撰写深度研究报告..."
         })
 
+        if state.get("due_diligence_mode"):
+            # 尽调交付物只能来自结构化清单、证据库和规则评分。让 LLM 重新
+            # 叙述这些字段，实测会把“计划查询的数据源”写成“已引用接口”，
+            # 或猜测未核实字段的局部取值。LLM 保留候选抽取职责，不拥有
+            # 在最终报告新增事实、来源或结论的权限。
+            self._write_structured_due_diligence_report(state)
+            word_count = len(state.get("final_report", ""))
+            self.add_message(state, "research_step", {
+                "step_type": "writing", "title": "内容生成",
+                "subtitle": "已从结构化证据链生成确定性尽调报告", "status": "completed",
+                "stats": {"sections_count": len(state["outline"]),
+                          "word_count": word_count, "references_count": 0},
+            })
+            state["phase"] = ResearchPhase.REVIEWING.value
+            return state
+
         # 逐章节撰写
         for section in state["outline"]:
             if section.get("status") not in ["final", "drafted"]:
@@ -395,6 +419,66 @@ class LeadWriter(BaseAgent):
         state["phase"] = ResearchPhase.REVIEWING.value
 
         return state
+
+    def _write_structured_due_diligence_report(self, state: ResearchState) -> None:
+        """从清单/证据/评分确定性渲染尽调报告，禁止模型补全。"""
+        checks = state.get("field_checks") or []
+        completeness = state.get("completeness") or {}
+        assessment = state.get("risk_assessment") or {}
+        as_of = state.get("as_of") or "未设置"
+        company = state.get("company_name") or state.get("subject_name") or "待核实主体"
+        required_verified = completeness.get("required_verified", 0)
+        required_total = completeness.get("required_total", 0)
+        lines = [
+            f"# {company} 尽职调查报告",
+            "",
+            "## 结论",
+            "",
+            f"研究截止日：{as_of}。必查项核实率为 {required_verified}/{required_total}。",
+            f"规则评级：{assessment.get('level') or '尚未评级'}。",
+            f"授信结论：{assessment.get('credit_advice') or '尚未形成授信结论'}。",
+            "“未核实”既不表示存在风险，也不表示不存在风险；在补齐证据并重新核验前，不得据此放款。",
+        ]
+
+        sections = {str(row.get("id")): row.get("title") for row in (state.get("outline") or [])}
+        section_ids = list(dict.fromkeys(
+            [str(row.get("id")) for row in (state.get("outline") or [])]
+            + [str(check.get("section_id")) for check in checks]
+        ))
+        for section_id in section_ids:
+            section_checks = [c for c in checks if str(c.get("section_id")) == section_id]
+            if not section_checks:
+                continue
+            lines.extend(["", f"## {sections.get(section_id) or section_id}", ""])
+            for check in section_checks:
+                status = check.get("status") or "unverified"
+                name = check.get("field_name") or check.get("field_id")
+                if status == "verified":
+                    lines.append(
+                        f"- **{name}：已核实**；取值：{check.get('value')}；"
+                        f"{format_provenance(check)}"
+                    )
+                elif status == "conflicting":
+                    detail = "；".join(
+                        f"{row.get('source')}={row.get('value')}"
+                        for row in (check.get("conflict_detail") or [])
+                    )
+                    lines.append(f"- **{name}：数据冲突**；{detail}；须人工复核，未自动采信任何一方。")
+                elif status == "not_applicable":
+                    lines.append(f"- {name}：不适用；原因：{check.get('failure_reason') or '未说明'}")
+                else:
+                    reason = check.get("failure_reason") or "未取得满足核验规则的证据"
+                    lines.append(f"- **{name}：未核实**；原因：{reason}")
+        state["references"] = []
+        state["final_report"] = "\n".join(lines)
+        self._finalize_report(state)
+        self.add_message(state, "report_draft", {
+            "agent": self.name, "content": state["final_report"],
+            "executive_summary": f"必查项核实 {required_verified}/{required_total}；"
+                                 f"{assessment.get('level') or '尚未评级'}。",
+            "conclusions": [assessment.get("credit_advice") or "尚未形成授信结论"],
+            "word_count": len(state["final_report"]), "references_count": 0,
+        })
 
     @staticmethod
     def _is_risk_section(section: Dict) -> bool:
@@ -480,10 +564,15 @@ class LeadWriter(BaseAgent):
         })
 
         # 收集相关素材
-        related_facts = [f for f in state["facts"] if section_id in f.get("related_sections", [])]
+        fact_pool = state["facts"]
+        if state.get("due_diligence_mode"):
+            # 尽调模式下，Scout 的普通抽取只是候选。只有经 RAG 证据桥逐字、
+            # 主体和截止日校验后标为 verified 的事实才能进入写作上下文。
+            fact_pool = [fact for fact in fact_pool if fact.get("verified") is True]
+        related_facts = [f for f in fact_pool if section_id in f.get("related_sections", [])]
         if not related_facts:
             # 如果没有特定关联，使用所有事实
-            related_facts = state["facts"][:10]
+            related_facts = fact_pool[:10]
 
         # 格式化事实。
         # 注意用语义化的证据等级而非裸分数——实测模型会把 "可信度: 0.95"
@@ -503,19 +592,25 @@ class LeadWriter(BaseAgent):
 
         facts_text = []
         for fact in related_facts:
+            fact_date = (fact.get("metadata") or {}).get("as_of_date") or "日期未确认"
             facts_text.append(
                 f"- {fact.get('content')}"
-                f"（来源：{fact.get('source_name')}；证据等级：{_evidence_level(fact.get('credibility_score'))}）"
+                f"（来源：{fact.get('source_name')}；证据日期：{fact_date}；"
+                f"证据等级：{_evidence_level(fact.get('credibility_score'))}）"
             )
 
         # 格式化数据点
         data_text = []
-        for dp in state["data_points"][:10]:
+        # data_points/insights 是 LLM 从普通事实派生的二级产物，目前不带独立
+        # 证据 ID。尽调模式下不把它们作为素材，避免候选事实虽被拒绝，派生
+        # 数字却从侧门进入报告。已核实数值已经在 field_checks 中提供。
+        safe_data_points = [] if state.get("due_diligence_mode") else state["data_points"][:10]
+        for dp in safe_data_points:
             data_text.append(f"- {dp.get('name')}: {dp.get('value')} {dp.get('unit', '')} ({dp.get('year', 'N/A')})")
 
         # 格式化图表信息
         charts_info = []
-        for chart in state["charts"]:
+        for chart in ([] if state.get("due_diligence_mode") else state["charts"]):
             if chart.get("section_id") == section_id:
                 charts_info.append(f"- 图表: {chart.get('title')} (ID: {chart.get('id')})")
 
@@ -526,7 +621,9 @@ class LeadWriter(BaseAgent):
             section_type=section.get("section_type", "mixed"),
             facts="\n".join(facts_text) if facts_text else "（暂无相关事实）",
             data_points="\n".join(data_text) if data_text else "（暂无数据点）",
-            insights="\n".join([f"- {i}" for i in state["insights"][:5]]) if state["insights"] else "（暂无洞察）",
+            insights=("（尽调模式不采用无独立证据ID的派生洞察）"
+                      if state.get("due_diligence_mode")
+                      else "\n".join([f"- {i}" for i in state["insights"][:5]]) if state["insights"] else "（暂无洞察）"),
             charts_info="\n".join(charts_info) if charts_info else "（暂无图表）",
             field_checks=self._format_field_checks(state, section_id),
             risk_scorecard=self._format_risk_scorecard(state, section)
@@ -540,7 +637,8 @@ class LeadWriter(BaseAgent):
             user_prompt=prompt,
             json_mode=True,
             temperature=0.4,
-            max_tokens=16000  # 拉满到最大值
+            # 供应商上限 8192，实测超了直接 400（见 base.MAX_OUTPUT_TOKENS）。
+            max_tokens=self.max_output_tokens
         )
 
         result = self.parse_json_response(response)
@@ -655,7 +753,8 @@ class LeadWriter(BaseAgent):
             user_prompt=prompt,
             json_mode=True,
             temperature=0.3,
-            max_tokens=16000  # 拉满到最大值
+            # 供应商上限 8192，实测超了直接 400（见 base.MAX_OUTPUT_TOKENS）。
+            max_tokens=self.max_output_tokens
         )
 
         result = self.parse_json_response(response)
@@ -716,7 +815,52 @@ class LeadWriter(BaseAgent):
         "记得同步"这种要求迟早会失效，上一次就失效了。
         """
         self._ensure_risk_block(state)
+        self._ensure_investigation_section(state)
         self._ensure_evidence_appendix(state)
+
+    def _ensure_investigation_section(self, state: ResearchState) -> bool:
+        """
+        保证最终报告带有调查层章节，位置固定在正文之后、证据附录之前。
+
+        ## 为什么必须挂在收口入口而不是渲染处
+
+        尽调正文由 `_write_structured_due_diligence_report` 一次性渲染，
+        但 Critic 要求修订时会走 `_revise_report`——那是一次 LLM 全文重写。
+        章节若只在渲染处插入，一次修订就会把它连同那句"未经核实"的声明
+        一起改掉或删掉。**这正是 BC-50 的形态**，所以复用它的解法：
+        新增收口区块只改这一个方法。
+
+        ## 顺序为什么是 A 层 → B 层 → 附录
+
+        附录由 `canonicalize_appendix` 另行置底，所以这里只要保证 B 层
+        在正文之后即可。三者的相对位置因此恒定，不依赖调用顺序的巧合。
+
+        Returns: 是否改动了正文
+        """
+        report = state.get("final_report") or ""
+        if not report:
+            return False
+        block = render_investigation_section(state)
+        had_marker = INVESTIGATION_MARKER in report
+        if not block and not had_marker:
+            # 普通研究流程没有 B 层，也没有残留锚点：一个字都不该动。
+            # 收敛函数会顺手 strip 正文，那点空白无害，但它会把
+            # "本次没有 B 层"记成一次改动——一个恒亮的告警等于没有告警。
+            return False
+        canonical = canonicalize_investigation_section(report, block)
+        changed = canonical != report
+        state["final_report"] = canonical
+        if changed and block:
+            box = state.get("investigation") or {}
+            self.logger.info(
+                f"[LeadWriter] 调查层章节已"
+                f"{'重建' if had_marker else '追加'}"
+                f"（图表 {len(box.get('charts') or [])} 张，"
+                f"发现 {len(box.get('findings') or [])} 条）")
+        elif changed:
+            # 有残留锚点但无内容可放回：切除而非留残块，与评级块同一策略
+            self.logger.warning("[LeadWriter] 正文中的调查层章节无对应内容，已切除")
+        return changed
 
     def _ensure_evidence_appendix(self, state: ResearchState) -> bool:
         """
@@ -735,7 +879,10 @@ class LeadWriter(BaseAgent):
         if not report:
             return False
         block = render_appendix(checks, state.get("evidence_store") or {},
-                                state.get("completeness") or {})
+                                state.get("completeness") or {},
+                                search_failures=state.get("search_failures") or [],
+                                as_of=state.get("as_of", "") or "",
+                                section_failures=state.get("section_failures") or [])
         canonical = canonicalize_appendix(report, block)
         changed = canonical != report
         state["final_report"] = canonical
@@ -770,8 +917,69 @@ class LeadWriter(BaseAgent):
             )
         return changed
 
+    def _rerender_due_diligence_report(self, state: ResearchState) -> ResearchState:
+        """尽调模式的"修订"：重跑确定性渲染，**模型不参与**（BC-71）。
+
+        ## 这里修的是什么
+
+        `_write_report` 写着一条契约：「LLM 保留候选抽取职责，**不拥有在最终
+        报告新增事实、来源或结论的权限**」。但修订这条路整个绕过了它——
+        原实现把 `final_report` 截断到 6000 字喂给模型，再用模型的输出
+        **整份替换**，然后 `_finalize_report` 只找回三个带锚点的区块。
+
+        2026-08-22 真实运行实测（会话 dd-1787413212824）：
+
+            复核人看到    7284 字，17 行逐项核查，有结论段
+            落盘终稿      5147 字，**0 行逐项核查，无结论段**
+
+        没被收口的全部消失——包括报告标题、主体名称、研究截止日，
+        以及那句「未核实既不表示存在风险，也不表示不存在风险；
+        在补齐证据并重新核验前，**不得据此放款**」。
+        那是整个系统的核心免责语义，它在交付件上消失了。
+
+        更麻烦的是第二层后果：`report_draft` 只由确定性渲染器发出，
+        修订不发，所以**界面永远停在旧版**——复核人签的 7284 字那份，
+        与交付的 5147 字那份不是同一个文件。审计上这是签发不一致。
+
+        ## 为什么是重跑渲染而不是"别让模型删东西"
+
+        提示词约束是软约定（BC 里反复出现的「软约定干硬活」）。
+        尽调正文是清单、证据库、评分卡的**纯函数**，重跑一次必然逐字相同，
+        因此让它重跑既恢复了正文，也顺带让界面与终稿同步。
+
+        Critic 的意见本来就无法靠改写正文满足——正文没有可改的自由度。
+        所以循环照旧跑满迭代再强制转人工，行为不变，只是终稿不再被吃掉。
+        """
+        unresolved = [f for f in (state.get("critic_feedback") or [])
+                      if not f.get("resolved")]
+        self.add_message(state, "thought", {
+            "agent": self.name,
+            "content": "尽调正文由代码从清单与证据渲染，重跑渲染以保证终稿一致",
+        })
+        self._write_structured_due_diligence_report(state)
+
+        if unresolved:
+            # 结构上无法处理的意见必须留痕。此前这三轮迭代静默烧掉，
+            # 只在最后留一句"达到最大迭代轮次"，读者无从知道评审说了什么、
+            # 以及为什么一条都没被处理（与 BC-51 同一条纪律）。
+            detail = "；".join(
+                str(f.get("description") or "")[:60] for f in unresolved[:5])
+            note = (f"评审提出 {len(unresolved)} 条意见，但尽调正文由代码从清单与"
+                    f"证据确定性渲染，撰写环节无权改写，须由人工处理：{detail}")
+            errors = state.setdefault("errors", [])
+            if note not in errors:
+                errors.append(note)
+            self.add_message(state, "warning", {"agent": self.name, "content": note})
+            self.logger.warning(f"[LeadWriter] {note}")
+
+        state["phase"] = ResearchPhase.REVIEWING.value
+        return state
+
     async def _revise_report(self, state: ResearchState) -> ResearchState:
         """根据反馈修订报告"""
+        if state.get("due_diligence_mode"):
+            return self._rerender_due_diligence_report(state)
+
         self.add_message(state, "thought", {
             "agent": self.name,
             "content": "根据审核反馈修订报告..."
@@ -801,7 +1009,8 @@ class LeadWriter(BaseAgent):
             user_prompt=prompt,
             json_mode=True,
             temperature=0.3,
-            max_tokens=16000  # 拉满到最大值
+            # 供应商上限 8192，实测超了直接 400（见 base.MAX_OUTPUT_TOKENS）。
+            max_tokens=self.max_output_tokens
         )
 
         result = self.parse_json_response(response)

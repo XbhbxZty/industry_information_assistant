@@ -1,0 +1,104 @@
+{
+  "confidence": {
+    "overall_reference_assessment": 0.78
+  },
+  "credit_amount": null,
+  "eval_only": true,
+  "generated_reference": true,
+  "hard_gate_triggers": [
+    "具体应收账款债务人未识别和独立核验",
+    "基础交易真实性未验证",
+    "债务人确权未验证",
+    "转让限制及抵销权未验证",
+    "重复融资未完成核查"
+  ],
+  "human_review_status": "not_reviewed",
+  "issuer_level_hard_gate_triggers": [],
+  "key_risk_factors": [
+    "海外收入和境外资产占比较高",
+    "汇率波动已经实际影响利润",
+    "原材料和能源成本敏感",
+    "资本开支及境外产能投资规模较大",
+    "2025Q1短期及近期到期债务增加",
+    "美国子公司曾配合美国政府机构调查",
+    "具体保理债务人和交易证据缺失"
+  ],
+  "label_grade": "silver",
+  "missing_critical_evidence": [
+    "具体债务人身份及独立信用材料",
+    "合同订单发票物流验收",
+    "债务人确权",
+    "转让限制及抵销权",
+    "应收账款统一登记系统查询",
+    "历史回款",
+    "银行流水",
+    "纳税数据",
+    "企业征信",
+    "工商和司法数据库完整直接查询"
+  ],
+  "mitigating_factors": [
+    "2022-2024收入利润和经营现金流持续增长",
+    "2024标准无保留审计意见",
+    "2024资产负债率43.58%",
+    "公开贷款及利息偿付率100%",
+    "2024年报批准报出日前无存续债券",
+    "前五大客户销售占比17.75%，最大客户4.47%",
+    "2025Q1保持较大货币资金和正经营现金流"
+  ],
+  "normalized": {
+    "adverse_risk_gates": [],
+    "assessment_confidence": {
+      "calibrated_probability": false,
+      "ordinal_score": {
+        "overall_reference_assessment": 0.78
+      },
+      "raw": {
+        "overall_reference_assessment": 0.78
+      }
+    },
+    "corporate_risk_level": null,
+    "decision_status": "not_assessed",
+    "information_gates": [
+      "具体应收账款债务人未识别和独立核验",
+      "基础交易真实性未验证",
+      "债务人确权未验证",
+      "转让限制及抵销权未验证",
+      "重复融资未完成核查"
+    ],
+    "risk_level_raw": "中",
+    "risk_scope": "福耀玻璃上市主体公开信用基准",
+    "transaction_readiness": "insufficient_evidence",
+    "transaction_risk_level": "无法判断"
+  },
+  "reasoning_claim_ids": [
+    "CLM013",
+    "CLM014",
+    "CLM015",
+    "CLM018",
+    "CLM019",
+    "CLM021",
+    "CLM022",
+    "CLM023",
+    "CLM024",
+    "CLM025",
+    "CLM027",
+    "CLM028",
+    "CLM029",
+    "CLM031",
+    "CLM032",
+    "CLM037",
+    "CLM038",
+    "CLM041",
+    "CLM045",
+    "CLM046",
+    "CLM047",
+    "CLM048",
+    "CLM049"
+  ],
+  "receivable_debtor_risk": "无法判断",
+  "recommended_action": "继续调查",
+  "research_only": true,
+  "risk_level": "中",
+  "risk_scope": "福耀玻璃上市主体公开信用基准",
+  "specific_factoring_transaction_risk": "无法判断"
+}

@@ -708,31 +708,32 @@ async def parallel_search_all(
 
 
 async def search_local_knowledge(query: str, kb_name: str, top_k: int = 5) -> List[Dict]:
-    """搜索本地知识库"""
-    try:
-        from service.retrieval_service import retrieve_from_knowledge_base
-        results = await asyncio.to_thread(
-            retrieve_from_knowledge_base,
-            kb_name=kb_name,
-            question=query,
-            top_k=top_k
-        )
+    """
+    搜索本地知识库（V1 链路）
 
-        formatted_results = []
-        for r in results:
-            formatted_results.append({
-                'url': f"local://{kb_name}/{r.get('document_id', 'unknown')}",
-                'name': r.get('document_name', 'N/A'),
-                'summary': r.get('content_with_weight', ''),
-                'snippet': r.get('content_with_weight', '')[:200] if r.get('content_with_weight') else '',
-                'siteName': f"知识库: {kb_name}",
-                'siteIcon': '',
-                'source': 'local'
-            })
-        return formatted_results
-    except Exception as e:
-        logging.error(f"Local knowledge search error: {e}")
-        return []
+    ⚠️ **已停止工作，且这是有意的**（BC-53）。
+
+    本函数只拿得到知识库**名字**，没有用户身份，因此它做的是
+    "传什么名字就查什么"——一个无授权的按名查找。集合命名改为
+    `kb_<知识库UUID>` 后，按名字已经无法定位集合。
+
+    要恢复本地检索能力，正确路径是 `service/kb_scope.resolve_kb_scope()`：
+    它从 PostgreSQL 按登录用户解析可检索范围。V2 走的就是那条路。
+    V1 链路按 MIGRATION_PLAN Stage 0.4 计划整体删除，不再为它补这条能力。
+
+    这里显式返回空并记 error，而不是让上游以为"知识库里没有相关内容"——
+    检索失败与"查了没有"必须可区分（BC-51）。
+
+    原实现已直接删除而非注释保留：项目在 v0.6 为消除双份控制流删掉了
+    `_run_simplified`，留一份"以后可能用得上"的死代码是同一个错误。
+    需要时从 git 历史取。
+    """
+    logging.error(
+        f"[V1] 本地知识库检索已停用：按名字（{kb_name!r}）定位知识库无法做授权判断，"
+        f"集合命名已改为 kb_<UUID>。请使用 V2 链路（kb_scope.resolve_kb_scope）。"
+        f"本次返回空结果，**不代表知识库中没有相关内容**"
+    )
+    return []
 
 
 def websearch(query, count=5):

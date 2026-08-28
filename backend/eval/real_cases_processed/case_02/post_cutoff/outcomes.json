@@ -1,0 +1,16 @@
+[
+  {
+    "as_of_eligible": false,
+    "category": "post_cutoff",
+    "claim_id": "P001",
+    "event_date": "2026-05-13",
+    "fact": "美的集团披露为全资子公司发行的约HKD17.248bn零息H股可转换债券提供担保",
+    "purpose": "仅用于后验回测集团担保和境外融资风险演化",
+    "source_ids": [
+      "S11"
+    ],
+    "status": "verified",
+    "subject_name": "美的集团股份有限公司 / Midea Investment Development Company Limited",
+    "used_in_reference_assessment": false
+  }
+]

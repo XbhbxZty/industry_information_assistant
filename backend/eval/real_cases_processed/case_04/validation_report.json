@@ -1,0 +1,35 @@
+{
+  "case_id": "case_04",
+  "errors": [],
+  "metrics": {
+    "checklist_rows": 25,
+    "embedded_claim_rows": 0,
+    "embedded_source_rows": 0,
+    "markdown_claim_rows": 67,
+    "markdown_source_rows": 10,
+    "normalized_claim_rows": 67,
+    "normalized_source_rows": 10,
+    "post_cutoff_claim_rows": 3,
+    "reference_claim_rows": 64
+  },
+  "schema_version": "real-case-v1",
+  "status": "passed_with_warnings",
+  "warnings": [
+    {
+      "code": "embedded_json_claims_incomplete",
+      "detail": "embedded=0, normalized_markdown_merge=67"
+    },
+    {
+      "code": "embedded_json_sources_incomplete",
+      "detail": "embedded=0, normalized_markdown_merge=10"
+    },
+    {
+      "code": "mirror_source_present",
+      "detail": "one or more sources use a Sina mirror"
+    },
+    {
+      "code": "raw_sources_not_downloaded",
+      "detail": "this pass creates an acquisition queue; source files still require download and hashing"
+    }
+  ]
+}

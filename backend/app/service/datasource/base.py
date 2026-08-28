@@ -140,9 +140,9 @@ class DataSourceAdapter(ABC):
         Returns: {field_id: 处理结果说明}，供调用方记录与断言。
         """
         try:
-            from config.dd_checklist import CHECKLIST_BY_ID
+            from config.dd_checklist import CHECKLIST_BY_ID, NO_RECORD_VALUE
         except ImportError:
-            from app.config.dd_checklist import CHECKLIST_BY_ID
+            from app.config.dd_checklist import CHECKLIST_BY_ID, NO_RECORD_VALUE
 
         result = self.fetch(company)
         outcome: Dict[str, str] = {}
@@ -178,7 +178,7 @@ class DataSourceAdapter(ABC):
                     self._note_attempt(chk)
                     outcome[fid] = "attribute_missing_anomaly"
                     continue
-                value = "经查询，无相关记录"
+                value = NO_RECORD_VALUE
 
             record_structured_evidence(
                 evidence_store, chk,

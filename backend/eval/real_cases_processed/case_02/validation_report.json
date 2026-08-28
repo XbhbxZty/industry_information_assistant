@@ -1,0 +1,23 @@
+{
+  "case_id": "case_02",
+  "errors": [],
+  "metrics": {
+    "checklist_rows": 36,
+    "embedded_claim_rows": 68,
+    "embedded_source_rows": 11,
+    "markdown_claim_rows": 68,
+    "markdown_source_rows": 11,
+    "normalized_claim_rows": 68,
+    "normalized_source_rows": 11,
+    "post_cutoff_claim_rows": 0,
+    "reference_claim_rows": 68
+  },
+  "schema_version": "real-case-v1",
+  "status": "passed_with_warnings",
+  "warnings": [
+    {
+      "code": "raw_sources_not_downloaded",
+      "detail": "this pass creates an acquisition queue; source files still require download and hashing"
+    }
+  ]
+}

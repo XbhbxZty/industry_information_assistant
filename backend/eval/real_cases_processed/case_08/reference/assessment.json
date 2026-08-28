@@ -1,0 +1,58 @@
+{
+  "conditional_risk": {
+    "if_debtor_is_RBJAC": "需按其独立重整程序重新评估",
+    "if_debtor_is_brilliance_china_1114_HK": "需独立重新评估",
+    "if_debtor_is_one_of_12_restructuring_entities": "高",
+    "if_debtor_is_other_affiliate": "需按独立法人重新评估"
+  },
+  "confidence": {
+    "overall_reference_assessment": 0.96
+  },
+  "credit_amount": null,
+  "eval_only": true,
+  "generated_reference": true,
+  "human_review_status": "not_reviewed",
+  "label_grade": "silver",
+  "normalized": {
+    "adverse_risk_gates": [],
+    "assessment_confidence": {
+      "calibrated_probability": false,
+      "ordinal_score": {
+        "overall_reference_assessment": 0.96
+      },
+      "raw": {
+        "overall_reference_assessment": 0.96
+      }
+    },
+    "corporate_risk_level": null,
+    "decision_status": "blocked",
+    "information_gates": [],
+    "risk_level_raw": "无法判断",
+    "risk_scope": null,
+    "transaction_readiness": "not_assessed",
+    "transaction_risk_level": null
+  },
+  "reasoning_claim_ids": [
+    "C010",
+    "C012",
+    "C015",
+    "C019",
+    "C021",
+    "C023",
+    "C024",
+    "C026",
+    "C031",
+    "C032",
+    "C033",
+    "C041",
+    "C048",
+    "C049",
+    "C050",
+    "C056",
+    "C057",
+    "C058",
+    "C059"
+  ],
+  "recommended_action": "暂缓",
+  "risk_level": "无法判断"
+}

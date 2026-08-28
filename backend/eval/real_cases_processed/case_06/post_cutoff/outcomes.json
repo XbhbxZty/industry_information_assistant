@@ -1,0 +1,19 @@
+[
+  {
+    "as_of_eligible": false,
+    "date": "2025-06-13",
+    "event": "其他风险警示撤销",
+    "source_ids": [
+      "S13"
+    ]
+  },
+  {
+    "as_of_eligible": false,
+    "date": "2025-06-30",
+    "event": "2025年半年度归母及扣非净利润重新出现明显亏损",
+    "publication_date": "2025-08-29",
+    "source_ids": [
+      "S12"
+    ]
+  }
+]

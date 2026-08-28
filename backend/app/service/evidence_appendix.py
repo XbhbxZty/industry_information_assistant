@@ -24,6 +24,11 @@ v0.6a 花了三轮复核把溯源建起来：来源闭集、受信任适配器�
 """
 from typing import Any, Dict, List, Optional
 
+try:
+    from config.canonical import format_source_citation
+except ImportError:  # 兼容以 app 为包根的导入方式
+    from app.config.canonical import format_source_citation
+
 # 附录锚点。与评级块同样的收口机制：模型改写后由代码重建。
 APPENDIX_MARKER = "证据溯源附录（由系统生成"
 APPENDIX_END = "<!-- /evidence-appendix -->"
@@ -39,6 +44,7 @@ _SOURCE_LABEL = {
     "financial_report": "财务报表",
     "bidding": "招投标公开信息",
     "public_opinion": "公开舆情",
+    "rag_text_document_v1": "本地知识库文本文件（逐字校验）",
 }
 
 
@@ -57,7 +63,11 @@ def format_provenance(check: Dict[str, Any]) -> str:
     """
     src = source_label(check.get("source_adapter") or check.get("verification_origin"))
     ts = check.get("retrieved_at") or ""
-    return f"来源：{src}；取证时间：{ts or '未声明'}"
+    evidence_date = check.get("as_of_date") or ""
+    return (
+        f"来源：{src}；证据日期：{evidence_date or '未确认'}；"
+        f"取证时间：{ts or '未声明'}"
+    )
 
 
 def _evidence_note(check: Dict[str, Any], evidence_store: Dict[str, Dict]) -> str:
@@ -73,6 +83,9 @@ def render_appendix(
     field_checks: List[Dict[str, Any]],
     evidence_store: Optional[Dict[str, Dict]] = None,
     completeness: Optional[Dict[str, Any]] = None,
+    search_failures: Optional[List[Dict[str, Any]]] = None,
+    as_of: str = "",
+    section_failures: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """
     渲染证据溯源附录。
@@ -80,6 +93,17 @@ def render_appendix(
     只列**主张了事实**的项（verified / conflicting）——unverified 不主张任何事实，
     它属于信息缺口清单而不是证据清单。两者分开列，因为它们要求读者做的事
     完全不同：前者是可追溯的依据，后者是待补的工作。
+
+    `search_failures` 与 `as_of` 是 P0 补的两块：
+      - 检索故障必须与"查了没有"分开列。案例包的来源目录里 S009/S010
+        两条 403 失败单独成行并附免责声明，正是这个道理——不写出来，
+        读者无从知道哪些"未发现记录"其实是"没查成"。
+      - 截止日必须写明。一份没说"以哪天为准"的尽调报告，事后无法判断
+        当时该不该看到某条信息。
+
+    `section_failures` 是 BC-56 补的第三块，与前者同理但粒度更粗：
+    检索成功、抽取环节崩溃或超时的章节，其证据同样为空。不单独列出来，
+    读者会把"这一章崩了"读成"这一章材料未提供"。
     """
     evidence_store = evidence_store or {}
     checks = list(field_checks or [])
@@ -94,6 +118,18 @@ def render_appendix(
         "",
         "本附录记录报告中每一条已核实结论的来源与取证时间，供事后审计与追责。",
         "",
+    ]
+    if as_of:
+        lines += [
+            f"**研究截止日**：{as_of}。本报告的全部判断以该日期为准，"
+            f"晚于该日发布或发生的信息不参与结论。",
+            "",
+            "> ⚠️ 时点隔离在结构化数据源与法定披露文件上可严格施加；"
+            "通用网页检索的发布日期常缺失，该部分只能尽力过滤，"
+            "详见下方「检索时点局限」。",
+            "",
+        ]
+    lines += [
         "| 核查项 | 结论 | 来源 | 取证时间 | 证据编号 |",
         "|---|---|---|---|---|",
     ]
@@ -113,6 +149,32 @@ def render_appendix(
             f"| {c.get('retrieved_at') or '**未声明**'} "
             f"| {_evidence_note(c, evidence_store)} |"
         )
+
+    source_rows = []
+    seen_sources = set()
+    for check in asserted:
+        for evidence_id in check.get("evidence_ids") or []:
+            evidence = evidence_store.get(evidence_id) or {}
+            for source in (evidence.get("raw") or {}).get("sources") or []:
+                key = (source.get("source_id"), source.get("locator"), source.get("source"))
+                if key in seen_sources:
+                    continue
+                seen_sources.add(key)
+                source_rows.append(source)
+    if source_rows:
+        lines += ["", "**原始证据来源**", ""]
+        for source in source_rows:
+            label = source.get("title") or source.get("source_id") or "未命名来源"
+            locator = source.get("locator") or "位置未标注"
+            url = source.get("url") or source.get("source") or ""
+            # 引用形式由 config.canonical 单点定义：评测器用同一个函数**识别**
+            # 它。两侧各写一遍必然漂移，而漂移的表现是评测器把一条真实存在的
+            # 引用判成缺失，反过来逼人去改正确的生产代码（BC-59）。
+            citation = format_source_citation(source.get("source_id")) or "[—]"
+            lines.append(
+                f"- {citation} {label}；{locator}；"
+                f"发布日期：{source.get('publication_date') or '未确认'}；{url}"
+            )
 
     if gaps:
         lines += [
@@ -148,6 +210,66 @@ def render_appendix(
             "",
             f"> ⚠️ 以下核查项**未声明取证时间**，无法判断证据时效，"
             f"复核时须确认：{('、'.join(undated))}",
+        ]
+
+    # 检索故障（P0-2）。**必须与"查了没有"分列**：前者是失败，后者是结论。
+    # 把它们混同，一次 API 超时就会以"未发现负面舆情"的形式进入报告。
+    if search_failures:
+        lines += [
+            "",
+            "**本次未能完成的检索**",
+            "",
+            "| 检索源 | 查询 | 失败原因 | 时间 |",
+            "|---|---|---|---|",
+        ]
+        for f in search_failures:
+            q = str(f.get("query") or "").replace("|", "／")
+            lines.append(
+                f"| {source_label(f.get('provider'))} | {q[:40]} "
+                f"| {str(f.get('failure_reason') or '')[:40]} "
+                f"| {str(f.get('occurred_at') or '')[:19]} |"
+            )
+        lines += [
+            "",
+            "> ⚠️ 以上检索**未能完成**，只能证明本次访问失败，"
+            "**不得据此认定不存在相关记录**。相关核查项若在上方信息缺口清单中，"
+            "须线下补充核查。",
+        ]
+
+    # 章节级抽取故障（BC-56）。与检索故障分开成表：检索故障是"没查到"，
+    # 这里是"查到了但没读成"——两者要补的工作不同。
+    if section_failures:
+        lines += [
+            "",
+            "**本次未能完成的章节抽取**",
+            "",
+            "| 章节 | 故障类型 | 原因 | 时间 |",
+            "|---|---|---|---|",
+        ]
+        for f in section_failures:
+            title = str(f.get("section_title") or f.get("section_id") or "").replace("|", "／")
+            kind = "调用超时" if f.get("failure_kind") == "llm_timeout" else "执行异常"
+            reason = str(f.get("failure_reason") or "").replace("|", "／")
+            lines.append(
+                f"| {title[:30]} | {kind} | {reason[:60]} "
+                f"| {str(f.get('occurred_at') or '')[:19]} |"
+            )
+        lines += [
+            "",
+            "> ⚠️ 以上章节的检索资料**未能完成结构化抽取**。这些章节的证据为空"
+            "是故障所致，**不得读作「材料未提供」或「未发现相关记录」**。"
+            "本报告在这些章节上的结论不可采信，须重跑或线下补充核查。",
+        ]
+
+    if as_of:
+        lines += [
+            "",
+            "**检索时点局限**",
+            "",
+            "通用网页检索结果的发布日期由检索接口提供，实际常有缺失。"
+            "本次已丢弃可确认晚于研究截止日的结果；发布日期无法确认的结果"
+            "予以保留并标记，**未能对其施加时点过滤**。"
+            "结构化数据源与法定披露文件不受此局限。",
         ]
 
     lines += ["", APPENDIX_END]

@@ -89,7 +89,7 @@ cd frontend && npm run dev
 | Wizard 代码执行 | 财务趋势图、同业对比图 | ✅ 评审会要图 |
 | Writer | 尽调报告撰写 | ✅ |
 | **Critic 审核** | **风控复核岗** | ✅ **信贷流程里真实存在的一道岗** |
-| RAG 知识库 | 上传财报/征信报告/合同解析 | ✅ 甲方材料本来就是 PDF |
+| RAG 知识库 | 上传财报/征信报告/合同解析 | ✅ 文本型 PDF 已接入固定清单与结构化证据链；扫描件/多格式待统一 |
 | Text2SQL | 财务指标查询、同业对比 | ✅ |
 | checkpoint 暂停恢复 | 人工复核卡点 | ✅ |
 
@@ -366,9 +366,9 @@ service/datasource/
 这些功能没人为了好玩去做，正因如此它们才是真实业务项目的标志。
 
 ### 3.1 人机协同复核
-Critic 标记的高风险结论触发**暂停**，等待风控人员确认后继续。基础设施已存在：`checkpoint_service.update_status()` 已支持 `paused` 状态（但当前**无任何代码真正设置它**，是预留未用）。
-
-若 Stage 0.5 选方案 A，可用 LangGraph 的 `interrupt` 机制实现，技术上更漂亮。
+✅ 已完成：规则评级要求复核时通过 LangGraph `interrupt` 触发**暂停**，由
+`checkpoint_service.update_status()` 写入 `paused`；登录用户提交复核后从 PostgreSQL
+断点继续。复核接口校验检查点归属，复核人由 Token 身份自动签名，非法决定保持暂停。
 
 ### 3.2 报告导出 Word
 `python-docx` 已在依赖中。按尽调报告模板渲染，含风险评级页、图表、来源附录。
@@ -385,7 +385,7 @@ Critic 标记的高风险结论触发**暂停**，等待风控人员确认后继
 
 - `pages/news/` → `pages/companies/`（企业档案库）
 - `pages/bidding/` → 删除；`components/stock-card/` → 删除
-- **新增** `pages/due-diligence/`：发起尽调 → 实时过程 → 报告查看 → 复核操作
+- ✅ **已新增基础版** `pages/due-diligence/`：发起尽调 → 实时过程 → 报告查看 → 复核操作
 - 知识图谱组件重点适配**担保圈可视化**（环状关系高亮）
 - **新增事实溯源交互**：报告结论 hover/click → 高亮来源卡片
 - `store/industry.ts` → `store/business.ts`（业务线配置：供应链金融/小微信贷/商业保理，对应不同尽调侧重）
@@ -534,8 +534,10 @@ git 历史按 Stage 分组；README 如实说明基于课程项目二次开发�
 | `POST /research/review/{session_id}` | ✅ |
 | 复核结论并入评级并写回报告正文 | ✅ `apply_human_review()` |
 | 真实跨进程恢复验证 | ✅ 两个独立进程实测 |
-| 前端复核确认卡片 | ⬜ v1.0 范围 |
-| BC-18（`guarantee_circle` 低风险可达性） | ⬜ 待决策 |
+| 前端复核确认卡片 | ✅ v1.0-alpha 已接线 |
+| 复核认证、检查点归属与服务端身份签名 | ✅ 2026-08-13 独立复审补齐 |
+| 非法复核保持暂停（不得 fail-open 完成） | ✅ 反向测试覆盖 |
+| BC-18（`guarantee_circle` 低风险可达性） | ✅ 图分析适配器就绪后已解除能力闸门 |
 
 **本轮新增缺陷记录**：BC-41（声明式图与实际执行分叉）、BC-42（`Command(goto=END)`
 不取代静态边）、BC-43（未声明的 state 键被丢弃）、BC-44（`interrupt` 前的副作用

@@ -1,0 +1,10 @@
+# Large downloaded public documents and host-specific acquisition state.
+**/raw_sources/
+**/acquisition_manifest.jsonl
+acquisition_summary.json
+**/corpus/
+corpus_preparation_summary.json
+corpus_preparation_summary_case_*.json
+ingestion_summary.json
+rag_verification_summary.json
+retrieval_smoke_summary.json

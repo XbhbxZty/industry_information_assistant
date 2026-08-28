@@ -1,0 +1,31 @@
+{
+  "case_id": "case_08",
+  "errors": [],
+  "metrics": {
+    "checklist_rows": 32,
+    "embedded_claim_rows": 22,
+    "embedded_source_rows": 17,
+    "markdown_claim_rows": 60,
+    "markdown_source_rows": 17,
+    "normalized_claim_rows": 60,
+    "normalized_source_rows": 17,
+    "post_cutoff_claim_rows": 0,
+    "reference_claim_rows": 60
+  },
+  "schema_version": "real-case-v1",
+  "status": "passed_with_warnings",
+  "warnings": [
+    {
+      "code": "embedded_json_claims_incomplete",
+      "detail": "embedded=22, normalized_markdown_merge=60"
+    },
+    {
+      "code": "source_cutoff_unknown",
+      "detail": "one or more sources have unknown cutoff eligibility"
+    },
+    {
+      "code": "raw_sources_not_downloaded",
+      "detail": "this pass creates an acquisition queue; source files still require download and hashing"
+    }
+  ]
+}

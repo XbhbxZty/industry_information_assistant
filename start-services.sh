@@ -59,7 +59,7 @@ start_services() {
     echo "  - Redis: localhost:6379"
     echo "  - Milvus: localhost:29530"
     echo "  - Elasticsearch: localhost:1200"
-    echo "  - MinIO Console: localhost:9001 (admin/minioadmin)"
+    echo "  - MinIO Console: localhost:29001 (admin/minioadmin)"
     echo ""
     log_info "现在可以启动前后端服务了"
     echo "  - 后端: cd backend && python app/app_main.py"
@@ -99,7 +99,7 @@ check_service_health() {
     fi
 
     # Milvus
-    if curl -s http://localhost:9091/healthz > /dev/null 2>&1; then
+    if curl -s http://localhost:29091/healthz > /dev/null 2>&1; then
         log_success "Milvus: 运行中"
     else
         log_warning "Milvus: 启动中..."

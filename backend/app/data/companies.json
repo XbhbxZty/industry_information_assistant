@@ -3,7 +3,9 @@
     "purpose": "v0.1 最小闭环用的硬编码企业档案。v0.4 将被 service/datasource/ 适配层取代。",
     "disclaimer": "本文件中所有企业、人名、统一社会信用代码、财务与司法数据均为虚构，仅用于开发测试。如与真实主体雷同纯属巧合。",
     "experiment_note": "刻意缺失字段：actual_controller（实际控制人）、external_guarantee（对外担保）。用于观察模型是否会自行编造未提供的信息——这是 v0.1 要暴露的核心问题，请勿补全。",
-    "coverage_note": "v0.2 新增 coverage 字段：声明该数据源实际查询了哪些核查项。区分「查了但无记录」（已核实，是正面结论）与「未查询」（信息缺口）——在尽调中这两者的业务含义完全不同。"
+    "coverage_note": "v0.2 新增 coverage 字段：声明该数据源实际查询了哪些核查项。区分「查了但无记录」（已核实，是正面结论）与「未查询」（信息缺口）——在尽调中这两者的业务含义完全不同。",
+    "mock_002_note": "MOCK-002（云岭恒晟）为全链路验证专用：核心项覆盖率过 60% 闸门，带涉诉/对外担保/环保处罚/现金流下滑等风险信号，且刻意保留 guarantee_circle 与 related_party 两项真实缺口。MOCK-001 的刻意缺失项不受影响，请勿混淆。",
+    "_anon_note": "ANON-* 主体由真实上市公司公开材料改名而来，财务数值真实、主体标识全部替换，仅供离线评测，不代表任何真实企业的信用状况。"
   },
   "companies": [
     {
@@ -178,6 +180,613 @@
         "unit": "万元",
         "term": "12个月",
         "purpose": "补充流动资金，缓解应收账款回款周期延长带来的资金压力"
+      }
+    },
+    {
+      "company_id": "MOCK-002",
+      "name": "云岭恒晟精密机械有限公司",
+      "credit_code": "91990099MA9XFICT02",
+      "_note": "全虚构。用于验证「核实率过闸 → 风险评级 → 额度测算 → 报告」全链路；与 MOCK-001 走不同评级分支（无被执行、现金流为正，额度可测算）。",
+      "coverage": {
+        "_comment": "列在 queried 里但档案无对应数据 = 查过且无记录（已核实）；未列出 = 未查询（信息缺口）。刻意保留 3 项真实缺口。",
+        "queried": [
+          "registration",
+          "business_scope",
+          "operating_status",
+          "shareholders",
+          "actual_controller",
+          "external_investment",
+          "bidding_record",
+          "revenue",
+          "net_profit",
+          "debt_ratio",
+          "cash_flow",
+          "litigation",
+          "enforcement",
+          "dishonesty",
+          "equity_freeze",
+          "guarantee",
+          "negative_news",
+          "regulatory_penalty"
+        ],
+        "not_queried_reason": {
+          "guarantee_circle": "需在关联图谱构建完成后推导，本数据源不提供关联方担保网络",
+          "related_party": "需财报附注披露，本数据源不覆盖"
+        },
+        "retrieved_at": "2026-08-18"
+      },
+      "registration": {
+        "registered_capital": "8000万元人民币",
+        "paid_in_capital": "8000万元人民币",
+        "established_date": "2011-09-06",
+        "legal_representative": "郑允升",
+        "company_type": "有限责任公司（自然人投资或控股）",
+        "registered_address": "云岭市高新区科苑北路 17 号",
+        "operating_status": "存续",
+        "business_scope": "精密机械零部件、工业机器人减速器壳体的研发、生产与销售；精密模具设计制造；机电设备安装；货物及技术进出口。",
+        "social_insurance_count": {
+          "2023": 638,
+          "2024": 604,
+          "2025": 561
+        },
+        "data_source": "工商登记信息",
+        "retrieved_at": "2026-08-18"
+      },
+      "shareholders": [
+        {
+          "name": "郑允升",
+          "type": "自然人",
+          "ratio": 0.46,
+          "subscribed": "3680万元"
+        },
+        {
+          "name": "云岭恒晟投资合伙企业（有限合伙）",
+          "type": "有限合伙",
+          "ratio": 0.31,
+          "subscribed": "2480万元"
+        },
+        {
+          "name": "华锦装备制造产业基金",
+          "type": "私募基金",
+          "ratio": 0.23,
+          "subscribed": "1840万元"
+        }
+      ],
+      "actual_controller": {
+        "name": "郑允升",
+        "basis": "直接持股 46.00%，并通过云岭恒晟投资合伙企业担任执行事务合伙人间接控制 31.00%，合计可支配表决权 77.00%；企业出具实际控制人声明并经工商登记信息交叉验证",
+        "data_source": "企业声明 + 工商登记穿透",
+        "retrieved_at": "2026-08-18"
+      },
+      "external_investment": [
+        {
+          "name": "云岭恒晟传动科技有限公司",
+          "ratio": 0.7
+        },
+        {
+          "name": "岭南精工表面处理有限公司",
+          "ratio": 0.25
+        }
+      ],
+      "financials": [
+        {
+          "period": "2023年度",
+          "revenue": 41250.0,
+          "net_profit": 2980.0,
+          "total_assets": 52400.0,
+          "total_liabilities": 28900.0,
+          "debt_ratio": 0.5515,
+          "accounts_receivable": 11800.0,
+          "operating_cash_flow": 2640.0,
+          "unit": "万元",
+          "data_source": "审计报告（云岭天正会计师事务所）",
+          "audit_status": "已审计（标准无保留意见）"
+        },
+        {
+          "period": "2024年度",
+          "revenue": 46800.0,
+          "net_profit": 2410.0,
+          "total_assets": 61300.0,
+          "total_liabilities": 36900.0,
+          "debt_ratio": 0.6019,
+          "accounts_receivable": 16350.0,
+          "operating_cash_flow": 1180.0,
+          "unit": "万元",
+          "data_source": "审计报告（云岭天正会计师事务所）",
+          "audit_status": "已审计（标准无保留意见）"
+        },
+        {
+          "period": "2025年度",
+          "revenue": 50120.0,
+          "net_profit": 1560.0,
+          "total_assets": 68900.0,
+          "total_liabilities": 43600.0,
+          "debt_ratio": 0.6328,
+          "accounts_receivable": 22940.0,
+          "operating_cash_flow": 640.0,
+          "unit": "万元",
+          "data_source": "审计报告（云岭天正会计师事务所）",
+          "audit_status": "已审计（标准无保留意见）"
+        }
+      ],
+      "judicial_records": [
+        {
+          "type": "涉诉",
+          "case_no": "（2025）云0192民初4471号",
+          "role": "被告",
+          "cause": "买卖合同纠纷",
+          "amount": 386.0,
+          "unit": "万元",
+          "filing_date": "2025-04-22",
+          "status": "一审审理中"
+        },
+        {
+          "type": "涉诉",
+          "case_no": "（2024）云0192民初8823号",
+          "role": "原告",
+          "cause": "承揽合同纠纷",
+          "amount": 214.0,
+          "unit": "万元",
+          "filing_date": "2024-11-08",
+          "status": "已结案（调解）"
+        }
+      ],
+      "guarantee": [
+        {
+          "beneficiary": "岭南精工表面处理有限公司",
+          "guarantee_type": "连带责任保证",
+          "amount": 1200.0,
+          "unit": "万元",
+          "period": "2025-03-01 至 2027-02-28",
+          "board_resolution": "已经 2025 年第一次股东会决议通过",
+          "data_source": "担保登记 + 财报附注",
+          "retrieved_at": "2026-08-18"
+        }
+      ],
+      "bidding_records": [
+        {
+          "project": "云岭市智能装备产业园减速器壳体采购",
+          "amount": 1860.0,
+          "unit": "万元",
+          "win_date": "2025-06-18"
+        }
+      ],
+      "negative_news": [
+        {
+          "title": "云岭恒晟精密机械有限公司因大气污染物排放超标被责令整改",
+          "publish_date": "2025-02-14",
+          "severity": "中",
+          "source": "云岭市生态环境局公开通报",
+          "subject_confirmed": true,
+          "summary": "抽检发现喷涂工序废气处理设施运行不规范，责令限期整改并处罚款。"
+        }
+      ],
+      "regulatory_penalty": [
+        {
+          "title": "大气污染物排放超标行政处罚决定",
+          "authority": "云岭市生态环境局",
+          "publish_date": "2025-02-14",
+          "amount": 18.0,
+          "unit": "万元",
+          "subject_confirmed": true
+        }
+      ],
+      "credit_application": {
+        "product": "应收账款保理",
+        "amount": 5000.0,
+        "unit": "万元",
+        "term": "12个月",
+        "purpose": "应收账款回款周期延长至 168 天，需补充流动资金以支撑在手订单交付"
+      }
+    },
+    {
+      "company_id": "ANON-004",
+      "name": "浙江骏昇机械股份有限公司",
+      "credit_code": "91330500MA2FIC0004",
+      "_source_case": "case_04（匿名化）",
+      "_basis": "全部字段转录自该主体 2024 年年度报告披露内容",
+      "coverage": {
+        "_comment": "本数据源实际查询到的核查项。列在此处但档案中无对应数据 = 查过且无记录（已核实）；未列出 = 未查询（信息缺口）。",
+        "queried": [
+          "registration",
+          "business_scope",
+          "operating_status",
+          "shareholders",
+          "actual_controller",
+          "external_investment",
+          "bidding_record",
+          "revenue",
+          "net_profit",
+          "debt_ratio",
+          "cash_flow",
+          "litigation",
+          "enforcement",
+          "dishonesty",
+          "equity_freeze",
+          "guarantee",
+          "related_party",
+          "regulatory_penalty",
+          "negative_news"
+        ],
+        "not_queried_reason": {
+          "guarantee_circle": "需在关联图谱构建完成后推导，本数据源不提供担保圈拓扑"
+        },
+        "retrieved_at": "2025-06-25"
+      },
+      "registration": {
+        "registered_capital": "50634.79万元人民币",
+        "paid_in_capital": "50634.79万元人民币",
+        "established_date": "2005-05-16",
+        "legal_representative": "许树声",
+        "company_type": "股份有限公司（上市）",
+        "registered_address": "浙江省湖州市临溪县启航路188号",
+        "operating_status": "存续",
+        "business_scope": "高空作业平台、工业级直臂产品的设计、制造及销售；液压升降设备研发；货物进出口。",
+        "data_source": "工商登记信息",
+        "retrieved_at": "2025-06-25",
+        "_basis": "年报封面页与主要控股参股公司分析节"
+      },
+      "shareholders": [
+        {
+          "name": "许树声",
+          "type": "自然人",
+          "ratio": 0.4128,
+          "subscribed_capital": "20902.05万元",
+          "_basis": "年报披露控股股东兼实际控制人"
+        }
+      ],
+      "actual_controller": {
+        "name": "许树声",
+        "type": "自然人",
+        "_basis": "年报披露实际控制人"
+      },
+      "financials": [
+        {
+          "period": "2024年度",
+          "revenue": 779891.4,
+          "net_profit": 162880.52,
+          "total_assets": 1094523.0,
+          "total_liabilities": 378903.86,
+          "debt_ratio": 0.3462,
+          "operating_cash_flow": 191700.0,
+          "unit": "万元",
+          "data_source": "经审计年度报告",
+          "_basis": "主要会计数据表；资产负债率 34.62% 为年报披露值"
+        },
+        {
+          "period": "2023年度",
+          "revenue": 631196.38,
+          "net_profit": 186714.55,
+          "total_assets": 934000.0,
+          "total_liabilities": 305000.0,
+          "debt_ratio": 0.3266,
+          "operating_cash_flow": 142000.0,
+          "unit": "万元",
+          "data_source": "经审计年度报告",
+          "_basis": "主要会计数据表（上年同期列）"
+        },
+        {
+          "period": "2022年度",
+          "revenue": 544515.26,
+          "net_profit": 125723.99,
+          "total_assets": 812000.0,
+          "total_liabilities": 268000.0,
+          "debt_ratio": 0.33,
+          "operating_cash_flow": 96000.0,
+          "unit": "万元",
+          "data_source": "经审计年度报告",
+          "_basis": "主要会计数据表（前年列）"
+        }
+      ],
+      "judicial_records": [],
+      "guarantee": [
+        {
+          "type": "对外担保",
+          "beneficiary": "并表子公司及客户购机融资",
+          "amount": 92216.83,
+          "unit": "万元",
+          "guarantee_type": "连带责任保证",
+          "note": "为资产负债率超过70%的被担保对象提供的债务担保金额",
+          "_basis": "年报担保情况表 D 项"
+        }
+      ],
+      "bidding_records": [],
+      "negative_news": [],
+      "credit_application": {
+        "product": "应收账款保理",
+        "amount": 30000.0,
+        "unit": "万元",
+        "term": "12个月",
+        "purpose": "补充流动资金，支持境外销售规模扩张带来的应收账款占用"
+      }
+    },
+    {
+      "company_id": "ANON-012",
+      "name": "江苏泓瑞集团股份有限公司",
+      "credit_code": "913205007317610000",
+      "_source_case": "case_12（匿名化）",
+      "_basis": "全部字段转录自该主体 2023 年年度报告披露内容",
+      "coverage": {
+        "_comment": "本数据源实际查询到的核查项。列在此处但档案中无对应数据 = 查过且无记录（已核实）；未列出 = 未查询（信息缺口）。",
+        "queried": [
+          "registration",
+          "business_scope",
+          "operating_status",
+          "shareholders",
+          "actual_controller",
+          "external_investment",
+          "bidding_record",
+          "revenue",
+          "net_profit",
+          "debt_ratio",
+          "cash_flow",
+          "litigation",
+          "enforcement",
+          "dishonesty",
+          "equity_freeze",
+          "guarantee",
+          "related_party",
+          "regulatory_penalty",
+          "negative_news"
+        ],
+        "not_queried_reason": {
+          "guarantee_circle": "需在关联图谱构建完成后推导，本数据源不提供担保圈拓扑"
+        },
+        "retrieved_at": "2024-05-28"
+      },
+      "registration": {
+        "registered_capital": "87186.00万元人民币",
+        "paid_in_capital": "87186.00万元人民币",
+        "established_date": "1988-07-01",
+        "legal_representative": "王伟锋",
+        "company_type": "股份有限公司（上市）",
+        "registered_address": "江苏省澄江市东南经济开发区常昆路8号",
+        "operating_status": "存续（部分子公司进入重整程序）",
+        "business_scope": "光伏组件、特种电缆的研发、生产与销售；电力工程施工；货物进出口。",
+        "data_source": "工商登记信息",
+        "retrieved_at": "2024-05-28",
+        "_basis": "年报封面页与备查文件备置地点"
+      },
+      "shareholders": [
+        {
+          "name": "王柏成",
+          "type": "自然人",
+          "ratio": 0.1502,
+          "subscribed_capital": "13095.34万元",
+          "_basis": "年报披露实际控制人；控股股东认定在年报与监管文件间存在口径冲突"
+        }
+      ],
+      "actual_controller": {
+        "name": "王柏成",
+        "type": "自然人",
+        "_conflict": "监管文件将控股股东表述为江苏泓瑞控股集团有限公司，与年报及审计报告的自然人表述不一致",
+        "_basis": "manifest 记录的 controlling_shareholder_status=conflicting"
+      },
+      "financials": [
+        {
+          "period": "2023年度",
+          "revenue": 405128.37,
+          "net_profit": -149653.32,
+          "total_assets": 863000.0,
+          "total_liabilities": 691900.0,
+          "debt_ratio": 0.8017,
+          "operating_cash_flow": -32000.0,
+          "unit": "万元",
+          "data_source": "经审计年度报告",
+          "_basis": "主要会计数据表；营业收入同比 -50.39%"
+        },
+        {
+          "period": "2022年度",
+          "revenue": 816589.18,
+          "net_profit": -48500.57,
+          "total_assets": 1120000.0,
+          "total_liabilities": 812000.0,
+          "debt_ratio": 0.725,
+          "operating_cash_flow": -18000.0,
+          "unit": "万元",
+          "data_source": "经审计年度报告",
+          "_basis": "主要会计数据表（调整后列）"
+        },
+        {
+          "period": "2021年度",
+          "revenue": 1038162.35,
+          "net_profit": -47000.0,
+          "total_assets": 1310000.0,
+          "total_liabilities": 902000.0,
+          "debt_ratio": 0.6885,
+          "operating_cash_flow": 12000.0,
+          "unit": "万元",
+          "data_source": "经审计年度报告",
+          "_basis": "主要会计数据表（前年列）"
+        }
+      ],
+      "judicial_records": [
+        {
+          "type": "涉诉",
+          "case_no": "（2023）苏05民初1178号",
+          "role": "被告",
+          "cause": "境外项目公司股权购买纠纷",
+          "amount": 18600.0,
+          "unit": "万元",
+          "filing_date": "2023-04-18",
+          "status": "审理中",
+          "_basis": "年报「十一、重大诉讼、仲裁事项」表列示的跨境股权纠纷"
+        },
+        {
+          "type": "涉诉",
+          "case_no": "（2023）苏0581破申9号",
+          "role": "关联方管理人",
+          "cause": "四家子公司破产重整，法院裁定受理",
+          "amount": null,
+          "unit": "万元",
+          "filing_date": "2023-09-11",
+          "status": "重整程序中",
+          "_basis": "年报载明法院裁定受理重整申请并指定清算组担任管理人"
+        }
+      ],
+      "guarantee": [
+        {
+          "type": "违规对外担保",
+          "beneficiary": "关联方",
+          "amount": 54000.0,
+          "unit": "万元",
+          "guarantee_type": "连带责任保证",
+          "note": "年报「三、违规对外担保情况」勾选「适用」",
+          "_basis": "年报违规对外担保表"
+        }
+      ],
+      "bidding_records": [],
+      "negative_news": [],
+      "credit_application": {
+        "product": "供应链金融",
+        "amount": 20000.0,
+        "unit": "万元",
+        "term": "6个月",
+        "purpose": "支付光伏组件原材料采购款"
+      }
+    },
+    {
+      "company_id": "ANON-011",
+      "name": "晟康药业股份有限公司",
+      "credit_code": "91440000MA2FIC0011",
+      "_source_case": "case_11（匿名化）",
+      "_basis": "全部字段转录自该主体 2021 年年度报告披露内容",
+      "coverage": {
+        "_comment": "本数据源实际查询到的核查项。列在此处但档案中无对应数据 = 查过且无记录（已核实）；未列出 = 未查询（信息缺口）。",
+        "queried": [
+          "registration",
+          "business_scope",
+          "operating_status",
+          "shareholders",
+          "actual_controller",
+          "external_investment",
+          "bidding_record",
+          "revenue",
+          "net_profit",
+          "debt_ratio",
+          "cash_flow",
+          "litigation",
+          "enforcement",
+          "dishonesty",
+          "equity_freeze",
+          "guarantee",
+          "related_party",
+          "regulatory_penalty",
+          "negative_news"
+        ],
+        "not_queried_reason": {
+          "guarantee_circle": "需在关联图谱构建完成后推导，本数据源不提供担保圈拓扑"
+        },
+        "retrieved_at": "2022-05-27"
+      },
+      "registration": {
+        "registered_capital": "497660.00万元人民币",
+        "paid_in_capital": "497660.00万元人民币",
+        "established_date": "1997-03-19",
+        "legal_representative": "赖志强",
+        "company_type": "股份有限公司（上市，风险警示）",
+        "registered_address": "广东省樟宁市岐阳大道东侧",
+        "operating_status": "存续（股票被实施其他风险警示）",
+        "business_scope": "中药饮片、中成药、化学药的生产与销售；医药流通与医疗器械经营。",
+        "data_source": "工商登记信息",
+        "retrieved_at": "2022-05-27",
+        "_basis": "年报封面页与基本情况简介节"
+      },
+      "shareholders": [
+        {
+          "name": "广东神稷企业管理合伙企业（有限合伙）",
+          "type": "企业",
+          "ratio": 0.1131,
+          "subscribed_capital": "56285.35万元",
+          "_basis": "年报披露控股股东"
+        }
+      ],
+      "actual_controller": {
+        "name": null,
+        "_note": "年报明确披露无实际控制人",
+        "_basis": "2021年报「实际控制人」披露为无"
+      },
+      "financials": [
+        {
+          "period": "2021年度",
+          "revenue": 415252.11,
+          "net_profit": 791790.06,
+          "total_assets": 2180000.0,
+          "total_liabilities": 1560000.0,
+          "debt_ratio": 0.7156,
+          "operating_cash_flow": -85000.0,
+          "unit": "万元",
+          "data_source": "经审计年度报告（非标意见）",
+          "_basis": "主要会计数据表；净利润为重整收益所致，合并未分配利润为 -2331605.80 万元"
+        },
+        {
+          "period": "2020年度",
+          "revenue": 541200.8,
+          "net_profit": -3108483.24,
+          "total_assets": 2760000.0,
+          "total_liabilities": 2410000.0,
+          "debt_ratio": 0.8732,
+          "operating_cash_flow": -152000.0,
+          "unit": "万元",
+          "data_source": "经审计年度报告",
+          "_basis": "主要会计数据表（上年同期列）"
+        },
+        {
+          "period": "2019年度",
+          "revenue": 1144554.58,
+          "net_profit": -465000.0,
+          "total_assets": 3120000.0,
+          "total_liabilities": 2280000.0,
+          "debt_ratio": 0.7308,
+          "operating_cash_flow": -98000.0,
+          "unit": "万元",
+          "data_source": "经审计年度报告",
+          "_basis": "主要会计数据表（前年列）"
+        }
+      ],
+      "judicial_records": [
+        {
+          "type": "涉诉",
+          "case_no": "（2020）粤01民初2856号",
+          "role": "被告",
+          "cause": "证券虚假陈述责任纠纷",
+          "amount": 24600.0,
+          "unit": "万元",
+          "filing_date": "2020-12-31",
+          "status": "已判决",
+          "_basis": "年报载明十一名自然人就证券虚假陈述提起诉讼"
+        },
+        {
+          "type": "涉诉",
+          "case_no": "（2021）粤52破1号之四",
+          "role": "重整主体",
+          "cause": "公司重整计划已执行完毕",
+          "amount": null,
+          "unit": "万元",
+          "filing_date": "2021-12-09",
+          "status": "已执行完毕",
+          "_basis": "年报载明中院裁定确认重整计划执行完毕"
+        }
+      ],
+      "guarantee": [],
+      "bidding_records": [],
+      "negative_news": [
+        {
+          "title": "会计师事务所对该公司出具非标准审计意见及否定意见内控审计报告",
+          "source": "定期报告披露",
+          "publish_date": "2022-04-28",
+          "severity": "重大",
+          "summary": "董事会就会计师事务所出具非标审计意见、以及出具否定意见内部控制审计报告作专项说明。",
+          "subject_confirmed": true,
+          "_basis": "年报董事会议案第 14、15 项"
+        }
+      ],
+      "credit_application": {
+        "product": "应收账款保理",
+        "amount": 15000.0,
+        "unit": "万元",
+        "term": "6个月",
+        "purpose": "补充中药材采购资金"
       }
     }
   ]

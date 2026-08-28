@@ -1,0 +1,587 @@
+[
+  {
+    "check_id": "CHK001",
+    "conclusion": "上市主体识别明确",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C001",
+      "C002"
+    ],
+    "evidence_ids": [
+      "C001",
+      "C002"
+    ],
+    "hard_gate": false,
+    "item": "企业名称/信用代码",
+    "manual_review": false,
+    "missing_evidence": "无",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK002",
+    "conclusion": "300750与03750均对应同一法人，不是两家公司",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C006",
+      "C007"
+    ],
+    "evidence_ids": [
+      "C006",
+      "C007"
+    ],
+    "hard_gate": false,
+    "item": "A/H股主体一致性",
+    "manual_review": false,
+    "missing_evidence": "无",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK003",
+    "conclusion": "前身有限公司成立于2011-12-16",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C003",
+      "C004"
+    ],
+    "evidence_ids": [
+      "C003",
+      "C004"
+    ],
+    "hard_gate": false,
+    "item": "成立及历史主体",
+    "manual_review": true,
+    "missing_evidence": "GSXT历史变更全表",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK004",
+    "conclusion": "GSXT本次无法访问，不能以年报股本替代",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C011",
+      "C012"
+    ],
+    "evidence_ids": [
+      "C011",
+      "C012"
+    ],
+    "hard_gate": null,
+    "item": "实时工商登记状态/注册资本",
+    "manual_review": true,
+    "missing_evidence": "GSXT完整登记档案",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK005",
+    "conclusion": "厦门瑞庭为控股股东；曾毓群为实际控制人",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C008",
+      "C010"
+    ],
+    "evidence_ids": [
+      "C008",
+      "C010"
+    ],
+    "hard_gate": false,
+    "item": "控股股东/实控人",
+    "manual_review": false,
+    "missing_evidence": "无",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK006",
+    "conclusion": "**不能确认待保理发票债务人是宁德时代本体还是具体子公司**",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S006"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S006"
+    ],
+    "hard_gate": true,
+    "item": "具体保理债务人",
+    "manual_review": true,
+    "missing_evidence": "债务人全称、USCC、合同、发票、订单",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK007",
+    "conclusion": "标准无保留意见；未见持续经营重大不确定性",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C013",
+      "C014"
+    ],
+    "evidence_ids": [
+      "C013",
+      "C014"
+    ],
+    "hard_gate": false,
+    "item": "2024审计意见",
+    "manual_review": false,
+    "missing_evidence": "无",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK008",
+    "conclusion": "2024年末未发现财务/非财务报告重大缺陷",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C015"
+    ],
+    "evidence_ids": [
+      "C015"
+    ],
+    "hard_gate": false,
+    "item": "内部控制",
+    "manual_review": null,
+    "missing_evidence": "单笔业务内控执行证据",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK009",
+    "conclusion": "2024收入下降9.70%，但归母净利润上升15.01%",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C018",
+      "C021"
+    ],
+    "evidence_ids": [
+      "C018",
+      "C021"
+    ],
+    "hard_gate": false,
+    "item": "收入/利润趋势",
+    "manual_review": false,
+    "missing_evidence": "无",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK010",
+    "conclusion": "2024经营现金流969.90亿元，约为归母净利润1.91倍，未形成明显“利润增长但经营现金流恶化”信号",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C021",
+      "C024"
+    ],
+    "evidence_ids": [
+      "C021",
+      "C024"
+    ],
+    "hard_gate": false,
+    "item": "利润与经营现金流",
+    "manual_review": false,
+    "missing_evidence": "无",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK011",
+    "conclusion": "2024资产负债率65.24%，较2023年69.34%下降",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C027"
+    ],
+    "evidence_ids": [
+      "C027"
+    ],
+    "hard_gate": false,
+    "item": "杠杆",
+    "manual_review": false,
+    "missing_evidence": "具体债务期限结构进一步明细可补",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK012",
+    "conclusion": "集团年末应收净额641.36亿元；毛额96.71%在一年以内",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C028",
+      "C033"
+    ],
+    "evidence_ids": [
+      "C028",
+      "C033"
+    ],
+    "hard_gate": false,
+    "item": "应收账款规模/账龄",
+    "manual_review": true,
+    "missing_evidence": "客户级应收明细",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK013",
+    "conclusion": "上述641.36亿元为宁德时代**作为债权人**的应收资产，与供应商对宁德时代的应收账款方向相反",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C028",
+      "C033"
+    ],
+    "evidence_ids": [
+      "C028",
+      "C033"
+    ],
+    "hard_gate": true,
+    "item": "应收账款方向识别",
+    "manual_review": true,
+    "missing_evidence": "供应商自身应收明细",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK014",
+    "conclusion": "2024年末598.36亿元，同比约+31.7%；2025Q1进一步至656.40亿元",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C035",
+      "C057"
+    ],
+    "evidence_ids": [
+      "C035",
+      "C057"
+    ],
+    "hard_gate": false,
+    "item": "存货",
+    "manual_review": true,
+    "missing_evidence": "库龄、供应商个体关联程度",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK015",
+    "conclusion": "前五大客户收入占37.03%，最大客户约15%",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C037",
+      "C038"
+    ],
+    "evidence_ids": [
+      "C037",
+      "C038"
+    ],
+    "hard_gate": false,
+    "item": "客户集中度",
+    "manual_review": true,
+    "missing_evidence": "客户实名未披露",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK016",
+    "conclusion": "前五大供应商采购占16.3%，最大约6.0%，并非高度集中格局",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C039",
+      "C040"
+    ],
+    "evidence_ids": [
+      "C039",
+      "C040"
+    ],
+    "hard_gate": false,
+    "item": "供应商集中度",
+    "manual_review": true,
+    "missing_evidence": "供应商实名及申请人是否在其中",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK017",
+    "conclusion": "2024日常关联交易实际22.17亿元；2025预计额度不超过83.01亿元",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C041",
+      "C042"
+    ],
+    "evidence_ids": [
+      "C041",
+      "C042"
+    ],
+    "hard_gate": false,
+    "item": "关联交易",
+    "manual_review": true,
+    "missing_evidence": "单笔交易是否为关联供应商",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK018",
+    "conclusion": "2024购建长期资产现金支出311.80亿元，在建工程297.55亿元且同比增长",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C043",
+      "C044"
+    ],
+    "evidence_ids": [
+      "C043",
+      "C044"
+    ],
+    "hard_gate": false,
+    "item": "资本开支",
+    "manual_review": true,
+    "missing_evidence": "未来项目现金支出计划",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK019",
+    "conclusion": "2024境外收入占30.48%；存在外汇、海外产能和地域风险敞口",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S008"
+    ],
+    "evidence_claim_ids": [
+      "C045"
+    ],
+    "evidence_ids": [
+      "C045",
+      "S008"
+    ],
+    "hard_gate": false,
+    "item": "海外经营",
+    "manual_review": true,
+    "missing_evidence": "分区域应收/现金流明细",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK020",
+    "conclusion": "公司明确对锂、镍、钴、铝、铜等实施商品套期保值，说明存在原材料价格敞口，同时已有管理措施",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S008"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S008"
+    ],
+    "hard_gate": false,
+    "item": "原材料风险",
+    "manual_review": true,
+    "missing_evidence": "供应商自身价格传导条款",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK021",
+    "conclusion": "集团担保规模较大，但主要需按具体被担保主体拆分；不能自动作为上市主体违约风险",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C046",
+      "C047"
+    ],
+    "evidence_ids": [
+      "C046",
+      "C047"
+    ],
+    "hard_gate": false,
+    "item": "担保",
+    "manual_review": true,
+    "missing_evidence": "被担保子公司逐户明细",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK022",
+    "conclusion": "2024无重大披露标准诉讼，但存在40.01亿元其他诉讼",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C048",
+      "C049"
+    ],
+    "evidence_ids": [
+      "C048",
+      "C049"
+    ],
+    "hard_gate": false,
+    "item": "重大诉讼",
+    "manual_review": true,
+    "missing_evidence": "2025年1-5月新增案件全量检索",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK023",
+    "conclusion": "年报称2024无重大处罚整改，但未完成全量监管系统核验",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C050"
+    ],
+    "evidence_ids": [
+      "C050"
+    ],
+    "hard_gate": false,
+    "item": "行政处罚",
+    "manual_review": true,
+    "missing_evidence": "截止日监管全量结果",
+    "retrieval_attempt_ids": [],
+    "status": "unverified/部分verified"
+  },
+  {
+    "check_id": "CHK024",
+    "conclusion": "法院网站访问失败，不能形成“无记录”结论",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C051"
+    ],
+    "evidence_ids": [
+      "C051"
+    ],
+    "hard_gate": null,
+    "item": "被执行/失信/限消",
+    "manual_review": true,
+    "missing_evidence": "法院官方查询结果",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK025",
+    "conclusion": "截止日前已查年报未见公开到期债务逾期硬负面",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S001",
+      "S002"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S001",
+      "S002"
+    ],
+    "hard_gate": false,
+    "item": "债券/公开债务违约",
+    "manual_review": true,
+    "missing_evidence": "银行私域信贷信息",
+    "retrieval_attempt_ids": [],
+    "status": "verified（披露口径）"
+  },
+  {
+    "check_id": "CHK026",
+    "conclusion": "年报有200万元账面价值集团应收质押",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C034"
+    ],
+    "evidence_ids": [
+      "C034"
+    ],
+    "hard_gate": true,
+    "item": "应收质押",
+    "manual_review": true,
+    "missing_evidence": "**供应商拟融资债权自身**的登记结果",
+    "retrieval_attempt_ids": [],
+    "status": "verified（集团资产）"
+  },
+  {
+    "check_id": "CHK027",
+    "conclusion": "年报全文未检出“保理”，但该范围不足以证明不存在保理",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C052"
+    ],
+    "evidence_ids": [
+      "C052"
+    ],
+    "hard_gate": true,
+    "item": "保理/应收转让",
+    "manual_review": true,
+    "missing_evidence": "动产融资统一登记、公示及原融资合同",
+    "retrieval_attempt_ids": [],
+    "status": "no_record_found"
+  },
+  {
+    "check_id": "CHK028",
+    "conclusion": "公共资料无法验证",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": true,
+    "item": "合同/发票/物流/验收",
+    "manual_review": true,
+    "missing_evidence": "原始交易文件",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK029",
+    "conclusion": "公共资料无法确认无条件付款义务",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": true,
+    "item": "确权/对账/付款义务",
+    "manual_review": true,
+    "missing_evidence": "对账单、确权函、付款确认",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK030",
+    "conclusion": "无法公开验证合同是否禁止转让、存在质量扣款/返利/抵销",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": true,
+    "item": "转让限制/抵销权",
+    "manual_review": true,
+    "missing_evidence": "合同及补充协议",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK031",
+    "conclusion": "无法仅凭年报排除",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C052"
+    ],
+    "evidence_ids": [
+      "C052"
+    ],
+    "hard_gate": true,
+    "item": "重复融资",
+    "manual_review": true,
+    "missing_evidence": "中登网/动产融资统一登记、原融资材料",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  }
+]

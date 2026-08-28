@@ -1,0 +1,67 @@
+[
+  {
+    "as_of_eligible": false,
+    "claim_id": "P001",
+    "field_name": "2024_full_year_revenue",
+    "publication_date": "2025-05-20",
+    "source_ids": [
+      "P01"
+    ],
+    "status": "verified",
+    "subject_name": "TCL科技集团股份有限公司",
+    "unit": "CNY",
+    "value": 164822832863
+  },
+  {
+    "as_of_eligible": false,
+    "claim_id": "P002",
+    "field_name": "2024_full_year_net_profit_attributable_parent",
+    "publication_date": "2025-05-20",
+    "source_ids": [
+      "P01"
+    ],
+    "status": "verified",
+    "subject_name": "TCL科技集团股份有限公司",
+    "unit": "CNY",
+    "value": 1564109407
+  },
+  {
+    "as_of_eligible": false,
+    "claim_id": "P003",
+    "field_name": "2024_full_year_operating_cash_flow",
+    "publication_date": "2025-05-20",
+    "source_ids": [
+      "P01"
+    ],
+    "status": "verified",
+    "subject_name": "TCL科技集团股份有限公司",
+    "unit": "CNY",
+    "value": 29526569404
+  },
+  {
+    "as_of_eligible": false,
+    "claim_id": "P004",
+    "field_name": "2024_full_year_net_profit_attributable_shareholders",
+    "publication_date": "2025-05-20",
+    "source_ids": [
+      "P01"
+    ],
+    "status": "verified",
+    "subject_name": "TCL中环新能源科技股份有限公司",
+    "unit": "CNY_approx",
+    "value": -9820000000
+  },
+  {
+    "as_of_eligible": false,
+    "claim_id": "P005",
+    "field_name": "unified_social_credit_code",
+    "publication_date": "2025-08-28",
+    "source_ids": [
+      "S10"
+    ],
+    "status": "verified",
+    "subject_name": "TCL华星光电技术有限公司",
+    "unit": null,
+    "value": "91440300697136927G"
+  }
+]

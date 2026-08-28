@@ -9,6 +9,8 @@ import type {
   CheckStatus, Completeness, FieldCheck, HumanReviewRequest,
   ReviewDecision, RiskAssessment,
 } from '@/api/duediligence'
+import { authState } from '@/store/auth'
+import { useSnapshot } from 'valtio'
 
 const { Text, Paragraph } = Typography
 
@@ -237,12 +239,16 @@ function CreditBlock({ rec }: { rec: NonNullable<RiskAssessment['credit_recommen
         // 不出具额度时同样要给依据——「不出具」本身也是一个需要理由的结论
         <Alert type="warning" message="不出具额度建议" description={rec.reason} />
       )}
-      {rec.basis?.length > 0 && (
+      {(rec.basis?.length > 0 || (rec.unavailable_bases?.length ?? 0) > 0) && (
         <Table
           style={{ marginTop: 8 }}
           size="small" pagination={false} rowKey={(_, i) => String(i)}
           dataSource={[
             ...rec.basis.map(b => ({ k: b.method, v: `${b.value.toFixed(0)} 万元`, d: b.detail })),
+            // 金额列写「不参与测算」而不是 0：0 是现金流法为负时的真实取值，
+            // 两者混在同一列里必然被误读（BC-72）
+            ...(rec.unavailable_bases ?? []).map(u => ({
+              k: u.method, v: '不参与测算', d: u.reason })),
             ...rec.adjustments.map(a => ({ k: a.factor, v: `×${a.multiplier}`, d: a.detail })),
             ...rec.deductions.map(d => ({ k: d.item, v: `−${d.amount.toFixed(0)} 万元`, d: d.detail })),
           ]}
@@ -276,6 +282,7 @@ export function ReviewCard({
 }) {
   const [form] = Form.useForm()
   const [approved, setApproved] = useState(true)
+  const { user } = useSnapshot(authState)
 
   return (
     <Card
@@ -320,19 +327,15 @@ export function ReviewCard({
       <Form
         form={form} layout="vertical"
         onFinish={(v) => onSubmit({
-          reviewer: v.reviewer.trim(),
           approved: v.approved,
           comment: v.comment || '',
           override_level: v.override_level || null,
         })}
         initialValues={{ approved: true }}
       >
-        <Form.Item
-          name="reviewer" label="复核人"
-          // 没有署名的复核等于没有复核——出坏账追责时无法确定是谁批的
-          rules={[{ required: true, whitespace: true, message: '复核结论必须署名' }]}
-        >
-          <Input placeholder="如：风控部-张三" style={{ maxWidth: 260 }} />
+        <Form.Item label="复核人">
+          <Text>{user?.username || '当前登录用户'}</Text>
+          <Text type="secondary">（由登录身份自动签名，不可手工修改）</Text>
         </Form.Item>
 
         <Form.Item name="approved" label="复核结论">
@@ -352,7 +355,21 @@ export function ReviewCard({
           </Form.Item>
         )}
 
-        <Form.Item name="comment" label="复核意见">
+        <Form.Item
+          name="comment"
+          label="复核意见"
+          dependencies={['approved', 'override_level']}
+          rules={[({ getFieldValue }) => ({
+            validator(_, value) {
+              const changed = getFieldValue('override_level')
+              const rejected = getFieldValue('approved') === false
+              if ((changed || rejected) && !String(value || '').trim()) {
+                return Promise.reject(new Error('改判或不通过时必须填写理由'))
+              }
+              return Promise.resolve()
+            },
+          })]}
+        >
           <Input.TextArea rows={3} placeholder="调整等级时请写明理由，该意见会进入报告正文" />
         </Form.Item>
 

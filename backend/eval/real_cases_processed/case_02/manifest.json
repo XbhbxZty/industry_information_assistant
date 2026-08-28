@@ -1,0 +1,44 @@
+{
+  "business_scenario": [
+    "家电零部件供应商反向保理",
+    "经销商经营贷",
+    "供应商应收账款融资",
+    "A/H两地披露交叉核对"
+  ],
+  "business_types": [
+    "factoring",
+    "micro_loan"
+  ],
+  "case_id": "case_02",
+  "counts": {
+    "checklist_items": 36,
+    "post_cutoff_claims": 0,
+    "reference_claims": 68,
+    "sources": 11
+  },
+  "difficulty": "基础",
+  "label_policy": {
+    "generated_by": "deep_research",
+    "grade": "silver",
+    "human_review_status": "not_reviewed",
+    "raw_sources_retrievable_by_agent_after_verification": true,
+    "reference_retrievable_by_agent": false
+  },
+  "original_document": "D:/pythoncode/industry_information_assistant/industry_information_assistant/backend/eval/real_cases/case_02_美的集团_公开尽调案例包.md",
+  "original_sha256": "1bd71246f03f47457e8a264853e2e7127140d7c9e59661872716f95695470f33",
+  "primary_business_type": "factoring",
+  "research_cutoff": "2025-05-31",
+  "schema_version": "real-case-v1",
+  "subject": {
+    "A_share_code": "000333",
+    "H_share_code": "0300",
+    "actual_controller": "何享健",
+    "controlling_shareholder": "美的控股有限公司",
+    "english_name": "Midea Group Co., Ltd.",
+    "entity_boundary_note": "上市主体不等于全部美的集团成员企业。美的商业保理有限公司、重庆美的商业保理有限公司、美的集团财务有限公司等均应作为独立法律主体识别。",
+    "legal_name": "美的集团股份有限公司",
+    "legal_representative": "方洪波",
+    "registered_capital_rmb": 7655673083,
+    "unified_social_credit_code": "91440606722473344C"
+  }
+}

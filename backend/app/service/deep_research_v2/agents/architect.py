@@ -45,28 +45,28 @@ class ChiefArchitect(BaseAgent):
   "hypothesis_3": "关于该企业或有负债与关联风险的风险假设（需用证据验证）",
   "sec_1_title": "企业基本情况",
   "sec_1_desc": "工商登记、成立年限、经营范围、登记状态、参保人数",
-  "sec_1_query": "核查所需的检索词",
+  "sec_1_queries": ["工商登记检索词", "参保人数检索词", "经营范围检索词"],
   "sec_2_title": "股权结构与实际控制人",
   "sec_2_desc": "股东构成、持股比例、实际控制人认定、股权稳定性",
-  "sec_2_query": "核查所需的检索词",
+  "sec_2_queries": ["股东结构检索词", "实际控制人检索词", "股权质押检索词"],
   "sec_3_title": "经营状况",
   "sec_3_desc": "主营业务、客户结构、订单与中标情况、产能与人员变化",
-  "sec_3_query": "核查所需的检索词",
+  "sec_3_queries": ["分产品收入检索词", "客户与供应商集中度检索词", "产能检索词"],
   "sec_4_title": "财务分析",
   "sec_4_desc": "营收利润趋势、资产负债率、应收账款、经营性现金流",
-  "sec_4_query": "核查所需的检索词",
+  "sec_4_queries": ["三大报表检索词", "应收账款与账龄检索词", "经营活动现金流检索词"],
   "sec_5_title": "司法与合规风险",
   "sec_5_desc": "涉诉、被执行、失信、行政处罚记录及其影响",
-  "sec_5_query": "核查所需的检索词",
+  "sec_5_queries": ["涉诉与被执行检索词", "行政处罚检索词", "重大诉讼仲裁检索词"],
   "sec_6_title": "关联关系与对外担保",
   "sec_6_desc": "关联方、对外投资、对外担保、担保圈风险",
-  "sec_6_query": "核查所需的检索词",
+  "sec_6_queries": ["关联交易检索词", "对外担保检索词", "对外投资检索词"],
   "sec_7_title": "舆情扫描",
   "sec_7_desc": "负面报道、监管处罚、行业风险传导",
-  "sec_7_query": "核查所需的检索词",
+  "sec_7_queries": ["负面报道检索词", "监管问询检索词", "行业风险检索词"],
   "sec_8_title": "风险汇总与授信建议",
   "sec_8_desc": "各维度风险归纳、风险等级判断、授信意见与增信建议",
-  "sec_8_query": "核查所需的检索词",
+  "sec_8_queries": ["综合风险检索词"],
   "questions": "核心尽调问题1;核心尽调问题2;核心尽调问题3"
 }}
 
@@ -80,7 +80,16 @@ class ChiefArchitect(BaseAgent):
 2. 检索词应针对"需要核实什么"，而非"想了解什么"
 3. **不得在提纲阶段预设结论**——提纲只定义要查什么，不定义查到什么
 
-请填写具体内容，每个字段都是字符串类型。"""
+## 检索词的形式要求（决定这一章能看到多少材料）
+
+`sec_N_queries` 必须是**字符串数组**，每章 3–5 条（第 8 章可以只有 1 条）。
+
+- **一条查询只查一件事。** 检索是向量匹配，把七八个关键词塞进一条会稀释
+  embedding，反而谁都查不准
+- 每条都要能独立成立：主体 + 要核实的那一件事，例如
+  `宁德时代 前十名股东 2024年报`、`宁德时代 经营活动现金流量净额 2024`
+- **不要**把多件事用分号、逗号或空格连写成一条
+- 少写不如写够：这一章拿到几条查询，直接决定它能检索到多少材料"""
 
     REVISION_PROMPT = """你是总架构师，需要根据研究进展动态调整大纲。
 
@@ -124,13 +133,48 @@ class ChiefArchitect(BaseAgent):
             model=model
         )
 
+    @staticmethod
+    def _section_queries(flat_result: Dict, index: int) -> List[str]:
+        """取一章的原子检索词列表（BC-62）。
+
+        ## 为什么这里必须是列表
+
+        原实现是 `search_queries: [flat_result.get(f"sec_{i}_query")]`——
+        **永远只有一个元素**，而 Scout 侧的 `expand_local_search_queries` 又按
+        `；` 把它拆开。于是"这一章发几次检索"由**模型的标点习惯**隐式决定，
+        而提示词从未要求过分号：
+
+            deepseek-v3.2   用分号连写 → 拆出 25 条查询 → 178 个片段
+            deepseek-v4-flash 写成一个长串 → 8 条查询 → 80 个片段
+
+        两者都完全符合当时的提示词。一个 `str` 在承载 `list[str]`，
+        转换隐式且无人校验——与 BC-55 同族（类型没有表达真实需求）。
+
+        现在契约直接要求数组。分号拆分保留为兜底：旧检查点、以及仍然把多个
+        主题连写成一条的模型都要能工作，但**兜底会被记录**（见
+        `Scout._plan_section_queries`），否则下次换模型又会静默退回一条。
+        """
+        raw = flat_result.get(f"sec_{index}_queries")
+        queries: List[str] = []
+        if isinstance(raw, list):
+            queries = [str(item).strip() for item in raw if str(item or "").strip()]
+        elif isinstance(raw, str) and raw.strip():
+            # 模型把数组写成了字符串：交给下游确定性拆分，不在这里猜。
+            queries = [raw.strip()]
+        if not queries:
+            legacy = flat_result.get(f"sec_{index}_query")
+            if str(legacy or "").strip():
+                queries = [str(legacy).strip()]
+        if not queries:
+            queries = [str(flat_result.get(f"sec_{index}_title") or "").strip()]
+        return [query for query in queries if query]
+
     def _convert_flat_to_outline(self, flat_result: Dict) -> Dict:
         """将扁平JSON格式转换为标准outline格式"""
         outline = []
         for i in range(1, 10):  # 最多支持9个章节
             title_key = f"sec_{i}_title"
             desc_key = f"sec_{i}_desc"
-            query_key = f"sec_{i}_query"
 
             if title_key not in flat_result:
                 break
@@ -144,7 +188,7 @@ class ChiefArchitect(BaseAgent):
                 "section_type": "quantitative" if i in data_sections else "qualitative",
                 "requires_data": i in data_sections,
                 "requires_chart": i in data_sections,
-                "search_queries": [flat_result.get(query_key, flat_result.get(title_key, ""))]
+                "search_queries": self._section_queries(flat_result, i),
             }
             outline.append(section)
 
@@ -259,12 +303,13 @@ class ChiefArchitect(BaseAgent):
 
 输出JSON格式：
 {{"outline": [
-    {{"id": "sec_1", "title": "章节标题", "description": "描述", "section_type": "mixed", "requires_data": true, "requires_chart": false, "search_queries": ["核查检索词"]}},
+    {{"id": "sec_1", "title": "章节标题", "description": "描述", "section_type": "mixed", "requires_data": true, "requires_chart": false, "search_queries": ["检索词1", "检索词2", "检索词3"]}},
     ...共8个章节...
 ], "research_questions": ["尽调问题1", "尽调问题2", "尽调问题3"], "key_entities": []}}
 
 要求：outline 必须是固定的 8 个章节，依次为：企业基本情况、股权结构与实际控制人、
-经营状况、财务分析、司法与合规风险、关联关系与对外担保、舆情扫描、风险汇总与授信建议。"""
+经营状况、财务分析、司法与合规风险、关联关系与对外担保、舆情扫描、风险汇总与授信建议。
+`search_queries` 每章 3–5 条，**一条只查一件事**，不要把多个主题连写成一条。"""
 
         if not result:
             state["errors"].append("Failed to generate research plan after retries")

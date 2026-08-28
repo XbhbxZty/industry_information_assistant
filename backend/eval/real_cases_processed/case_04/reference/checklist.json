@@ -1,0 +1,464 @@
+[
+  {
+    "check_id": "CHK001",
+    "conclusion": "已确认上市主体与工商主体一致",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S01",
+      "S06"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S01",
+      "S06"
+    ],
+    "hard_gate": false,
+    "item": "主体名称/信用代码/上市代码一致性",
+    "manual_review": false,
+    "missing_evidence": "无关键缺失",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK002",
+    "conclusion": "已核验",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S06"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S06"
+    ],
+    "hard_gate": false,
+    "item": "成立日期、注册资本、法定代表人、地址",
+    "manual_review": false,
+    "missing_evidence": "工商“登记状态”字段未直接取得",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK003",
+    "conclusion": "已访问材料不足以完成历史曾用名链",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S01",
+      "S06"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S01",
+      "S06"
+    ],
+    "hard_gate": false,
+    "item": "曾用名",
+    "manual_review": true,
+    "missing_evidence": "国家企业信用公示历史变更记录",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK004",
+    "conclusion": "均为许树根",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S01"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S01"
+    ],
+    "hard_gate": false,
+    "item": "控股股东/实际控制人",
+    "manual_review": false,
+    "missing_evidence": "-",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK005",
+    "conclusion": "收入持续增长；2024归母净利润同比下降12.76%",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S01"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S01"
+    ],
+    "hard_gate": false,
+    "item": "2022-2024收入及盈利趋势",
+    "manual_review": false,
+    "missing_evidence": "-",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK006",
+    "conclusion": "无保留意见；未识别持续经营重大不确定性披露",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S01"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S01"
+    ],
+    "hard_gate": false,
+    "item": "2024审计意见",
+    "manual_review": false,
+    "missing_evidence": "-",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK007",
+    "conclusion": "2024境外主营收入约占77.01%，同比+43.83%",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S01"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S01"
+    ],
+    "hard_gate": false,
+    "item": "境外销售风险",
+    "manual_review": true,
+    "missing_evidence": "具体国家、客户、结算币种、回款周期穿透资料",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK008",
+    "conclusion": "前五客户27.60%；未披露具体客户身份",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S01"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S01"
+    ],
+    "hard_gate": false,
+    "item": "客户集中度",
+    "manual_review": true,
+    "missing_evidence": "客户名单、单户销售/应收、关联核验",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK009",
+    "conclusion": "2024经销收入同比-31%，直销规模明显较大",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S01"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S01"
+    ],
+    "hard_gate": false,
+    "item": "经销渠道变化",
+    "manual_review": true,
+    "missing_evidence": "主要经销商名单、库存、回款、终端销售",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK010",
+    "conclusion": "净额23.09亿元；约92.89%账龄≤1年",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S01"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S01"
+    ],
+    "hard_gate": false,
+    "item": "2024应收账款及账龄",
+    "manual_review": true,
+    "missing_evidence": "债务人明细、期后回款、逾期迁徙",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK011",
+    "conclusion": "增至28.55亿元，较年末+23.63%",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S03"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S03"
+    ],
+    "hard_gate": false,
+    "item": "2025Q1应收账款",
+    "manual_review": true,
+    "missing_evidence": "2025-06-30截止日实时台账",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK012",
+    "conclusion": "2025Q1存货27.31亿元，较年末+16.61%",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S03"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S03"
+    ],
+    "hard_gate": false,
+    "item": "存货风险",
+    "manual_review": true,
+    "missing_evidence": "SKU、库龄、订单覆盖、滞销及跌价测试",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK013",
+    "conclusion": "Q1收入+30.72%、利润+41.83%，但经营现金流-4.72亿元",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S03"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S03"
+    ],
+    "hard_gate": false,
+    "item": "利润与现金流背离",
+    "manual_review": true,
+    "missing_evidence": "Q2回款及采购付款台账",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK014",
+    "conclusion": "仅确认申请额度上限100亿元，无法确认实际使用额度",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S04",
+      "S10"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S04",
+      "S10"
+    ],
+    "hard_gate": false,
+    "item": "公开银行授信负担",
+    "manual_review": true,
+    "missing_evidence": "银行授信清单、提款余额、担保/抵质押条件",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK015",
+    "conclusion": "授权上限3.2亿元已确认，但会议材料形成时具体客户及协议尚未确定",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S04",
+      "S10"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S04",
+      "S10"
+    ],
+    "hard_gate": false,
+    "item": "客户购机融资担保",
+    "manual_review": true,
+    "missing_evidence": "实际客户、合同、提款、余额、逾期、回购/残值责任",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK016",
+    "conclusion": "授权上限22.6亿元；6月17日公开实际外部担保余额6.554亿元（不含新签3亿元最高额合同）",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S04",
+      "S05"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S04",
+      "S05"
+    ],
+    "hard_gate": false,
+    "item": "并表子公司担保",
+    "manual_review": true,
+    "missing_evidence": "截止6/30全部提款明细",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK017",
+    "conclusion": "中东、巴西部分子公司最近一期资产负债率>100%",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S04"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S04"
+    ],
+    "hard_gate": false,
+    "item": "高杠杆境外子公司",
+    "manual_review": true,
+    "missing_evidence": "各子公司债务期限和资金回流情况",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK018",
+    "conclusion": "专项报告定性为与全资子公司的“非经营性往来”",
+    "conflict": "无实质冲突",
+    "direct_source_ids": [
+      "S01",
+      "S02"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S01",
+      "S02"
+    ],
+    "hard_gate": false,
+    "item": "上海鼎策2.50亿元往来",
+    "manual_review": true,
+    "missing_evidence": "借款协议、用途、定价、授权、期后回款",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK019",
+    "conclusion": "**现有专项表不支持将上述2.50亿元认定为控股股东或实控人占款**",
+    "conflict": "易发生概念误判",
+    "direct_source_ids": [
+      "S02"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S02"
+    ],
+    "hard_gate": false,
+    "item": "控股股东/实控人资金占用",
+    "manual_review": true,
+    "missing_evidence": "监管口径专项核验记录",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK020",
+    "conclusion": "2024H1存在16.17亿元质押/有追索权保理余额",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S07"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S07"
+    ],
+    "hard_gate": false,
+    "item": "上海鼎策应收融资租赁款质押/保理",
+    "manual_review": true,
+    "missing_evidence": "截止日最新余额、登记信息",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK021",
+    "conclusion": "未取得足够公开证据",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S01",
+      "S07"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S01",
+      "S07"
+    ],
+    "hard_gate": false,
+    "item": "上市公司制造业贸易应收款保理/质押",
+    "manual_review": true,
+    "missing_evidence": "动产融资统一登记、公示登记、保理合同、银行确认",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK022",
+    "conclusion": "无法仅凭公开财报排除",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S01",
+      "S07"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S01",
+      "S07"
+    ],
+    "hard_gate": false,
+    "item": "重复融资风险",
+    "manual_review": true,
+    "missing_evidence": "应收账款逐笔确权及全部质押/转让登记",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK023",
+    "conclusion": "定期报告可提供有限披露，但未完成可复现的全国法院全量官方查询链",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S01"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S01"
+    ],
+    "hard_gate": false,
+    "item": "重大诉讼/执行/失信",
+    "manual_review": true,
+    "missing_evidence": "法院执行、失信、限制消费官方逐项查询结果",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK024",
+    "conclusion": "本次材料不足以形成“无处罚/无异常”结论",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S06"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S06"
+    ],
+    "hard_gate": false,
+    "item": "行政处罚/经营异常",
+    "manual_review": true,
+    "missing_evidence": "国家企业信用、信用中国等官方逐项结果",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK025",
+    "conclusion": "无法公开验证合同、发票、物流、确权和银行回款",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": false,
+    "item": "私域交易真实性",
+    "manual_review": true,
+    "missing_evidence": "全套交易底稿",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  }
+]

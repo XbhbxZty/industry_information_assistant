@@ -15,6 +15,8 @@ from core.database import get_db
 from models.knowledge import KnowledgeBase, Document
 from models.user import User
 from router.auth_router import get_current_user_required
+from service.kb_scope import collection_name_for
+from service.milvus_service import get_milvus_service
 from schemas.knowledge import (
     KnowledgeBaseCreate,
     KnowledgeBaseUpdate,
@@ -74,9 +76,15 @@ def doc_to_response(doc: Document) -> DocumentResponse:
     )
 
 
-async def process_document(document_id: str, file_path: str, kb_name: str, db_session_factory):
-    """后台处理文档（使用 DocMind 解析、向量化、存储到ES）"""
+async def process_document(document_id: str, file_path: str, kb_id: str, db_session_factory):
+    """
+    后台处理文档（DocMind 解析 → 向量化 → 写入 Milvus）
+
+    ⚠️ 第三个参数是**知识库 UUID**，不是知识库名。集合名按名字构造是
+    BC-53 的成因：`kb.name` 只在单个用户内唯一、可被改名、删除后可复用。
+    """
     from service.docmind_service import process_document_with_docmind
+    from service.kb_scope import collection_name_for
 
     # 创建新的数据库会话
     db = db_session_factory()
@@ -91,14 +99,16 @@ async def process_document(document_id: str, file_path: str, kb_name: str, db_se
         db.commit()
 
         try:
-            # 使用知识库名称作为ES索引名
-            index_name = f"kb_{kb_name}".lower().replace(" ", "_")
+            # 集合名由知识库 UUID 生成，规则唯一定义在 kb_scope
+            index_name = collection_name_for(kb_id)
 
             # 使用 DocMind 处理文档
             result = process_document_with_docmind(
                 file_path=file_path,
                 file_name=doc.filename,
                 index_name=index_name,
+                kb_id=str(kb_id),
+                document_id=str(document_id),
             )
 
             if result["success"]:
@@ -283,6 +293,19 @@ async def delete_knowledge_base(
             detail="知识库不存在"
         )
 
+    # 先删向量再删记录：反过来的话，删库成功而删集合失败会留下一个
+    # 谁都不知道其存在的孤儿集合——没有 kb 记录就再也定位不到它。
+    #
+    # 此前这里**完全不碰 Milvus**。在旧的按名命名方案下，这不只是
+    # 存储泄漏：删掉「财报」再建一个「财报」，旧向量会原样复活到新知识库里。
+    # 改用 UUID 后复活问题自动消失（UUID 不复用），但孤儿存储仍需清理。
+    collection_name = collection_name_for(kb.id)
+    try:
+        get_milvus_service().delete_collection(collection_name)
+    except Exception as e:
+        # 向量删不掉不应阻止用户删知识库，但必须留下可追查的记录
+        print(f"[delete_knowledge_base] 集合 {collection_name} 清理失败: {e}")
+
     db.delete(kb)
     db.commit()
     return None
@@ -365,7 +388,7 @@ async def upload_document(
         process_document,
         str(doc.id),
         file_path,
-        kb.name,
+        str(kb.id),      # 知识库 UUID，不是名字（BC-53）
         SessionLocal
     )
 
@@ -419,8 +442,6 @@ async def get_document_chunks(
     db: Session = Depends(get_db),
 ):
     """获取文档的所有切片"""
-    from service.milvus_service import get_milvus_service
-
     try:
         kb_uuid = UUID(kb_id)
         doc_uuid = UUID(doc_id)
@@ -461,7 +482,7 @@ async def get_document_chunks(
         )
 
     # 从 Milvus 获取切片
-    collection_name = f"kb_{kb.name}".lower().replace(" ", "_")
+    collection_name = collection_name_for(kb.id)
     print(f"[get_document_chunks] 查询切片: collection={collection_name}, filename={doc.filename}")
 
     try:
@@ -527,6 +548,19 @@ async def delete_document(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="文档不存在"
         )
+
+    # 删除向量切片。此前从不清理，被删文档的内容会**永远留在检索结果里**——
+    # 用户以为删掉了，报告里还能引用到它。
+    #
+    # 现在按 doc_id 精确删除是安全的：doc_id 已改为文档 UUID。
+    # 在旧方案下（doc_id = md5(文件名)）这一步反而危险——
+    # 会连带删掉同一集合里所有同名文件的切片。
+    try:
+        get_milvus_service().delete_by_doc_id(
+            collection_name_for(kb.id), str(doc.id)
+        )
+    except Exception as e:
+        print(f"[delete_document] 切片清理失败 doc_id={doc.id}: {e}")
 
     # 删除文件（如果存在）
     if doc.file_path and os.path.exists(doc.file_path):

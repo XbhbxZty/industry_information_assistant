@@ -38,12 +38,21 @@ if verdict == "pass":
 
 ## 一条关键取舍：尽调核心问题类型不接受 severity 降级
 
-对 `unverified_as_fact` / `conflict_silently_resolved` /
-`unsupported_risk_conclusion` 这三类，**只要模型说存在，无论它标什么严重度，
+对 `DD_BLOCKING_ISSUE_TYPES` 里的类型，**只要模型说存在，无论它标什么严重度，
 都不得自动通过**。
 
-理由：整套反幻觉架构就是为了抓这三类。允许模型用 `minor` 决定它们是否阻断，
+理由：整套反幻觉架构就是为了抓这几类。允许模型用 `minor` 决定它们是否阻断，
 等于把最后的裁决权又交回给刚刚被证明会放水的那一方——BC-29 本体。
+
+P0-2 新增的两类同样不接受降级，理由各自独立：
+
+- `subject_attribution_error`：把集团、子公司或关联方的负面算到借款主体
+  头上（或反过来，把借款主体的义务推给关联方），会直接把风险画像算错。
+  模型很容易把它看成"表述可以更精确"而标 minor——但这不是措辞问题，
+  是**主体识别错误**，结论指向的根本不是同一个法人。
+- `post_cutoff_evidence`：用了研究截止日之后才存在的信息。对回溯评测而言
+  这是信息泄漏，整份评测就此失效；对真实授信而言，它意味着报告在描述
+  一个当时不可能知道的世界。两种情形下"轻微"都不成立。
 
 代价是更多报告被拦下转人工。但 v0.6 的复核卡点已经建好，
 拦下的成本是一次人工确认；放过的成本是一笔无人复核的授信。
@@ -65,6 +74,9 @@ DD_BLOCKING_ISSUE_TYPES = frozenset({
     "conflict_silently_resolved",   # 多源冲突被单方面采信
     "unsupported_risk_conclusion",  # 风险结论无证据支撑
     "review_not_executed",          # 审核链路本身没跑（降级路径）
+    # —— P0-2 新增两类 ——
+    "subject_attribution_error",    # 风险/义务归错法人主体
+    "post_cutoff_evidence",         # 使用了晚于研究截止日的信息
 })
 
 MIN_PASS_SCORE = 7.0

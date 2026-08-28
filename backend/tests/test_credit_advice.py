@@ -85,17 +85,32 @@ _HEALTHY = {
 def test_未核实的财务字段不得参与额度测算():
     """
     ⭐ 用未经核实的数字决定放多少钱，是整套核实架构在授信环节的失守。
+
+    ## 这条用例自己曾经是缺陷的一部分（BC-72）
+
+    它原先断言 `methods == {"营收法", "净资产法", "现金流法"}`——
+    要求净资产法**必须**在测算口径里。而净资产恰恰是从未核实过的：
+    `total_assets` / `total_liabilities` 不在核心二十项，也不在场景扩展里。
+
+    **标题说的是一回事，断言钉的是相反的另一回事**，而它一直是绿的——
+    因为被测代码和这条用例共享同一个错误假设（本文档记的「闭环自证系统」）。
+
+    现在净资产法恒不可测算，断言随之改为：它不得出现在 `basis` 里，
+    而应带着原因出现在 `unavailable_bases` 里。
     """
     full = recommend_credit(_HEALTHY, _checks(), _assessment())
     assert full["recommendable"]
     methods = {b["method"] for b in full["basis"]}
-    assert methods == {"营收法", "净资产法", "现金流法"}
+    assert methods == {"营收法", "现金流法"}
+    assert [u["method"] for u in full["unavailable_bases"]] == ["净资产法"], \
+        "净资产法不可测算，但必须写明原因而不是静默消失"
 
     partial = recommend_credit(
         _HEALTHY, _checks({"revenue": "unverified", "cash_flow": "unverified"}),
         _assessment())
-    assert {b["method"] for b in partial["basis"]} == {"净资产法"}, \
-        "未核实的营收与现金流不得出现在测算口径里"
+    assert partial["basis"] == [], \
+        "营收与现金流均未核实时，没有任何口径可用——净资产法本来也不该算数"
+    assert not partial["recommendable"]
 
 
 def test_财务数据全部未核实时不出具而非给零():

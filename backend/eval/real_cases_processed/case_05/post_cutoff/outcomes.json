@@ -1,0 +1,29 @@
+[
+  {
+    "as_of_eligible": false,
+    "date": "2026-03-31",
+    "event": "2025年度财务报告仍被出具带与持续经营相关重大不确定性段落的无保留意见",
+    "source_ids": [
+      "SRC-14"
+    ],
+    "used_in_reference_assessment": false
+  },
+  {
+    "as_of_eligible": false,
+    "date": "2026-03-31",
+    "event": "2025年度扣非归母净利润约-44.14106亿元",
+    "source_ids": [
+      "SRC-14"
+    ],
+    "used_in_reference_assessment": false
+  },
+  {
+    "as_of_eligible": false,
+    "date": "2026-03-31",
+    "event": "公司股票继续实施其他风险警示",
+    "source_ids": [
+      "SRC-15"
+    ],
+    "used_in_reference_assessment": false
+  }
+]

@@ -41,15 +41,35 @@ class AgentModelConfig:
 
 @dataclass
 class AgentsConfig:
-    """所有 Agent 的配置"""
+    """所有 Agent 的配置
+
+    ## 2026-08-17：deepseek-v3.2 全部退役为 deepseek-v4-flash
+
+    v3.2 已是旧模型，不再作为任何节点的默认。**Scout 仍保持 qwen-plus**——
+    它是唯一的高频节点（每章一次调用、每次喂十几个片段），推理模型的思考链
+    会把这里的时延与 token 成倍放大，而 BC-56 的教训正是"把最贵模型铺满整条
+    链路不是模型路由，而是放弃路由"。
+
+    ⚠️ 换模型改变了成本与时延画像，**但还没有对应的质量实测**。
+    BC-56 的结论是"强模型只有在某个节点、某个指标上产生可测增益才值得使用"，
+    这次退役依据是"v3.2 已过时"这一维护理由，不是实测增益。
+    消融装置（`eval/retrieval_fixture.py`）已就绪，跑完才能说清各节点该用什么。
+
+    参考基线：2026-08-17 的 case_01 封闭运行得分 72.07，
+    当时矩阵为 architect/data_analyst/wizard/writer=deepseek-v3.2、
+    scout=qwen-plus、critic=deepseek-v4-flash。**换矩阵后与该分数不可直接比较。**
+    """
     # 规划师 - 分析问题，生成研究大纲
     architect: AgentModelConfig = field(default_factory=lambda: AgentModelConfig(
-        model="deepseek-v3.2",
+        model="deepseek-v4-flash",
         temperature=0.7,
         max_tokens=4000
     ))
 
     # 侦察员 - 深度搜索（使用较快的模型）
+    #
+    # 刻意**不**跟随上面那次退役：这是唯一的高频节点，也是 BC-56 里
+    # 553 秒尾延迟的发生地。要动它必须先有节点级消融数据。
     scout: AgentModelConfig = field(default_factory=lambda: AgentModelConfig(
         model="qwen-plus",  # 搜索阶段用快速模型
         temperature=0.5,
@@ -58,14 +78,14 @@ class AgentsConfig:
 
     # 数据分析师 - 数据提取和分析
     data_analyst: AgentModelConfig = field(default_factory=lambda: AgentModelConfig(
-        model="deepseek-v3.2",
+        model="deepseek-v4-flash",
         temperature=0.3,
         max_tokens=8000
     ))
 
     # 代码极客 - 代码生成和图表绘制
     wizard: AgentModelConfig = field(default_factory=lambda: AgentModelConfig(
-        model="deepseek-v3.2",
+        model="deepseek-v4-flash",
         temperature=0.3,
         max_tokens=8000
     ))
@@ -75,12 +95,16 @@ class AgentsConfig:
     # 用推理模型（带思考链）而非通用模型，依据是实测对比：
     # 同链路、同温度、同提示词，唯一变量是模型 —— 28 例 × 3 次
     #
+    # ⚠️ 下表是**历史实测记录**，记录的是当时两个候选模型的表现，
+    #    不随默认配置变更而改写——改了就是伪造实验数据。
+    #
     #                    检出稳定   无误报稳定   不稳定   逐次口径
     #   deepseek-v3.2     10/10       9/18        8      72.2%
     #   deepseek-v4-flash 10/10      17/18        1      98.1%
     #
-    # 代价：约 1.6 倍耗时、4 倍 token。Critic 每次研究只跑 1-2 次，可接受；
-    # 但不宜推广到 Scout 这类高频 Agent（见 v0.7 模型路由）。
+    # 代价：约 1.6 倍耗时、4 倍 token（相对当时的对照模型 v3.2）。
+    # Critic 每次研究只跑 1-2 次，可接受；但不宜推广到 Scout 这类高频 Agent
+    # （见 v0.7 模型路由）。
     #
     # ⚠️ 审核环节的错误会成倍放大——误判触发无谓返工，还会把正确内容改错。
     # 审核者的可靠性优先级高于生成者，这里值得多花成本。
@@ -91,8 +115,11 @@ class AgentsConfig:
     ))
 
     # 首席写手 - 报告撰写
+    #
+    # 输出上限 16000，是全链路最大的单次生成。推理模型的思考链会额外占额度，
+    # 首次真实运行需要确认报告没有因此被截断。
     writer: AgentModelConfig = field(default_factory=lambda: AgentModelConfig(
-        model="deepseek-v3.2",
+        model="deepseek-v4-flash",
         temperature=0.7,
         max_tokens=16000
     ))
@@ -135,7 +162,7 @@ class LLMConfig:
     search_api_key: str = field(default_factory=lambda: os.getenv("BOCHA_API_KEY", ""))
 
     # 默认模型（用于未单独配置的场景）
-    default_model: str = "deepseek-v3.2"
+    default_model: str = "deepseek-v4-flash"
 
     # Agent 配置
     agents: AgentsConfig = field(default_factory=AgentsConfig)

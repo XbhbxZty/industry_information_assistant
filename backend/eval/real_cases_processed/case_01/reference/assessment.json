@@ -1,0 +1,143 @@
+{
+  "confidence": {
+    "overall_reference_assessment": "中高"
+  },
+  "corporate_adverse_hard_gate_found": false,
+  "credit_amount": null,
+  "eval_only": true,
+  "generated_reference": true,
+  "hard_gate_triggers": [
+    {
+      "gate": "debtor_identity",
+      "triggered": true,
+      "type": "information_gate"
+    },
+    {
+      "gate": "trade_authenticity_and_confirmation",
+      "triggered": true,
+      "type": "information_gate"
+    },
+    {
+      "gate": "receivable_ownership_and_transferability",
+      "triggered": true,
+      "type": "information_gate"
+    },
+    {
+      "gate": "duplicate_financing_registration",
+      "triggered": true,
+      "type": "information_gate"
+    }
+  ],
+  "human_review_status": "not_reviewed",
+  "key_risk_factors": [
+    "前五大客户收入占37.03%",
+    "存货在2024年及2025Q1持续增长",
+    "较高资本开支和在建工程规模",
+    "集团担保余额较大",
+    "海外收入占30.48%",
+    "锂、镍、钴等关键原材料价格及供应链暴露",
+    "存在日常关联交易",
+    "存在未达到重大披露标准的其他诉讼",
+    "单笔保理交易资料和债权权属尚未验证"
+  ],
+  "label_grade": "silver",
+  "missing_critical_evidence": [
+    "具体债务人法人身份",
+    "采购合同和订单",
+    "发票真实性",
+    "物流和验收",
+    "对账和应收确权",
+    "历史回款",
+    "转让限制和抵销条款",
+    "应收账款质押或转让登记",
+    "重复融资查询",
+    "有效法院执行查询",
+    "实时工商登记",
+    "银行流水、税务和企业征信"
+  ],
+  "mitigating_factors": [
+    "2024年度标准无保留审计意见",
+    "2024年度内控评价未发现重大缺陷",
+    "2024归母净利润增长",
+    "2024经营现金流继续增长且高于归母净利润",
+    "2024资产负债率较2023下降",
+    "2025Q1收入、利润、经营现金流同比增长",
+    "2025Q1应收账款较2024年末下降",
+    "供应商集中度总体不高",
+    "存在商品及外汇套期保值风险管理措施"
+  ],
+  "normalized": {
+    "adverse_risk_gates": [],
+    "assessment_confidence": {
+      "calibrated_probability": false,
+      "ordinal_score": {
+        "overall_reference_assessment": 0.8
+      },
+      "raw": {
+        "overall_reference_assessment": "中高"
+      }
+    },
+    "corporate_risk_level": null,
+    "decision_status": "manual_review",
+    "information_gates": [
+      {
+        "gate": "debtor_identity",
+        "triggered": true,
+        "type": "information_gate"
+      },
+      {
+        "gate": "trade_authenticity_and_confirmation",
+        "triggered": true,
+        "type": "information_gate"
+      },
+      {
+        "gate": "receivable_ownership_and_transferability",
+        "triggered": true,
+        "type": "information_gate"
+      },
+      {
+        "gate": "duplicate_financing_registration",
+        "triggered": true,
+        "type": "information_gate"
+      }
+    ],
+    "risk_level_raw": "中",
+    "risk_scope": "截至2025-05-31公开资料下的核心企业及拟开展供应链金融交易综合参考风险",
+    "transaction_readiness": "insufficient_evidence",
+    "transaction_risk_level": null
+  },
+  "reasoning_claim_ids": [
+    "C001",
+    "C002",
+    "C006",
+    "C007",
+    "C013",
+    "C015",
+    "C018",
+    "C021",
+    "C024",
+    "C027",
+    "C028",
+    "C030",
+    "C035",
+    "C037",
+    "C039",
+    "C041",
+    "C043",
+    "C044",
+    "C045",
+    "C046",
+    "C048",
+    "C049",
+    "C051",
+    "C052",
+    "C053",
+    "C054",
+    "C055",
+    "C056",
+    "C057"
+  ],
+  "recommended_action": "人工复核",
+  "risk_level": "中",
+  "risk_scope": "截至2025-05-31公开资料下的核心企业及拟开展供应链金融交易综合参考风险"
+}

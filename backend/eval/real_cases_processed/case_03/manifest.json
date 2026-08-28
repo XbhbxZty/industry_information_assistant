@@ -1,0 +1,49 @@
+{
+  "business_scenario": [
+    "汽车玻璃供应链中的原材料企业融资",
+    "以主机厂或福耀体系应收款为基础的保理",
+    "出口型制造企业小微信贷对标案例"
+  ],
+  "business_types": [
+    "factoring",
+    "supply_chain_finance",
+    "micro_loan"
+  ],
+  "case_id": "case_03",
+  "counts": {
+    "checklist_items": 36,
+    "post_cutoff_claims": 0,
+    "reference_claims": 51,
+    "sources": 12
+  },
+  "difficulty": "基础",
+  "label_policy": {
+    "generated_by": "deep_research",
+    "grade": "silver",
+    "human_review_status": "not_reviewed",
+    "raw_sources_retrievable_by_agent_after_verification": true,
+    "reference_retrievable_by_agent": false
+  },
+  "original_document": "D:/pythoncode/industry_information_assistant/industry_information_assistant/backend/eval/real_cases/case_03_福耀玻璃_尽职调查案例包.md",
+  "original_sha256": "e7d8ba2ac89ff2a88571f2176100d6f711fac9ff636fa387c5564d4ab94f5112",
+  "primary_business_type": "factoring",
+  "research_cutoff": "2025-05-31",
+  "schema_version": "real-case-v1",
+  "subject": {
+    "A_share_code": "600660",
+    "H_share_code": "3606",
+    "exact_establishment_date": null,
+    "legal_entity_incorporation": "1992年6月",
+    "legal_representative_as_of_cutoff": "曹德旺",
+    "major_shareholder": {
+      "name": "三益发展有限公司",
+      "note": "财务报表附注称母公司；不自动等同于已核验控股股东",
+      "shareholding_pct": 14.97
+    },
+    "name": "福耀玻璃工业集团股份有限公司",
+    "registered_capital_rmb": 2609743532,
+    "registration_status": null,
+    "ultimate_controller": "曹德旺",
+    "unified_social_credit_code": "91350100611300758B"
+  }
+}

@@ -1,0 +1,637 @@
+[
+  {
+    "check_id": "CHK001",
+    "conclusion": "政府记录可相互匹配",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM001"
+    ],
+    "evidence_ids": [
+      "CLM001"
+    ],
+    "hard_gate": false,
+    "item": "主体名称+信用代码匹配",
+    "manual_review": false,
+    "missing_evidence": "无重大缺口",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK002",
+    "conclusion": "600660/3606",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM002"
+    ],
+    "evidence_ids": [
+      "CLM002"
+    ],
+    "hard_gate": false,
+    "item": "A/H股代码",
+    "manual_review": false,
+    "missing_evidence": "无",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK003",
+    "conclusion": "已核到1992年6月，精确日未核到",
+    "conflict": "“企业历史起点”与“法律主体设立”口径易混",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM004"
+    ],
+    "evidence_ids": [
+      "CLM004"
+    ],
+    "hard_gate": false,
+    "item": "法律主体成立日期",
+    "manual_review": true,
+    "missing_evidence": "工商登记原始档案",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK004",
+    "conclusion": "不能用章程“永久存续”替代工商登记状态",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM050"
+    ],
+    "evidence_ids": [
+      "CLM050"
+    ],
+    "hard_gate": false,
+    "item": "当前登记状态",
+    "manual_review": true,
+    "missing_evidence": "GSXT主体详情",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK005",
+    "conclusion": "尚未形成完整名称沿革链",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM051"
+    ],
+    "evidence_ids": [
+      "CLM051"
+    ],
+    "hard_gate": false,
+    "item": "曾用名",
+    "manual_review": true,
+    "missing_evidence": "工商历史变更记录",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK006",
+    "conclusion": "三益发展14.97%；最终控制方曹德旺",
+    "conflict": "“母公司”≠必然“控股股东”",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM008"
+    ],
+    "evidence_ids": [
+      "CLM008"
+    ],
+    "hard_gate": false,
+    "item": "股东/实控人",
+    "manual_review": false,
+    "missing_evidence": "无重大缺口",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK007",
+    "conclusion": "收入、利润持续增长",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM011"
+    ],
+    "evidence_ids": [
+      "CLM011"
+    ],
+    "hard_gate": false,
+    "item": "2022-2024收入及利润趋势",
+    "manual_review": false,
+    "missing_evidence": "无",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK008",
+    "conclusion": "2022-2024同步增长，未见高层面利润/现金流明显背离",
+    "conflict": "无",
+    "direct_source_ids": [
+      "SRC01"
+    ],
+    "evidence_claim_ids": [
+      "CLM015"
+    ],
+    "evidence_ids": [
+      "CLM015",
+      "SRC01"
+    ],
+    "hard_gate": false,
+    "item": "经营现金流",
+    "manual_review": false,
+    "missing_evidence": "月度/客户级现金流",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK009",
+    "conclusion": "2024标准无保留意见，未出现持续经营重大不确定性审计强调",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM018"
+    ],
+    "evidence_ids": [
+      "CLM018"
+    ],
+    "hard_gate": false,
+    "item": "审计意见/持续经营",
+    "manual_review": false,
+    "missing_evidence": "无",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK010",
+    "conclusion": "2024资产负债率43.58%，贷款、利息偿付率均100%",
+    "conflict": "无",
+    "direct_source_ids": [
+      "SRC01"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "SRC01"
+    ],
+    "hard_gate": false,
+    "item": "杠杆及公开偿债",
+    "manual_review": false,
+    "missing_evidence": "私域银行授信明细",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK011",
+    "conclusion": "2024末81.57亿元；2025Q1降至72.88亿元",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM019"
+    ],
+    "evidence_ids": [
+      "CLM019"
+    ],
+    "hard_gate": false,
+    "item": "应收账款规模",
+    "manual_review": true,
+    "missing_evidence": "客户级明细",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK012",
+    "conclusion": "2024末绝大部分在一年以内",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM020"
+    ],
+    "evidence_ids": [
+      "CLM020"
+    ],
+    "hard_gate": false,
+    "item": "应收账款账龄",
+    "manual_review": true,
+    "missing_evidence": "各债务人具体逾期表",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK013",
+    "conclusion": "通常30-120天",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM021"
+    ],
+    "evidence_ids": [
+      "CLM021"
+    ],
+    "hard_gate": false,
+    "item": "一般信用期",
+    "manual_review": true,
+    "missing_evidence": "具体合同可能不同",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK014",
+    "conclusion": "前五销售17.75%，最大客户4.47%",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM023"
+    ],
+    "evidence_ids": [
+      "CLM023"
+    ],
+    "hard_gate": false,
+    "item": "集团客户集中度",
+    "manual_review": true,
+    "missing_evidence": "客户实名",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK015",
+    "conclusion": "公开资料不能识别拟融资应收款债务人",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM048"
+    ],
+    "evidence_ids": [
+      "CLM048"
+    ],
+    "hard_gate": true,
+    "item": "具体保理债务人",
+    "manual_review": true,
+    "missing_evidence": "债务人全称、代码、合同主体",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK016",
+    "conclusion": "福耀上市主体信用不能替代主机厂/子公司债务人信用",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM048"
+    ],
+    "evidence_ids": [
+      "CLM048"
+    ],
+    "hard_gate": true,
+    "item": "债务人信用",
+    "manual_review": true,
+    "missing_evidence": "债务人独立尽调",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK017",
+    "conclusion": "公开资料不能验证",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM049"
+    ],
+    "evidence_ids": [
+      "CLM049"
+    ],
+    "hard_gate": true,
+    "item": "合同/发票/物流/验收",
+    "manual_review": true,
+    "missing_evidence": "原件及系统记录",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK018",
+    "conclusion": "无债务人针对拟融资资产的确权材料",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM049"
+    ],
+    "evidence_ids": [
+      "CLM049"
+    ],
+    "hard_gate": true,
+    "item": "应收账款确权",
+    "manual_review": true,
+    "missing_evidence": "确权函/对账单/债务人确认",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK019",
+    "conclusion": "无交易级条款",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM049"
+    ],
+    "evidence_ids": [
+      "CLM049"
+    ],
+    "hard_gate": true,
+    "item": "转让限制、抵销权、回购/返利",
+    "manual_review": true,
+    "missing_evidence": "基础合同及补充协议",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK020",
+    "conclusion": "年报中的“应收款项融资”是银行承兑汇票，不能替代该检查",
+    "conflict": "容易发生字段误判",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM034"
+    ],
+    "evidence_ids": [
+      "CLM034"
+    ],
+    "hard_gate": true,
+    "item": "应收账款质押/保理",
+    "manual_review": true,
+    "missing_evidence": "贸易应收登记明细",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK021",
+    "conclusion": "公开定期报告不足以排除",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM036"
+    ],
+    "evidence_ids": [
+      "CLM036"
+    ],
+    "hard_gate": true,
+    "item": "重复融资",
+    "manual_review": true,
+    "missing_evidence": "动产融资统一登记公示系统查询/登记证明",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK022",
+    "conclusion": "2024主营国外收入约占45.35%",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM025"
+    ],
+    "evidence_ids": [
+      "CLM025"
+    ],
+    "hard_gate": false,
+    "item": "海外业务暴露",
+    "manual_review": true,
+    "missing_evidence": "国家/客户级收入矩阵",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK023",
+    "conclusion": "2024产生约2428.49万元汇兑损失；与2023汇兑收益方向反转",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM027"
+    ],
+    "evidence_ids": [
+      "CLM027"
+    ],
+    "hard_gate": false,
+    "item": "汇率风险",
+    "manual_review": true,
+    "missing_evidence": "币种敞口、衍生品逐笔头寸",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK024",
+    "conclusion": "汽车玻璃原辅材料占该产品成本64%",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM028"
+    ],
+    "evidence_ids": [
+      "CLM028"
+    ],
+    "hard_gate": false,
+    "item": "原材料成本",
+    "manual_review": true,
+    "missing_evidence": "采购合同及锁价机制",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK025",
+    "conclusion": "浮法玻璃能源成本占该产品成本34.92%",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM029"
+    ],
+    "evidence_ids": [
+      "CLM029"
+    ],
+    "hard_gate": false,
+    "item": "能源成本",
+    "manual_review": true,
+    "missing_evidence": "能源价格合同",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK026",
+    "conclusion": "海外资产约237.79亿元，占37.59%",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM030"
+    ],
+    "evidence_ids": [
+      "CLM030"
+    ],
+    "hard_gate": false,
+    "item": "境外资产",
+    "manual_review": true,
+    "missing_evidence": "境外主体逐户资产负债",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK027",
+    "conclusion": "2024资本开支现金约54.81亿元，另有46.99亿元已签约资本承诺",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM031"
+    ],
+    "evidence_ids": [
+      "CLM031"
+    ],
+    "hard_gate": false,
+    "item": "资本开支",
+    "manual_review": true,
+    "missing_evidence": "后续项目执行明细",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK028",
+    "conclusion": "搜查发生于美国全资子公司；公告称其非调查目标",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM037"
+    ],
+    "evidence_ids": [
+      "CLM037"
+    ],
+    "hard_gate": false,
+    "item": "美国子公司事件",
+    "manual_review": true,
+    "missing_evidence": "美国政府最终处置/结案材料",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK029",
+    "conclusion": "仅可确认“2024年年报披露无重大诉讼仲裁”",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM039"
+    ],
+    "evidence_ids": [
+      "CLM039"
+    ],
+    "hard_gate": false,
+    "item": "重大诉讼",
+    "manual_review": true,
+    "missing_evidence": "法院全量直接检索",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK030",
+    "conclusion": "年报诚信声明不足以替代法院官方数据库逐项查询",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM040"
+    ],
+    "evidence_ids": [
+      "CLM040"
+    ],
+    "hard_gate": false,
+    "item": "执行/失信/限消全面核验",
+    "manual_review": true,
+    "missing_evidence": "中国执行信息公开网直接查询",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK031",
+    "conclusion": "年报批准报出日前无存续债券；2024超短融已兑付",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM041"
+    ],
+    "evidence_ids": [
+      "CLM041"
+    ],
+    "hard_gate": false,
+    "item": "公开债券违约",
+    "manual_review": false,
+    "missing_evidence": "非公开贷款仍不可见",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK032",
+    "conclusion": "短借升至56.12亿元，一年内到期非流动负债升至54.20亿元",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "CLM046"
+    ],
+    "evidence_ids": [
+      "CLM046"
+    ],
+    "hard_gate": false,
+    "item": "2025Q1短期债务变化",
+    "manual_review": true,
+    "missing_evidence": "债务到期月度表",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK033",
+    "conclusion": "公开资料无法获得",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": null,
+    "item": "银行流水",
+    "manual_review": true,
+    "missing_evidence": "银行流水",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK034",
+    "conclusion": "公开资料无法完整验证",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": null,
+    "item": "纳税数据",
+    "manual_review": true,
+    "missing_evidence": "纳税申报/完税证明",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK035",
+    "conclusion": "无授权私域征信",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": null,
+    "item": "企业征信",
+    "manual_review": true,
+    "missing_evidence": "企业信用报告",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK036",
+    "conclusion": "本案将福耀作为出口制造企业公开信用对标，不以福耀本身代替实际小微借款人",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": true,
+    "item": "“小微企业”直接授信适用性",
+    "manual_review": true,
+    "missing_evidence": "实际借款人资料",
+    "retrieval_attempt_ids": [],
+    "status": "not_applicable"
+  }
+]

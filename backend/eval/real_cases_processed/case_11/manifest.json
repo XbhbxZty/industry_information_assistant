@@ -1,0 +1,43 @@
+{
+  "business_scenario": "以2022年5月为时点重做历史授信，构造原始财务数据—更正数据—监管认定—审计意见版本树",
+  "business_types": [
+    "historical_credit_review"
+  ],
+  "case_id": "case_11",
+  "counts": {
+    "checklist_items": 22,
+    "post_cutoff_claims": 0,
+    "reference_claims": 74,
+    "sources": 13
+  },
+  "difficulty": "高难",
+  "label_policy": {
+    "generated_by": "deep_research",
+    "grade": "silver",
+    "human_review_status": "not_reviewed",
+    "raw_sources_retrievable_by_agent_after_verification": true,
+    "reference_retrievable_by_agent": false
+  },
+  "original_document": "D:/pythoncode/industry_information_assistant/industry_information_assistant/backend/eval/real_cases/case_11_康美药业尽职调查案例包.md",
+  "original_sha256": "9ca72a832c97d0245938439f09871b7e8abae0aa3a8070530ff3c151d9a9614f",
+  "primary_business_type": "historical_credit_review",
+  "research_cutoff": "2022-05-31",
+  "schema_version": "real-case-v1",
+  "subject": {
+    "actual_controller": null,
+    "actual_controller_disclosure": "2021年报披露无实际控制人",
+    "controlling_shareholder": "广东神农氏企业管理合伙企业（有限合伙）",
+    "legal_representative_as_of_cutoff": "赖志坚",
+    "name": "康美药业股份有限公司",
+    "stock_code": "600518",
+    "stock_exchange": "上海证券交易所",
+    "unified_social_credit_code": {
+      "confirmation_sources": [
+        "SRC002",
+        "SRC001"
+      ],
+      "status": "verified",
+      "value": "91445200231131526C"
+    }
+  }
+}

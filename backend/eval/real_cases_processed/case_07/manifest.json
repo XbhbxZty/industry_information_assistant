@@ -1,0 +1,54 @@
+{
+  "business_scenario": [
+    "建筑施工、装修、建材供应商对房地产开发商应收账款保理",
+    "核实项目公司债权是否存在对上市主体的可执行追索权",
+    "重整计划执行阶段新增融资准入"
+  ],
+  "business_types": [
+    "factoring"
+  ],
+  "case_id": "case_07",
+  "counts": {
+    "checklist_items": 28,
+    "post_cutoff_claims": 2,
+    "reference_claims": 40,
+    "sources": 15
+  },
+  "difficulty": "hard",
+  "label_policy": {
+    "generated_by": "deep_research",
+    "grade": "silver",
+    "human_review_status": "not_reviewed",
+    "raw_sources_retrievable_by_agent_after_verification": true,
+    "reference_retrievable_by_agent": false
+  },
+  "original_document": "D:/pythoncode/industry_information_assistant/industry_information_assistant/backend/eval/real_cases/case_07_金科地产集团股份有限公司_尽调案例包.md",
+  "original_sha256": "e88e9aac0ff269ab142052f6c4450e34416b6dbab0648030a6f25412ee99ae20",
+  "primary_business_type": "factoring",
+  "research_cutoff": "2025-05-31",
+  "schema_version": "real-case-v1",
+  "subject": {
+    "actual_controller_as_disclosed": "黄红云",
+    "critical_entity_separation": [
+      {
+        "name": "重庆金科房地产开发有限公司",
+        "separate_legal_entity": true,
+        "unified_social_credit_code": "91500000203026104B"
+      },
+      {
+        "rule": "任何具体地区项目公司均须单独识别，不因金科品牌、股权控制或集团管理关系自动成为金科股份债务。"
+      }
+    ],
+    "establishment_date": {
+      "annual_report_business_description": "1998",
+      "registration_oriented_sources": "1994-03-29",
+      "status": "conflicting"
+    },
+    "exchange": "深圳证券交易所",
+    "legal_representative": "周达",
+    "name": "金科地产集团股份有限公司",
+    "security_code": "000656",
+    "security_name_as_of_cutoff": "*ST金科",
+    "unified_social_credit_code": "91500000202893468X"
+  }
+}

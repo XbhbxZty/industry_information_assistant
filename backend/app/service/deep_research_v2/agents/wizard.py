@@ -26,6 +26,11 @@ from contextlib import redirect_stdout, redirect_stderr
 from .base import BaseAgent
 from ..state import ResearchState, ResearchPhase
 
+try:
+    from service import investigation_layer as inv
+except ImportError:  # 兼容以 app 为包根的导入方式
+    from app.service import investigation_layer as inv  # type: ignore
+
 
 class CodeWizard(BaseAgent):
     """
@@ -357,6 +362,9 @@ df = df.dropna()
         self.logger.info(f"[CodeWizard] ========== process 开始 ==========")
         self.logger.info(f"[CodeWizard] 当前 phase: {state['phase']}, data_points: {len(state['data_points'])}, outline: {len(state['outline'])}")
 
+        if state.get("due_diligence_mode"):
+            return await self._build_investigation_layer(state)
+
         if state["phase"] != ResearchPhase.ANALYZING.value:
             # 检查是否有需要分析的数据
             if len(state["data_points"]) >= 3:
@@ -383,6 +391,239 @@ df = df.dropna()
 
         self.logger.info(f"[CodeWizard] ========== process 结束 ==========")
         return state
+
+    # ------------------------------------------------ 调查层（B 层，阶段 1）
+
+    #: B 层单次抽取的墙钟上界（红线 4）。挂死不能拖住整条流水线——
+    #: A 层的评级此刻已经产出，B 层只是加法（计划 9.2）。
+    INVESTIGATION_TIMEOUT = 120.0
+
+    #: 探索性抽取的输出预算。**诊断函数要拿它判断截断是否可能**，
+    #: 所以不能写成调用点的字面量——两处各写一个数，归因就会骗人。
+    INVESTIGATION_MAX_TOKENS = 8000
+
+    async def _build_investigation_layer(self, state: ResearchState) -> ResearchState:
+        """构建调查层：确定性图表 + 探索性发现。
+
+        ## 为什么这一步放在 visualize 节点
+
+        `analyze` 节点（DataAnalyst）出评级，`visualize` 排在它之后且被刻意
+        分开——"图表生成失败不能连累这家企业是否可授信"（BC-17）。
+        B 层继承的正是这条编排：它整个失败，报告少一节，
+        等级与额度照常产出（计划 9.2）。
+
+        ## 这个方法不写 A 层任何字段
+
+        `field_checks` / `risk_assessment` / `completeness` / `evidence_store`
+        在这里只读不写；所有产出写进 `state["investigation"]`。
+        隔离由 `tests/test_investigation_isolation.py` 用 AST 断言，
+        不靠这段注释。
+        """
+        box = inv.get_investigation(state)
+
+        # 一、确定性图表：纯代码解析已核实字段，不调用模型，因而不会失败
+        charts, skipped = inv.build_deterministic_charts(state)
+        box["charts"].extend(charts)
+        for row in skipped:
+            inv.record_failure(
+                state, f"确定性图表·{row['field_name']}", row["reason"],
+                kind="not_found",
+            )
+
+        # 二、探索性抽取：一次独立的模型调用，有上界、可关闭、失败不阻断
+        if box.get("enabled"):
+            await self._run_exploratory_pass(state)
+        else:
+            inv.record_failure(state, "探索性调查", "本次运行未启用调查层探索性抽取",
+                               kind="disabled")
+
+        # 三、跨层一致性判定（阶段 2）。**只观察，不闸门**：
+        #     它不写 risk_assessment、不改 requires_human_review。
+        #     放在这里是因为 A 层评级（analyze 节点）与 B 层发现此刻都已就绪。
+        try:
+            from service.cross_layer_verdict import judge_findings
+        except ImportError:  # 兼容以 app 为包根的导入方式
+            from app.service.cross_layer_verdict import judge_findings
+        state["cross_layer_verdict"] = judge_findings(
+            box.get("findings") or [], state.get("field_checks") or [])
+
+        # 语料只服务于上面那次抽取。留在 state 里会让每次尽调的检查点
+        # 随语料线性膨胀，而它对报告与审计都没有价值——原文的权威副本
+        # 在知识库里，证据窗口在证据库里。
+        state["raw_sources"] = []
+
+        cross = state.get("cross_layer_verdict") or {}
+        stats = {"charts_count": len(box["charts"]),
+                 "findings_count": len(box["findings"]),
+                 "entities_count": len(box["graph"].get("nodes") or []),
+                 "challenges_count": (cross.get("counts") or {}).get("challenges", 0)}
+        self.add_message(state, "investigation", {"agent": self.name, **box})
+        if cross:
+            self.add_message(state, "cross_layer_verdict",
+                             {"agent": self.name, **cross})
+        self.add_message(state, "research_step", {
+            "agent": self.name, "step_type": "analyzing", "title": "调查层",
+            "subtitle": (f"确定性图表 {len([c for c in box['charts'] if c['chart_class'] == inv.CHART_DETERMINISTIC])} 张，"
+                         f"探索性发现 {len(box['findings'])} 条（不参与授信裁决）"),
+            "status": "completed", "stats": stats,
+        })
+        self.logger.info(f"[CodeWizard] 调查层完成：{stats}")
+        return state
+
+    #: 输出侧的**实测**字/token 比。
+    #:
+    #: 2026-08-23 探针 7 次调用逐条量出来的：
+    #:
+    #:     1752 字 / 623 tok = 2.81      2945 字 / 1071 tok = 2.75
+    #:     2960 字 / 1029 tok = 2.88     2972 字 / 1037 tok = 2.87
+    #:
+    #: 上一版按 1.5 估算，于是 `near_budget` 的门槛只有 7200 字，
+    #: 而真实上界约 8000 × 2.8 ≈ 22400 字——**归因会把远未到顶的响应
+    #: 说成被上界切断**，正是 BC-76 要消除的那类错话。
+    #:
+    #: ⚠️ **不要拿这个数去算输入侧。** 输入的限是另一个量纲：
+    #: 实测 47054 字撞 400（`input length should be [1, 30720]`）、
+    #: 23335 字通过，说明输入近似 1 字 1 token。两侧分开定
+    #: （输入预算见 `scout.INVESTIGATION_INPUT_CHAR_BUDGET`）。
+    OUTPUT_CHARS_PER_TOKEN = 2.8
+
+    #: 响应长度达到输出预算的这个比例时，才可能是被 `max_tokens` 切断的。
+    TRUNCATION_LENGTH_RATIO = 0.6
+
+    def _diagnose_unparseable(self, raw: str, finish_reason: str = "") -> tuple:
+        """给解析失败一个**站得住的**归因，并留下足以推翻它的证据（BC-76）。
+
+        ## 这个函数是被自己的错误归因逼出来的
+
+        上一版一律写「响应疑似被 max_tokens 截断」，判据只是括号不配平。
+        阶段 2 观察期实测两轮：响应 1948 字与 3546 字，而输出预算是
+        8000 token（约 12000 字）——**离上界差一个数量级，不可能是它**。
+
+        更麻烦的是留痕只存了开头 120 字，而**截断的证据在结尾**：
+        那条错误归因既不成立、又无法被留痕证伪。
+
+        ## 三条互斥的归因
+
+        括号配平 → 根本不是 JSON（模型答非所问）
+        括号不平 + 接近上界 → 大概率真的是 max_tokens
+        括号不平 + 远低于上界 → 响应不完整，但另有成因（提前停、网络截断…）
+
+        第三条刻意**不猜**具体成因。写一个猜的成因，下一个人会顺着它去查。
+        """
+        budget_chars = self.INVESTIGATION_MAX_TOKENS * self.OUTPUT_CHARS_PER_TOKEN
+        unbalanced = raw.count("{") > raw.count("}")
+        near_budget = len(raw) >= budget_chars * self.TRUNCATION_LENGTH_RATIO
+
+        if not unbalanced:
+            reason = "调查层抽取的响应不是可解析的 JSON（括号配平，非截断）"
+        elif finish_reason == "length":
+            # **供应商自己说的**，比任何长度启发式都可靠。
+            reason = "调查层抽取的响应被输出上界截断（finish_reason=length）"
+        elif finish_reason and finish_reason != "length":
+            # 模型自己结束了这一轮，却交出不完整的 JSON——
+            # 这是指令遵循问题，不是预算问题。**不要归因到 max_tokens**。
+            reason = (f"调查层抽取的响应不完整，但模型自报正常结束"
+                      f"（finish_reason={finish_reason}）——属指令遵循问题，"
+                      f"与输出上界无关")
+        elif near_budget:
+            reason = "调查层抽取的响应被输出上界截断（括号不配平且接近 max_tokens）"
+        else:
+            reason = ("调查层抽取的响应不完整，但**远未达输出上界**，"
+                      "成因不是 max_tokens；需查模型是否提前停止或链路截断")
+
+        # 头尾都留：截断的证据在结尾，只存开头等于留了个无法证伪的结论。
+        #
+        # 头尾各取 60 字是算过的：`record_failure` 会把 detail 截到 200 字，
+        # 头尾各 90 字会让**结尾正好被切掉**——留痕层默默吃掉了这条修复要交付
+        # 的东西，直到测试去查结尾才暴露。诊断信息要按留痕的上限来设计。
+        detail = (f"响应 {len(raw)} 字 / 预算约 {budget_chars:.0f} 字；"
+                  f"finish={finish_reason or '未提供'}；"
+                  f"括号 {raw.count('{')}开 {raw.count('}')}闭；"
+                  f"头：{raw[:50]}｜尾：{raw[-50:]}")
+        return reason, detail
+
+    async def _run_exploratory_pass(self, state: ResearchState) -> None:
+        """对留存语料做一次独立的调查层抽取。
+
+        **与 A 层的抽取是两次调用，不是一次调用多输出几个字段。**
+        阶段 1 的验收标准是"A 层等级、额度、核实率逐位不变"；
+        改动 A 层那次调用的输出契约就再也无法证明它没变（BC-56 量过
+        这类改动对字段抽取的影响）。多花一次调用，换回可证明性。
+        """
+        sources = state.get("raw_sources") or []
+        if not sources:
+            inv.record_failure(
+                state, "探索性调查",
+                "本次没有留存到可供调查层使用的原文语料",
+                kind="not_found",
+                detail="通常意味着本轮未走本地知识库检索，或检索全部落空",
+            )
+            return
+
+        prompt = inv.EXPLORATORY_PROMPT.format(
+            subject=state.get("company_name") or state.get("subject_name") or "待核实主体",
+            as_of=state.get("as_of") or "未设置",
+            sources=inv.format_sources_for_prompt(sources),
+            max_findings=inv.MAX_FINDINGS,
+        )
+        try:
+            response, meta = await self.call_llm(
+                system_prompt=(
+                    "你是尽职调查分析师的助手，只负责从给定材料中摘录可溯源的事实。"
+                    "你的产出不进入授信决策，不得给出风险判断或结论性评价。"
+                ),
+                user_prompt=prompt,
+                json_mode=True,
+                temperature=0.2,
+                # 真实语料实测：20 条来源能让模型写出 8884 字的 JSON，
+                # 4000 token 会从中间切断，于是整份解析失败（BC-74）。
+                # 上界与 `MAX_FINDINGS` 是一对——提示词同时告诉模型条数上限，
+                # 让"写不完"这件事在两端都被约束住。
+                max_tokens=self.INVESTIGATION_MAX_TOKENS,
+                timeout=self.INVESTIGATION_TIMEOUT,
+                # 取回 finish_reason：响应不完整时，它是唯一能直接说出
+                # "为什么"的字段。没有它，归因只能靠猜（BC-76）。
+                return_meta=True,
+            )
+        except Exception as exc:
+            # 「没查成」必须与「查了没有」分开记（BC-51）。合并成一句
+            # "本节无内容"，读者就无法判断该不该补查。
+            inv.record_failure(state, "探索性调查", "调查层抽取调用失败",
+                               kind="error", detail=f"{type(exc).__name__}: {exc}")
+            return
+        finish_reason = str((meta or {}).get("finish_reason") or "")
+
+        # ⚠️ `parse_json_response` 解析彻底失败时返回的是 **`{}`**，不是 None。
+        #
+        #    原来那道 `if not isinstance(payload, dict)` 守卫因此**永远不会触发**——
+        #    `{}` 是 dict。于是一次截断的、解析不了的响应，一路走到
+        #    `ingest_exploratory_payload({})`，产出 0 条发现、0 条拒绝、
+        #    **0 条失败留痕**，外观与"材料里确实没东西"完全一致（BC-74）。
+        #
+        #    这正是 BC-51「查了没有 vs 没查成」在我自己写的代码里的复发，
+        #    也是 BC-72「守卫存在 ≠ 守卫正确」的第二例：那行 isinstance
+        #    读起来像是在挡解析失败，实际挡不住任何东西。
+        payload = self.parse_json_response(response)
+        raw = str(response or "").strip()
+        if not payload:
+            if raw:
+                reason, detail = self._diagnose_unparseable(raw, finish_reason)
+                inv.record_failure(state, "探索性调查", reason,
+                                   kind="error", detail=detail)
+            else:
+                inv.record_failure(state, "探索性调查", "模型返回空响应",
+                                   kind="error")
+            return
+
+        stats = inv.ingest_exploratory_payload(state, payload, sources)
+        if not stats["findings"] and not stats["rejected"] and not stats["metrics"]:
+            # 「查了没有」也要留痕（BC-51）。跑完一无所获与根本没跑，
+            # 在报告上都是这一节空着——不写明，读者无从判断该不该补语料。
+            inv.record_failure(
+                state, "探索性调查",
+                f"已就 {len(sources)} 条来源抽取，材料中没有清单以外的可溯源内容",
+                kind="not_found")
+        self.logger.info(f"[CodeWizard] 调查层探索性抽取：{stats}")
 
     async def _analyze_data(self, state: ResearchState) -> None:
         """分析数据"""

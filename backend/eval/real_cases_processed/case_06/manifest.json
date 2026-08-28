@@ -1,0 +1,47 @@
+{
+  "business_scenario": [
+    "农化产业链供应商融资",
+    "重整企业恢复经营后新授信",
+    "历史风险是否应永久一票否决的反事实测试"
+  ],
+  "business_types": [
+    "supply_chain_finance"
+  ],
+  "case_id": "case_06",
+  "counts": {
+    "checklist_items": 35,
+    "post_cutoff_claims": 3,
+    "reference_claims": 58,
+    "sources": 13
+  },
+  "difficulty": "中等",
+  "label_policy": {
+    "generated_by": "deep_research",
+    "grade": "silver",
+    "human_review_status": "not_reviewed",
+    "raw_sources_retrievable_by_agent_after_verification": true,
+    "reference_retrievable_by_agent": false
+  },
+  "original_document": "D:/pythoncode/industry_information_assistant/industry_information_assistant/backend/eval/real_cases/case_06_南京红太阳股份有限公司_尽调案例包.md",
+  "original_sha256": "5974d2705ead54f44c28e53b932c82a62694dc996f784e8edc9aac683526ab0f",
+  "primary_business_type": "supply_chain_finance",
+  "research_cutoff": "2025-05-31",
+  "schema_version": "real-case-v1",
+  "subject": {
+    "actual_controller": "曲靖高新技术产业开发区管理委员会",
+    "control_change_effective_date": "2024-12-25",
+    "controlling_shareholder": "云南合奥产业合伙企业（有限合伙）",
+    "exchange": "深圳证券交易所",
+    "incorporation_date": "1991-06-13",
+    "legal_representative": "杨一",
+    "name": "南京红太阳股份有限公司",
+    "registered_address": "南京市高淳区桠溪镇东风路8号",
+    "registered_capital_cny_10k": 129802.7341,
+    "registration_status": {
+      "reason": "未直接完成国家企业信用信息公示系统2025-05-31时点状态核验",
+      "status": "unverified"
+    },
+    "stock_code": "000525",
+    "unified_social_credit_code": "91320100134900928L"
+  }
+}

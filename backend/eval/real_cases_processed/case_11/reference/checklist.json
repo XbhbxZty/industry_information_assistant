@@ -1,0 +1,424 @@
+[
+  {
+    "check_id": "CHK001",
+    "conclusion": "代码91445200231131526C已由2020、2021两份完整年报交叉锁定",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C001",
+      "C002"
+    ],
+    "evidence_ids": [
+      "C001",
+      "C002"
+    ],
+    "hard_gate": false,
+    "item": "主体名称/信用代码",
+    "manual_review": false,
+    "missing_evidence": "工商实时档案非必要但可补",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK002",
+    "conclusion": "康美药业股份有限公司=600518",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C003"
+    ],
+    "evidence_ids": [
+      "C003"
+    ],
+    "hard_gate": false,
+    "item": "上市主体匹配",
+    "manual_review": false,
+    "missing_evidence": "无重大缺口",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK003",
+    "conclusion": "截止日赖志坚",
+    "conflict": "历史发生变更",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C005"
+    ],
+    "evidence_ids": [
+      "C005"
+    ],
+    "hard_gate": false,
+    "item": "法定代表人",
+    "manual_review": false,
+    "missing_evidence": "工商变更档案可补",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK004",
+    "conclusion": "重整后神农氏为控股股东；年报披露无实际控制人",
+    "conflict": "与重整前控制结构不同",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C006",
+      "C007"
+    ],
+    "evidence_ids": [
+      "C006",
+      "C007"
+    ],
+    "hard_gate": false,
+    "item": "控股股东/实控人",
+    "manual_review": true,
+    "missing_evidence": "最新工商穿透",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK005",
+    "conclusion": "存在监管认定的系统性虚假记载",
+    "conflict": "原报表/更正/监管口径并存",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C190"
+    ],
+    "evidence_ids": [
+      "C190"
+    ],
+    "hard_gate": true,
+    "item": "2016—2018财务真实性",
+    "manual_review": true,
+    "missing_evidence": "无法“恢复”全部真实逐笔交易",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK006",
+    "conclusion": "2016/2017原为标准无保留意见，但审计报告后来被监管认定存在虚假记载",
+    "conflict": "重大",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C105",
+      "C192"
+    ],
+    "evidence_ids": [
+      "C105",
+      "C192"
+    ],
+    "hard_gate": true,
+    "item": "历史审计可靠性",
+    "manual_review": true,
+    "missing_evidence": "审计底稿非公开",
+    "retrieval_attempt_ids": [],
+    "status": "conflicting"
+  },
+  {
+    "check_id": "CHK007",
+    "conclusion": "至少存在原始版、2019追溯版、监管认定三个层次",
+    "conflict": "重大",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C101",
+      "C111"
+    ],
+    "evidence_ids": [
+      "C101",
+      "C111"
+    ],
+    "hard_gate": true,
+    "item": "2017财务版本",
+    "manual_review": true,
+    "missing_evidence": "逐笔调整底稿",
+    "retrieval_attempt_ids": [],
+    "status": "conflicting"
+  },
+  {
+    "check_id": "CHK008",
+    "conclusion": "原始2018年报后又于2020年追溯调整，且有监管认定",
+    "conflict": "重大",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C120",
+      "C127"
+    ],
+    "evidence_ids": [
+      "C120",
+      "C127"
+    ],
+    "hard_gate": true,
+    "item": "2018财务版本",
+    "manual_review": true,
+    "missing_evidence": "完整会计调整底稿",
+    "retrieval_attempt_ids": [],
+    "status": "conflicting"
+  },
+  {
+    "check_id": "CHK009",
+    "conclusion": "巨亏，审计保留意见，关联方占用约94.81亿元",
+    "conflict": "无单值冲突",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C130",
+      "C135"
+    ],
+    "evidence_ids": [
+      "C130",
+      "C135"
+    ],
+    "hard_gate": true,
+    "item": "2019经营情况",
+    "manual_review": true,
+    "missing_evidence": "后续偿还明细",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK010",
+    "conclusion": "巨亏、负净资产、逾期债务，审计无法表示意见",
+    "conflict": "后被2022重述",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C140",
+      "C148"
+    ],
+    "evidence_ids": [
+      "C140",
+      "C148"
+    ],
+    "hard_gate": true,
+    "item": "2020原始财务",
+    "manual_review": true,
+    "missing_evidence": "债务逐笔清单",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK011",
+    "conclusion": "2022-04-29再次调减资产28.87亿元、调增负债4.64亿元、调减归母权益33.50亿元",
+    "conflict": "与2021原始版冲突",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C150",
+      "C156"
+    ],
+    "evidence_ids": [
+      "C150",
+      "C156"
+    ],
+    "hard_gate": true,
+    "item": "2020追溯重述",
+    "manual_review": true,
+    "missing_evidence": "股东会审议链可继续补齐",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK012",
+    "conclusion": "2021年10月尚无法确定；2022年4月基于进一步材料追溯至2020",
+    "conflict": "时间归属发生改变",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C149",
+      "C150"
+    ],
+    "evidence_ids": [
+      "C149",
+      "C150"
+    ],
+    "hard_gate": true,
+    "item": "林下参减值归属期间",
+    "manual_review": true,
+    "missing_evidence": "公安说明、评估及专项程序底稿全文",
+    "retrieval_attempt_ids": [],
+    "status": "conflicting"
+  },
+  {
+    "check_id": "CHK013",
+    "conclusion": "带强调事项段的无保留意见",
+    "conflict": "较2020明显改善但不能逆转历史风险",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C169"
+    ],
+    "evidence_ids": [
+      "C169"
+    ],
+    "hard_gate": false,
+    "item": "2021审计意见",
+    "manual_review": true,
+    "missing_evidence": "强调事项消除证据",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK014",
+    "conclusion": "归母净利+79.18亿元，但扣非约-79.68亿元、OCF仅2.14亿元",
+    "conflict": "非数值冲突，而是盈利构成异常",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C161",
+      "C163"
+    ],
+    "evidence_ids": [
+      "C161",
+      "C163"
+    ],
+    "hard_gate": true,
+    "item": "2021盈利质量",
+    "manual_review": true,
+    "missing_evidence": "非经常损益完整形成机制",
+    "retrieval_attempt_ids": [],
+    "status": "verified/analysis"
+  },
+  {
+    "check_id": "CHK015",
+    "conclusion": "历史累计占用和2020末余额均重大；2021年报披露已经清偿",
+    "conflict": "历史风险与年末清偿状态同时存在",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C148",
+      "C170",
+      "C191"
+    ],
+    "evidence_ids": [
+      "C148",
+      "C170",
+      "C191"
+    ],
+    "hard_gate": true,
+    "item": "关联方资金占用",
+    "manual_review": true,
+    "missing_evidence": "清偿来源及资产质量底稿",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK016",
+    "conclusion": "2021年已经完成司法重整",
+    "conflict": "不等于经营风险已经消失",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C171"
+    ],
+    "evidence_ids": [
+      "C171"
+    ],
+    "hard_gate": true,
+    "item": "司法重整",
+    "manual_review": true,
+    "missing_evidence": "重整后债权逐笔清偿/留债计划",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK017",
+    "conclusion": "已有生效代表人诉讼判决",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C193",
+      "C194"
+    ],
+    "evidence_ids": [
+      "C193",
+      "C194"
+    ],
+    "hard_gate": true,
+    "item": "证券虚假陈述诉讼",
+    "manual_review": true,
+    "missing_evidence": "剩余衍生诉讼全量清单",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK018",
+    "conclusion": "2021年末约13.57亿元",
+    "conflict": "不能推断具体应收真实性",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C166"
+    ],
+    "evidence_ids": [
+      "C166"
+    ],
+    "hard_gate": false,
+    "item": "应收账款余额",
+    "manual_review": true,
+    "missing_evidence": "客户明细、账龄、回款、函证",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK019",
+    "conclusion": "本次证据不足以证明有或没有",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C200"
+    ],
+    "evidence_ids": [
+      "C200"
+    ],
+    "hard_gate": null,
+    "item": "应收质押/转让/保理",
+    "manual_review": true,
+    "missing_evidence": "中登网等权威登记、保理合同",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK020",
+    "conclusion": "公开资料无法验证特定交易",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C201"
+    ],
+    "evidence_ids": [
+      "C201"
+    ],
+    "hard_gate": null,
+    "item": "合同/发票/物流/确权",
+    "manual_review": true,
+    "missing_evidence": "原始合同、发票、物流、验收、对账/确权",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK021",
+    "conclusion": "非公开资料缺失",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C202"
+    ],
+    "evidence_ids": [
+      "C202"
+    ],
+    "hard_gate": null,
+    "item": "银行流水/税务/征信",
+    "manual_review": true,
+    "missing_evidence": "银行流水、纳税、征信",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK022",
+    "conclusion": "未取得覆盖截止日前完整历史快照",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C203"
+    ],
+    "evidence_ids": [
+      "C203"
+    ],
+    "hard_gate": null,
+    "item": "被执行/失信/限制消费全量核验",
+    "manual_review": true,
+    "missing_evidence": "权威司法执行完整查询结果",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  }
+]

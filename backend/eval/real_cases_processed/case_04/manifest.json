@@ -1,0 +1,50 @@
+{
+  "business_scenario": [
+    "高空作业平台零部件供应商信用融资",
+    "设备经销商融资",
+    "制造业应收账款保理"
+  ],
+  "business_types": [
+    "factoring"
+  ],
+  "case_id": "case_04",
+  "counts": {
+    "checklist_items": 25,
+    "post_cutoff_claims": 3,
+    "reference_claims": 64,
+    "sources": 10
+  },
+  "difficulty": "中等",
+  "label_policy": {
+    "generated_by": "deep_research",
+    "grade": "silver",
+    "human_review_status": "not_reviewed",
+    "raw_sources_retrievable_by_agent_after_verification": true,
+    "reference_retrievable_by_agent": false
+  },
+  "original_document": "D:/pythoncode/industry_information_assistant/industry_information_assistant/backend/eval/real_cases/case_04_浙江鼎力机械股份有限公司_尽调案例包.md",
+  "original_sha256": "d489c7e26d5e40d522a3e9f46d5354d3f68e89317c6205a1f9349d2a2ecc87e4",
+  "primary_business_type": "factoring",
+  "research_cutoff": "2025-06-30",
+  "schema_version": "real-case-v1",
+  "subject": {
+    "actual_controller": "许树根",
+    "controlling_shareholder": "许树根",
+    "establishment_date": "2005-05-16",
+    "exchange": "上海证券交易所",
+    "former_names": {
+      "status": "unverified",
+      "value": null
+    },
+    "legal_representative": "许树根",
+    "name": "浙江鼎力机械股份有限公司",
+    "registered_address": "浙江省湖州市德清县启航路188号",
+    "registered_capital_cny": 506347879,
+    "registration_status": {
+      "status": "unverified",
+      "value": null
+    },
+    "stock_code": "603338",
+    "unified_social_credit_code": "913300007743880298"
+  }
+}

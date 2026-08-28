@@ -47,6 +47,12 @@ class CriticMaster(BaseAgent):
 4. **时效性**：以上方给定的当前日期为准判断，不得依据你的训练数据截止时间
 5. **完整性**：是否遗漏重要方面
 
+## 复核权限边界
+- 下方核查清单是证据桥完成逐字、主体、单位、截止日和完整度校验后的最终状态，你无权根据训练知识或原始候选重新判定它
+- 即使你认为某份年报“应该可以证明”某字段，也只能把它视为证据抽取覆盖不足；不得要求 Writer 把未核实项改为已核实，不得用上市状态、未披露事项或员工数推断工商/司法结论
+- 每条 issue 必须给出报告中的准确 location、原文 evidence 和非空 description；无法引用报告中的实际越界表述时不要输出该 issue
+- 报告并列披露 conflict_detail 的各来源取值并要求人工复核，属于正确处理，不得报 conflict_silently_resolved；不得自行重新换算并推翻清单状态
+
 ## ⛔ 核查清单交叉校验（最高优先级，必须逐项执行）
 
 下方给出本次尽调的核查清单及其**真实状态**。报告正文必须与该状态一致。
@@ -54,7 +60,7 @@ class CriticMaster(BaseAgent):
 
 {field_checks}
 
-### 三类清单问题全部由你判定
+### 尽调专项问题全部由你判定
 
 （v0.6 起不再有程序侧的确定性预判。原先由正则扫描器独占 `unverified_as_fact`
 与 `conflict_silently_resolved` 两类，三次独立盲测证明该分工使系统整体变差：
@@ -85,10 +91,24 @@ class CriticMaster(BaseAgent):
    - 信息缺口必须在结论中体现，不得被忽略
    - 严重程度：major（若未核实项涉及司法维度，则为 critical）
 
+**D. `subject_attribution_error`（风险或义务归错法人主体）**
+   检查每一条负面事实、债务、担保、诉讼、处罚，**是否被归属到了正确的法人**。
+   - 违规示例一：集团合并口径的对外担保余额，被表述为"借款人自身的高额债务"
+   - 违规示例二：某子公司被列为失信被执行人，报告写成"该企业为失信被执行人"
+   - 违规示例三：母公司或关联方的资质、中标业绩，被当作借款主体的经营能力佐证
+   - 违规示例四：把借款主体自身的义务说成"由集团承担"，从而淡化风险
+   - **关联方的风险是风险，但它是关联方的风险**。可以写"其控股子公司X存在
+     被执行记录，需评估对借款人的传导影响"，不可以写成借款人自己的记录
+   - 判定要点：报告在陈述一条负面时，有没有写清楚**这是谁的**。
+     笼统使用"该集团""该公司""其关联企业"而不指明具体法人，
+     且该表述会影响风险判断时，即属违规
+   - 严重程度：critical（主体识别错误会让整个风险画像指向错误的法人）
+
+{as_of_section}
 **注意「已核实：经查询，无相关记录」不是未核实**——那是数据源查询后确认无记录的
 正面结论，报告据此写"经查询未发现失信记录"是**正确**的，不要误报。
 
-### 判定这三类问题时的纪律（避免误报）
+### 判定上述各类问题时的纪律（避免误报）
 
 误报的代价同样高：一个见谁都咬的检查器会被使用者忽略，等于没有。因此：
 
@@ -97,7 +117,7 @@ class CriticMaster(BaseAgent):
 2. **不要因为"表述可以更严谨"而报 critical**。如果你的描述里出现
    "基本正确""处理得当""但建议…"这类措辞，说明它至多是 minor。
    critical 只留给会**导致错误授信决策**的问题。
-3. **不要因为报告缺少某个章节而报这三类问题**。章节缺失属于 `incomplete`，
+3. **不要因为报告缺少某个章节而报上述尽调专项问题**。章节缺失属于 `incomplete`，
    与清单校验无关。你收到的可能只是报告的一部分。
 4. **拒绝给出确定性结论本身不是缺陷**。当必查项大量未核实时，
    报告写"不具备定级条件，建议补充核查后再评审"是**风控上正确**的做法，
@@ -140,7 +160,7 @@ class CriticMaster(BaseAgent):
         {{
             "id": "issue_1",
             "target_section": "章节ID或'全局'",
-            "issue_type": "unverified_as_fact/conflict_silently_resolved/unsupported_risk_conclusion/missing_source/logic_error/bias/hallucination/outdated/incomplete",
+            "issue_type": "unverified_as_fact/conflict_silently_resolved/unsupported_risk_conclusion/subject_attribution_error/post_cutoff_evidence/missing_source/logic_error/bias/hallucination/outdated/incomplete",
             "severity": "critical/major/minor",
             "location": "具体位置描述",
             "description": "问题详细描述",
@@ -266,6 +286,27 @@ class CriticMaster(BaseAgent):
             )
         return "\n".join(out)
 
+    #: 设了研究截止日时才注入的审核段落。
+    #:
+    #: **不设截止日时必须整段为空**，不能永远挂在提示词里。让模型去找一个
+    #: 本次根本不存在的问题类型，它会开始把正常的时间表述报成越界——
+    #: 与 BC-18 同形：一条永远亮着的告警会被学会无视，而且这里更糟，
+    #: 它会主动制造误报。
+    AS_OF_REVIEW_SECTION = """
+**E. `post_cutoff_evidence`（使用了研究截止日之后的信息）**
+   本次研究的截止日是 **{as_of}**。报告的全部判断只能建立在该日期之前
+   已经发布或已经发生的信息上。
+   - 违规示例一：截止日为 2025-05-31，报告引用了 2025 年半年报的数据
+   - 违规示例二：报告用截止日之后发生的事件来论证或推翻某个结论
+     （"该企业后来顺利完成上市，说明信用良好"）
+   - 违规示例三：报告出现晚于截止日的日期，却未指出它越过了截止日
+   - **允许**的写法：明确标注"以下为截止日后信息，仅供后验参考，
+     不参与本次判断"，并与正文结论隔离
+   - 判定要点：这条信息在截止日当天，尽调人员**有没有可能知道**。
+     不可能知道却被用来支撑结论，即属违规
+   - 严重程度：critical（用事后信息倒推当时判断，会让整份报告失去参考价值）
+"""
+
     def __init__(self, llm_api_key: str, llm_base_url: str, model: str = "qwen-max"):
         super().__init__(
             name="CriticMaster",
@@ -274,6 +315,15 @@ class CriticMaster(BaseAgent):
             llm_base_url=llm_base_url,
             model=model
         )
+
+    def _format_as_of_section(self, state: ResearchState) -> str:
+        """
+        未设截止日时返回空串——见 `AS_OF_REVIEW_SECTION` 的注释。
+        """
+        as_of = (state.get("as_of") or "").strip()
+        if not as_of:
+            return ""
+        return self.AS_OF_REVIEW_SECTION.format(as_of=as_of)
 
     def merge_review(self, state: ResearchState, llm_result: Any) -> Dict[str, Any]:
         """
@@ -583,10 +633,13 @@ class CriticMaster(BaseAgent):
         missing_aspects = review_result.get("missing_aspects", [])
 
         # 需要补充搜索的问题类型。
-        # 注意三类清单校验问题**不在此列**：
+        # 注意尽调专项问题**一律不在此列**：
         #   unverified_as_fact / conflict_silently_resolved —— 问题在于报告"写多了"，
         #     字段本就取不到，再搜一遍也拿不到，正确做法是改写表述而非补充检索
         #   unsupported_risk_conclusion —— 需要的是在结论中体现信息缺口，同样是改写
+        #   subject_attribution_error —— 主体归错是**写错了**，补充检索改不了它
+        #   post_cutoff_evidence —— 越界信息要删掉或隔离，再搜只会搜到更多越界信息，
+        #     把它路由去补充检索是南辕北辙
         # 把它们误判为"需补充检索"会导致无效的重复搜索（V1 空转的同类问题）
         research_needed_types = {"missing_source", "incomplete", "outdated"}
 
@@ -633,12 +686,16 @@ class CriticMaster(BaseAgent):
 
         # 准备事实列表
         facts_summary = []
-        for fact in state["facts"][:20]:
+        fact_pool = state["facts"]
+        if state.get("due_diligence_mode"):
+            fact_pool = [fact for fact in fact_pool if fact.get("verified") is True]
+        for fact in fact_pool[:20]:
             facts_summary.append(f"- [{fact.get('id')}] {fact.get('content', '')[:150]} (来源: {fact.get('source_name')}, 可信度: {fact.get('credibility_score')})")
 
         # 准备数据点列表
         data_summary = []
-        for dp in state["data_points"][:15]:
+        data_pool = [] if state.get("due_diligence_mode") else state["data_points"][:15]
+        for dp in data_pool:
             data_summary.append(f"- {dp.get('name')}: {dp.get('value')} {dp.get('unit', '')} (来源: {dp.get('source')})")
 
         # 格式化大纲
@@ -656,6 +713,7 @@ class CriticMaster(BaseAgent):
             facts="\n".join(facts_summary) if facts_summary else "（暂无事实记录）",
             data_points="\n".join(data_summary) if data_summary else "（暂无数据点）",
             field_checks=self._format_checklist_for_review(state),
+            as_of_section=self._format_as_of_section(state),
         )
 
         self.logger.info(f"[CriticMaster] 调用 LLM 进行审核...")

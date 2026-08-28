@@ -1,0 +1,52 @@
+{
+  "business_scenario": [
+    "动力电池材料供应商以对宁德时代及其子公司的应收账款申请商业保理",
+    "核心企业反向保理",
+    "锂电产业链供应商授信"
+  ],
+  "business_types": [
+    "factoring",
+    "supply_chain_finance"
+  ],
+  "case_id": "case_01",
+  "counts": {
+    "checklist_items": 31,
+    "post_cutoff_claims": 0,
+    "reference_claims": 58,
+    "sources": 12
+  },
+  "difficulty": "基础",
+  "label_policy": {
+    "generated_by": "deep_research",
+    "grade": "silver",
+    "human_review_status": "not_reviewed",
+    "raw_sources_retrievable_by_agent_after_verification": true,
+    "reference_retrievable_by_agent": false
+  },
+  "original_document": "D:/pythoncode/industry_information_assistant/industry_information_assistant/backend/eval/real_cases/case_01_宁德时代_尽职调查评测案例包.md",
+  "original_sha256": "47157a2285b5d6c8bfe20fe7c484cdd3fa14b8d5cb0ed5ad0ee0aaee3b91e956",
+  "primary_business_type": "factoring",
+  "research_cutoff": "2025-05-31",
+  "schema_version": "real-case-v1",
+  "subject": {
+    "a_share_code": "300750",
+    "a_share_exchange": "深圳证券交易所",
+    "actual_controller": "曾毓群",
+    "controlling_shareholder": "厦门瑞庭投资有限公司",
+    "h_share_code": "03750",
+    "h_share_exchange": "香港联合交易所有限公司",
+    "legal_name": "宁德时代新能源科技股份有限公司",
+    "legal_representative": "曾毓群",
+    "registered_capital": {
+      "reason": "未取得实时工商登记；不得以会计股本机械替代工商注册资本",
+      "status": "unverified",
+      "value": null
+    },
+    "registration_status": {
+      "reason": "国家企业信用信息公示系统本次访问失败",
+      "status": "unverified",
+      "value": null
+    },
+    "unified_social_credit_code": "91350900587527783P"
+  }
+}

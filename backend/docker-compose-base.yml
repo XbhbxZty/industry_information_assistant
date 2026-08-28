@@ -37,8 +37,11 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
     ports:
-      - "9001:9001"
-      - "9000:9000"
+      # Windows/Hyper-V may reserve the 8145-9144 host port block
+      # (netsh interface ipv4 show excludedportrange protocol=tcp).
+      # Keep container ports as-is; publish outside the reserved range.
+      - "29001:9001"
+      - "29000:9000"
     volumes:
       - milvus-minio-data:/minio_data
     command: minio server /minio_data --console-address ":9001"
@@ -67,7 +70,7 @@ services:
       retries: 3
     ports:
       - "${MILVUS_PORT:-29530}:19530"
-      - "9091:9091"
+      - "29091:9091"
     depends_on:
       - "milvus-etcd"
       - "milvus-minio"

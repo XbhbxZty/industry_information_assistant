@@ -1,0 +1,98 @@
+{
+  "confidence": {
+    "overall_reference_assessment": 0.96
+  },
+  "credit_amount": null,
+  "eval_only": true,
+  "generated_reference": true,
+  "hard_gate_triggers": [
+    "持续经营重大不确定性",
+    "负净资产",
+    "大额短期借款逾期",
+    "债权人申请重整且处于预重整",
+    "大额非经营性资金占用",
+    "违规担保",
+    "内部控制审计否定意见",
+    "证监会行政处罚事先告知程序",
+    "2024Q1继续亏损及净资产恶化"
+  ],
+  "human_review_status": "not_reviewed",
+  "key_risk_factors": [
+    "流动性和偿债风险",
+    "连续亏损及收入下降",
+    "应收账款长账龄及减值风险",
+    "关联方治理风险",
+    "担保和或有负债风险",
+    "重整结果不确定",
+    "交易级公开证据不足"
+  ],
+  "label_grade": "silver",
+  "missing_critical_evidence": [
+    "合同发票物流验收确权及回款",
+    "应收账款质押转让保理和重复融资登记",
+    "银行流水及企业征信",
+    "纳税资料",
+    "法院执行失信限消完整结果",
+    "最新工商公示结果",
+    "全量担保和诉讼仲裁最新状态"
+  ],
+  "mitigating_factors": [
+    "2023年度财务报表正式意见仍为无保留意见",
+    "2023年度经营现金流净额仍为正",
+    "电缆及光伏主营业务仍在经营",
+    "截止日仍在推进预重整"
+  ],
+  "normalized": {
+    "adverse_risk_gates": [
+      "持续经营重大不确定性",
+      "负净资产",
+      "大额短期借款逾期",
+      "债权人申请重整且处于预重整",
+      "大额非经营性资金占用",
+      "违规担保",
+      "内部控制审计否定意见",
+      "证监会行政处罚事先告知程序",
+      "2024Q1继续亏损及净资产恶化"
+    ],
+    "assessment_confidence": {
+      "calibrated_probability": false,
+      "ordinal_score": {
+        "overall_reference_assessment": 0.96
+      },
+      "raw": {
+        "overall_reference_assessment": 0.96
+      }
+    },
+    "corporate_risk_level": null,
+    "decision_status": "blocked",
+    "information_gates": [],
+    "risk_level_raw": "高",
+    "risk_scope": null,
+    "transaction_readiness": "insufficient_evidence",
+    "transaction_risk_level": null
+  },
+  "reasoning_claim_ids": [
+    "C017",
+    "C023",
+    "C024",
+    "C025",
+    "C028",
+    "C031",
+    "C033",
+    "C034",
+    "C035",
+    "C036",
+    "C037",
+    "C039",
+    "C040",
+    "C041",
+    "C042",
+    "C045",
+    "C047",
+    "C053",
+    "C054"
+  ],
+  "recommended_action": "暂缓",
+  "risk_level": "高",
+  "usage_note": "仅供离线评测研究，不代表真实金融审批结果"
+}

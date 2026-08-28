@@ -1,0 +1,514 @@
+{
+  "case_id": "case_01",
+  "chunks": 430,
+  "year_labels": [
+    "2002",
+    "2003",
+    "2004",
+    "2005",
+    "2006",
+    "2007",
+    "2008",
+    "2009",
+    "2010",
+    "2011",
+    "2012",
+    "2013",
+    "2014",
+    "2015",
+    "2016",
+    "2017",
+    "2018",
+    "2019",
+    "2020",
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025",
+    "2026",
+    "2027",
+    "2028",
+    "2029",
+    "2030",
+    "2031",
+    "2034",
+    "2035",
+    "2040"
+  ],
+  "fields": [
+    {
+      "field_id": "guarantee_circle",
+      "field_name": "担保圈",
+      "scope": "core",
+      "best_term_hits": 0,
+      "best_positive_hits": 0,
+      "top_terms": {
+        "互保": 0,
+        "连环担保": 0,
+        "担保圈": 0
+      },
+      "blockers": [
+        "确定性关键词在语料中出现 0 次"
+      ],
+      "reachable": false
+    },
+    {
+      "field_id": "debt_ratio",
+      "field_name": "资产负债率",
+      "scope": "core",
+      "best_term_hits": 4,
+      "best_positive_hits": 4,
+      "top_terms": {
+        "资产负债率": 4,
+        "负债合计": 3,
+        "资产总计": 3
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "operating_status",
+      "field_name": "登记状态",
+      "scope": "core",
+      "best_term_hits": 12,
+      "best_positive_hits": 9,
+      "top_terms": {
+        "注销": 12,
+        "存续": 10,
+        "在业": 2
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "enforcement",
+      "field_name": "被执行记录",
+      "scope": "core",
+      "best_term_hits": 3,
+      "best_positive_hits": 0,
+      "top_terms": {
+        "被执行": 3,
+        "执行标的": 0,
+        "执行案件": 0
+      },
+      "blockers": [
+        "3 次命中全部落在否定式披露里（「未发生」「不属于」等），不是可引用的正面事实"
+      ],
+      "reachable": false
+    },
+    {
+      "field_id": "external_investment",
+      "field_name": "对外投资",
+      "scope": "core",
+      "best_term_hits": 21,
+      "best_positive_hits": 20,
+      "top_terms": {
+        "联营企业": 21,
+        "合营企业": 18,
+        "参股": 6
+      },
+      "blockers": [
+        "完整度判据对列表型字段硬返回 False（需全量表格解析）"
+      ],
+      "reachable": false
+    },
+    {
+      "field_id": "business_scope",
+      "field_name": "经营范围",
+      "scope": "core",
+      "best_term_hits": 16,
+      "best_positive_hits": 14,
+      "top_terms": {
+        "主营业务": 16,
+        "主要从事": 6,
+        "经营范围": 0
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "guarantee",
+      "field_name": "对外担保",
+      "scope": "core",
+      "best_term_hits": 24,
+      "best_positive_hits": 23,
+      "top_terms": {
+        "担保": 24,
+        "被担保方": 1
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "related_party",
+      "field_name": "关联方交易",
+      "scope": "core",
+      "best_term_hits": 22,
+      "best_positive_hits": 19,
+      "top_terms": {
+        "关联方": 22,
+        "关联交易": 18
+      },
+      "blockers": [
+        "完整度判据对列表型字段硬返回 False（需全量表格解析）"
+      ],
+      "reachable": false
+    },
+    {
+      "field_id": "actual_controller",
+      "field_name": "实际控制人",
+      "scope": "core",
+      "best_term_hits": 14,
+      "best_positive_hits": 13,
+      "top_terms": {
+        "实际控制人": 14
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "equity_freeze",
+      "field_name": "股权冻结",
+      "scope": "core",
+      "best_term_hits": 0,
+      "best_positive_hits": 0,
+      "top_terms": {
+        "股权冻结": 0,
+        "司法冻结": 0
+      },
+      "blockers": [
+        "确定性关键词在语料中出现 0 次"
+      ],
+      "reachable": false
+    },
+    {
+      "field_id": "bidding_record",
+      "field_name": "中标记录",
+      "scope": "core",
+      "best_term_hits": 0,
+      "best_positive_hits": 0,
+      "top_terms": {
+        "中标": 0,
+        "成交供应商": 0
+      },
+      "blockers": [
+        "确定性关键词在语料中出现 0 次"
+      ],
+      "reachable": false
+    },
+    {
+      "field_id": "registration",
+      "field_name": "工商登记基本信息",
+      "scope": "core",
+      "best_term_hits": 11,
+      "best_positive_hits": 11,
+      "top_terms": {
+        "法定代表人": 11,
+        "统一社会信用代码": 4,
+        "注册资本": 4
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "dishonesty",
+      "field_name": "失信记录",
+      "scope": "core",
+      "best_term_hits": 3,
+      "best_positive_hits": 0,
+      "top_terms": {
+        "失信被执行人": 3,
+        "失信记录": 0
+      },
+      "blockers": [
+        "3 次命中全部落在否定式披露里（「未发生」「不属于」等），不是可引用的正面事实"
+      ],
+      "reachable": false
+    },
+    {
+      "field_id": "litigation",
+      "field_name": "涉诉记录",
+      "scope": "core",
+      "best_term_hits": 1,
+      "best_positive_hits": 1,
+      "top_terms": {
+        "诉讼": 1,
+        "案件": 1,
+        "案号": 0
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "regulatory_penalty",
+      "field_name": "监管处罚",
+      "scope": "core",
+      "best_term_hits": 1,
+      "best_positive_hits": 0,
+      "top_terms": {
+        "行政处罚": 1,
+        "监管措施": 0,
+        "处罚决定": 0
+      },
+      "blockers": [
+        "1 次命中全部落在否定式披露里（「未发生」「不属于」等），不是可引用的正面事实"
+      ],
+      "reachable": false
+    },
+    {
+      "field_id": "revenue",
+      "field_name": "营业收入",
+      "scope": "core",
+      "best_term_hits": 18,
+      "best_positive_hits": 17,
+      "top_terms": {
+        "营业收入": 18
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "cash_flow",
+      "field_name": "经营性现金流",
+      "scope": "core",
+      "best_term_hits": 9,
+      "best_positive_hits": 8,
+      "top_terms": {
+        "经营活动产生的现金流量净额": 9,
+        "经营性现金流": 0
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "negative_news",
+      "field_name": "负面舆情",
+      "scope": "core",
+      "best_term_hits": 7,
+      "best_positive_hits": 7,
+      "top_terms": {
+        "违约": 7,
+        "负面": 4,
+        "事故": 2
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "shareholders",
+      "field_name": "股东结构",
+      "scope": "core",
+      "best_term_hits": 84,
+      "best_positive_hits": 79,
+      "top_terms": {
+        "股东": 84,
+        "股本": 26,
+        "持股": 25
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "net_profit",
+      "field_name": "净利润",
+      "scope": "core",
+      "best_term_hits": 23,
+      "best_positive_hits": 23,
+      "top_terms": {
+        "净利润": 23
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "overseas_revenue",
+      "field_name": "海外收入",
+      "scope": "scenario",
+      "best_term_hits": 28,
+      "best_positive_hits": 26,
+      "top_terms": {
+        "境外": 28,
+        "海外": 10,
+        "国外": 0
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "inventory",
+      "field_name": "存货",
+      "scope": "scenario",
+      "best_term_hits": 12,
+      "best_positive_hits": 11,
+      "top_terms": {
+        "存货": 12
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "accounts_receivable_gross",
+      "field_name": "应收账款账面余额",
+      "scope": "scenario",
+      "best_term_hits": 22,
+      "best_positive_hits": 19,
+      "top_terms": {
+        "应收账款": 22,
+        "账面余额": 17
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "capex_cash_outflow",
+      "field_name": "资本开支",
+      "scope": "scenario",
+      "best_term_hits": 3,
+      "best_positive_hits": 3,
+      "top_terms": {
+        "购建固定资产": 3,
+        "无形资产和其他长期资产支付的现金": 3
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "construction_in_progress",
+      "field_name": "在建工程",
+      "scope": "scenario",
+      "best_term_hits": 15,
+      "best_positive_hits": 14,
+      "top_terms": {
+        "在建工程": 15
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "internal_control_weakness",
+      "field_name": "内控缺陷",
+      "scope": "scenario",
+      "best_term_hits": 24,
+      "best_positive_hits": 21,
+      "top_terms": {
+        "内部控制": 24,
+        "重大缺陷": 7,
+        "内控": 7
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "top5_customer_share",
+      "field_name": "前五大客户集中度",
+      "scope": "scenario",
+      "best_term_hits": 1,
+      "best_positive_hits": 1,
+      "top_terms": {
+        "前五名客户": 1,
+        "前五大客户": 1,
+        "合计销售金额": 1
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "accounts_receivable_impairment",
+      "field_name": "应收账款减值",
+      "scope": "scenario",
+      "best_term_hits": 33,
+      "best_positive_hits": 32,
+      "top_terms": {
+        "减值准备": 33,
+        "坏账准备": 9,
+        "信用减值损失": 5
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "guarantee_balance",
+      "field_name": "担保余额",
+      "scope": "scenario",
+      "best_term_hits": 4,
+      "best_positive_hits": 3,
+      "top_terms": {
+        "担保余额": 4,
+        "对外担保": 4,
+        "担保总额": 1
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "accounts_receivable_aging",
+      "field_name": "应收账款账龄",
+      "scope": "scenario",
+      "best_term_hits": 8,
+      "best_positive_hits": 8,
+      "top_terms": {
+        "账龄": 8,
+        "1年以内": 6,
+        "1 年以内": 6
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "audit_opinion",
+      "field_name": "审计意见",
+      "scope": "scenario",
+      "best_term_hits": 5,
+      "best_positive_hits": 3,
+      "top_terms": {
+        "审计意见": 5,
+        "无保留意见": 4,
+        "保留意见": 4
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "material_litigation",
+      "field_name": "重大诉讼仲裁",
+      "scope": "scenario",
+      "best_term_hits": 1,
+      "best_positive_hits": 1,
+      "top_terms": {
+        "重大诉讼": 1,
+        "诉讼": 1,
+        "仲裁": 1
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "accounts_receivable_net",
+      "field_name": "应收账款账面价值",
+      "scope": "scenario",
+      "best_term_hits": 35,
+      "best_positive_hits": 31,
+      "top_terms": {
+        "账面价值": 35,
+        "应收账款": 22
+      },
+      "blockers": [],
+      "reachable": true
+    },
+    {
+      "field_id": "top5_supplier_share",
+      "field_name": "前五大供应商集中度",
+      "scope": "scenario",
+      "best_term_hits": 1,
+      "best_positive_hits": 1,
+      "top_terms": {
+        "前五名供应商": 1,
+        "合计采购金额": 1,
+        "前五大供应商": 0
+      },
+      "blockers": [],
+      "reachable": true
+    }
+  ]
+}

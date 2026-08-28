@@ -13,7 +13,7 @@ import os
 import json
 import uuid
 import logging
-from typing import AsyncGenerator, Dict, Any, Optional
+from typing import AsyncGenerator, Dict, Any, List, Optional
 from datetime import datetime
 
 from .graph import DeepResearchGraph
@@ -93,7 +93,13 @@ class DeepResearchV2Service:
         user_id: Optional[str] = None,
         search_web: bool = True,
         search_local: bool = False,
-        max_iterations: Optional[int] = None
+        max_iterations: Optional[int] = None,
+        as_of: str = "",
+        kb_scope: Optional[List[Dict[str, Any]]] = None,
+        subject_name: str = "",
+        business_type: str = "",
+        due_diligence: Optional[bool] = None,
+        investigation: Optional[bool] = None,
     ) -> AsyncGenerator[str, None]:
         """
         执行深度研究（SSE 流式输出）
@@ -107,6 +113,9 @@ class DeepResearchV2Service:
             search_web: 是否启用网络搜索（默认True）
             search_local: 是否启用本地知识库搜索（默认False）
             max_iterations: 本次请求的最大审核迭代次数（覆盖实例默认值）
+            as_of: 研究截止日（ISO 日期）。默认空 = 不设时点闸门
+            kb_scope: 本地知识库检索范围，由路由层按用户授权解析后传入。
+                     本服务不自行解析——授权判断属于持有 db 与登录身份的那一层
 
         Yields:
             SSE 格式的事件字符串
@@ -126,6 +135,12 @@ class DeepResearchV2Service:
         else:
             logger.info(f"Starting research for session {session_id}: {query[:50]}...")
             logger.info(f"Search modes - web: {search_web}, local: {search_local}")
+            if as_of:
+                logger.info(f"研究截止日: {as_of}（晚于该日的证据不得进入判断）")
+            if search_local:
+                logger.info(
+                    f"本地检索范围: {[e.get('kb_name') for e in (kb_scope or [])] or '（空——将报为检索故障）'}"
+                )
 
         try:
             async for event in self.graph.run(
@@ -133,7 +148,13 @@ class DeepResearchV2Service:
                 resume=resume,
                 user_id=user_id,
                 search_web=search_web,
-                search_local=search_local
+                search_local=search_local,
+                as_of=as_of,
+                kb_scope=kb_scope,
+                subject_name=subject_name,
+                business_type=business_type,
+                due_diligence=due_diligence,
+                investigation=investigation,
             ):
                 # 转换为 SSE 格式
                 yield self._format_sse(event)

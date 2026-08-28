@@ -1,0 +1,81 @@
+{
+  "confidence": {
+    "overall_reference_assessment": 0.78
+  },
+  "credit_amount": null,
+  "eval_only": true,
+  "generated_reference": true,
+  "hard_gate_triggers": [],
+  "human_review_status": "not_reviewed",
+  "key_risk_factors": [
+    "2024年境外主营业务收入占主营业务约77.01%",
+    "2025Q1应收账款较2024年末增长23.63%",
+    "2025Q1存货较2024年末增长16.61%",
+    "2025Q1经营现金流为-4.716亿元",
+    "存在客户购机融资担保和对子公司担保安排",
+    "上海鼎策及部分境外子公司杠杆较高",
+    "母公司对上海鼎策2.50亿元非经营性往来需穿透复核",
+    "上海鼎策历史存在较大规模应收融资租赁款质押/有追索权保理",
+    "母公司贸易应收款是否存在质押、转让、保理和重复融资尚缺关键证据"
+  ],
+  "label_grade": "silver",
+  "missing_critical_evidence": [
+    "2025-06-30应收账款逐户台账和期后回款",
+    "主要客户和经销商名单",
+    "合同、订单、发票、物流、验收和确权材料",
+    "全部应收账款质押/转让/保理登记",
+    "客户融资担保实际提款和违约情况",
+    "上海鼎策2.50亿元资金往来协议和用途",
+    "全部银行授信实际使用余额",
+    "银行流水、税务及企业征信",
+    "司法和行政官方数据库全量查询结果"
+  ],
+  "mitigating_factors": [
+    "2024年资产负债率约34.62%",
+    "2024年经营活动现金流净额19.17亿元",
+    "2024年财务报表取得无保留审计意见",
+    "2024年约92.89%的应收账款账龄在一年以内",
+    "前五大客户销售占比27.60%",
+    "截至2025-06-17公司披露无逾期对外担保"
+  ],
+  "normalized": {
+    "adverse_risk_gates": [],
+    "assessment_confidence": {
+      "calibrated_probability": false,
+      "ordinal_score": {
+        "overall_reference_assessment": 0.78
+      },
+      "raw": {
+        "overall_reference_assessment": 0.78
+      }
+    },
+    "corporate_risk_level": null,
+    "decision_status": "manual_review",
+    "information_gates": [],
+    "risk_level_raw": "中",
+    "risk_scope": null,
+    "transaction_readiness": "insufficient_evidence",
+    "transaction_risk_level": null
+  },
+  "reasoning_claim_ids": [
+    "C019",
+    "C024",
+    "C027",
+    "C029",
+    "C033",
+    "C035",
+    "C041",
+    "C044",
+    "C046",
+    "C048",
+    "C052",
+    "C053",
+    "C055",
+    "C057",
+    "C060",
+    "C062",
+    "C063"
+  ],
+  "recommended_action": "人工复核",
+  "risk_level": "中"
+}

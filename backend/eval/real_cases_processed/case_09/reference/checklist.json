@@ -1,0 +1,560 @@
+[
+  {
+    "check_id": "CHK001",
+    "conclusion": "海尔智家股份有限公司",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S01"
+    ],
+    "evidence_claim_ids": [
+      "C001"
+    ],
+    "evidence_ids": [
+      "C001",
+      "S01"
+    ],
+    "hard_gate": false,
+    "item": "当前法人名称",
+    "manual_review": false,
+    "missing_evidence": "无",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK002",
+    "conclusion": "91370200264574251E",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S01"
+    ],
+    "evidence_claim_ids": [
+      "C005"
+    ],
+    "evidence_ids": [
+      "C005",
+      "S01"
+    ],
+    "hard_gate": null,
+    "item": "统一社会信用代码",
+    "manual_review": true,
+    "missing_evidence": "实际交易文件中的信用代码",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK003",
+    "conclusion": "琴岛海尔电冰箱→青岛海尔电冰箱→青岛海尔股份→海尔智家",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C002",
+      "C004"
+    ],
+    "evidence_ids": [
+      "C002",
+      "C004"
+    ],
+    "hard_gate": null,
+    "item": "曾用名链",
+    "manual_review": true,
+    "missing_evidence": "具体历史合同日期",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK004",
+    "conclusion": "否；它是历史股票简称，完整法人历史名称为“青岛海尔股份有限公司”等",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C004",
+      "C012"
+    ],
+    "evidence_ids": [
+      "C004",
+      "C012"
+    ],
+    "hard_gate": null,
+    "item": "“青岛海尔”是否可直接视为法人名称",
+    "manual_review": true,
+    "missing_evidence": "交易文件全文",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK005",
+    "conclusion": "**否**",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C017",
+      "C019"
+    ],
+    "evidence_ids": [
+      "C017",
+      "C019"
+    ],
+    "hard_gate": true,
+    "item": "“海尔集团”是否等于海尔智家",
+    "manual_review": true,
+    "missing_evidence": "实际合同/发票",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK006",
+    "conclusion": "**否**",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C020",
+      "C022"
+    ],
+    "evidence_ids": [
+      "C020",
+      "C022"
+    ],
+    "hard_gate": true,
+    "item": "海尔财务公司是否等于海尔智家",
+    "manual_review": true,
+    "missing_evidence": "实际付款路径",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK007",
+    "conclusion": "三类股份均对应海尔智家",
+    "conflict": "D股上市日期/场所披露有口径差异",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C012",
+      "C014"
+    ],
+    "evidence_ids": [
+      "C012",
+      "C014"
+    ],
+    "hard_gate": false,
+    "item": "A/H/D主体一致性",
+    "manual_review": true,
+    "missing_evidence": "无",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK008",
+    "conclusion": "章程与H股一般资料存在不同表述",
+    "conflict": "有",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C015"
+    ],
+    "evidence_ids": [
+      "C015"
+    ],
+    "hard_gate": false,
+    "item": "D股首发日期/场所",
+    "manual_review": true,
+    "missing_evidence": "可进一步调取2018年CEINEX原始上市公告",
+    "retrieval_attempt_ids": [],
+    "status": "conflicting"
+  },
+  {
+    "check_id": "CHK009",
+    "conclusion": "1989设立历史已验证，但精确工商日期本次未从GSXT确认",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C008",
+      "C009"
+    ],
+    "evidence_ids": [
+      "C008",
+      "C009"
+    ],
+    "hard_gate": false,
+    "item": "工商精确成立日期",
+    "manual_review": true,
+    "missing_evidence": "GSXT有效查询结果",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK010",
+    "conclusion": "不作“正常/存续”最终工商结论",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C010"
+    ],
+    "evidence_ids": [
+      "C010"
+    ],
+    "hard_gate": null,
+    "item": "工商登记状态",
+    "manual_review": true,
+    "missing_evidence": "GSXT查询",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK011",
+    "conclusion": "截止日为李华刚",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C011"
+    ],
+    "evidence_ids": [
+      "C011"
+    ],
+    "hard_gate": false,
+    "item": "法定代表人",
+    "manual_review": true,
+    "missing_evidence": "实际合同签署授权",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK012",
+    "conclusion": "海尔集团公司",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C016"
+    ],
+    "evidence_ids": [
+      "C016"
+    ],
+    "hard_gate": false,
+    "item": "实际控制人",
+    "manual_review": false,
+    "missing_evidence": "无",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK013",
+    "conclusion": "收入、归母净利、经营现金流总体增长",
+    "conflict": "2023存在重述",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C023",
+      "C031"
+    ],
+    "evidence_ids": [
+      "C023",
+      "C031"
+    ],
+    "hard_gate": false,
+    "item": "2022-2024收入利润现金流",
+    "manual_review": false,
+    "missing_evidence": "无",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK014",
+    "conclusion": "2024标准无保留",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C036"
+    ],
+    "evidence_ids": [
+      "C036"
+    ],
+    "hard_gate": false,
+    "item": "审计意见",
+    "manual_review": false,
+    "missing_evidence": "无",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK015",
+    "conclusion": "本次已访问审计摘要未显示非标持续经营意见；但不能等同于所有公开来源均无风险",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S02"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S02"
+    ],
+    "hard_gate": false,
+    "item": "持续经营重大不确定性",
+    "manual_review": null,
+    "missing_evidence": "完整审计报告复核",
+    "retrieval_attempt_ids": [],
+    "status": "no_record_found/limited_scope"
+  },
+  {
+    "check_id": "CHK016",
+    "conclusion": "2024净额264.73亿元；2025Q1账面282.36亿元",
+    "conflict": "IFRS/CAS展示口径不同",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C038",
+      "C043"
+    ],
+    "evidence_ids": [
+      "C038",
+      "C043"
+    ],
+    "hard_gate": false,
+    "item": "应收账款规模",
+    "manual_review": false,
+    "missing_evidence": "无",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK017",
+    "conclusion": "2024净应收中约240.78亿元为1-3个月",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C040",
+      "C041"
+    ],
+    "evidence_ids": [
+      "C040",
+      "C041"
+    ],
+    "hard_gate": null,
+    "item": "应收账款账龄",
+    "manual_review": true,
+    "missing_evidence": "特定债权账龄",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK018",
+    "conclusion": "2024年430.44亿元",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C037"
+    ],
+    "evidence_ids": [
+      "C037"
+    ],
+    "hard_gate": false,
+    "item": "存货",
+    "manual_review": false,
+    "missing_evidence": "无",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK019",
+    "conclusion": "2025Q1约188.10亿元",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C045"
+    ],
+    "evidence_ids": [
+      "C045"
+    ],
+    "hard_gate": false,
+    "item": "短期借款",
+    "manual_review": false,
+    "missing_evidence": "无",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK020",
+    "conclusion": "公开存在集团内部担保及若干特定海尔集团担保",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C051",
+      "C053"
+    ],
+    "evidence_ids": [
+      "C051",
+      "C053"
+    ],
+    "hard_gate": null,
+    "item": "担保",
+    "manual_review": true,
+    "missing_evidence": "**拟融资债权自己的保证合同**",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK021",
+    "conclusion": "集团2024末有4700万元应收及票据用于银行贷款质押",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C049"
+    ],
+    "evidence_ids": [
+      "C049"
+    ],
+    "hard_gate": true,
+    "item": "应收账款质押",
+    "manual_review": true,
+    "missing_evidence": "拟融资应收具体登记",
+    "retrieval_attempt_ids": [],
+    "status": "verified/partial"
+  },
+  {
+    "check_id": "CHK022",
+    "conclusion": "50.68亿元应收票据用于担保部分应付票据",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C050"
+    ],
+    "evidence_ids": [
+      "C050"
+    ],
+    "hard_gate": true,
+    "item": "票据质押",
+    "manual_review": true,
+    "missing_evidence": "特定资产编号匹配",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK023",
+    "conclusion": "公开合并财报无法回答",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": true,
+    "item": "特定应收是否已转让/保理",
+    "manual_review": true,
+    "missing_evidence": "动产融资统一登记、已有保理合同",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK024",
+    "conclusion": "本案例未提供私域合同",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": true,
+    "item": "具体合同债务人",
+    "manual_review": true,
+    "missing_evidence": "原合同/补充协议",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK025",
+    "conclusion": "未提供发票，不能假设抬头为海尔智家",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": true,
+    "item": "发票抬头",
+    "manual_review": true,
+    "missing_evidence": "发票原件/电子底账",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK026",
+    "conclusion": "公开资料无法核验",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": true,
+    "item": "收货/验收",
+    "manual_review": true,
+    "missing_evidence": "PO、送货、验收、物流",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK027",
+    "conclusion": "未获得具体债务人确认",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": true,
+    "item": "对账/确权",
+    "manual_review": true,
+    "missing_evidence": "对账单、确权函、电子确权记录",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK028",
+    "conclusion": "公开资料无法核验",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": true,
+    "item": "回款主体及历史流水",
+    "manual_review": true,
+    "missing_evidence": "银行流水、回款凭证",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK029",
+    "conclusion": "官方入口本次403，不能写“无记录”",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C055",
+      "C056"
+    ],
+    "evidence_ids": [
+      "C055",
+      "C056"
+    ],
+    "hard_gate": null,
+    "item": "被执行/失信",
+    "manual_review": true,
+    "missing_evidence": "官方查询截图/结果",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK030",
+    "conclusion": "官方入口未能完成查询",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C057"
+    ],
+    "evidence_ids": [
+      "C057"
+    ],
+    "hard_gate": null,
+    "item": "行政处罚/经营异常",
+    "manual_review": true,
+    "missing_evidence": "GSXT/信用中国结果",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK031",
+    "conclusion": "非公开资料；不得据缺失推断信用良好",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": null,
+    "item": "银行流水、税务、企业征信",
+    "manual_review": true,
+    "missing_evidence": "借款人授权资料",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  }
+]

@@ -7,6 +7,7 @@ import {
   type Completeness,
   type FieldCheck,
   type HumanReviewRequest,
+  type Investigation,
   type ReviewDecision,
   type RiskAssessment,
 } from '@/api/duediligence'
@@ -32,6 +33,9 @@ export interface DDState {
   risk: RiskAssessment | null
   reviewRequest: HumanReviewRequest | null
   report: string
+  /** 调查层（B 层）。**与上面的 risk / completeness 语义完全隔离**：
+   *  它不参与评级与额度，界面上也必须分区呈现，不得与清单混排 */
+  investigation: Investigation | null
   /** 证据链降级与执行错误。**必须呈现**——只写进日志的话，
    *  复核人不会知道这份结论建立在来源不明的数据上 */
   errors: string[]
@@ -41,7 +45,48 @@ export interface DDState {
 const EMPTY: DDState = {
   phase: 'idle', sessionId: '', companyName: '', stage: '',
   steps: [], fieldChecks: [], completeness: null, risk: null,
-  reviewRequest: null, report: '', errors: [], errorMessage: '',
+  reviewRequest: null, report: '', investigation: null,
+  errors: [], errorMessage: '',
+}
+
+interface DDStreamEvent {
+  type?: string
+  name?: string
+  message?: string
+  content?: unknown
+  phase?: string
+  company_name?: string
+  field_checks?: FieldCheck[]
+  completeness?: Completeness
+  title?: string
+  subtitle?: string
+  investigation?: Investigation
+  human_review?: RiskAssessment['human_review']
+  level?: string
+  gates_applied?: string[]
+  credit_advice?: string
+  final_report?: string
+  risk_assessment?: RiskAssessment
+  errors?: string[]
+}
+
+function asEvent(value: unknown): DDStreamEvent {
+  return value !== null && typeof value === 'object' ? value as DDStreamEvent : {}
+}
+
+function eventPayload(event: DDStreamEvent): DDStreamEvent {
+  return event.content !== null && typeof event.content === 'object'
+    ? asEvent(event.content)
+    : event
+}
+
+function errorInfo(value: unknown): { name: string; message: string } {
+  if (value instanceof Error) return { name: value.name, message: value.message }
+  const record = asEvent(value)
+  return {
+    name: typeof record.name === 'string' ? record.name : '',
+    message: typeof record.message === 'string' ? record.message : '',
+  }
 }
 
 /**
@@ -59,33 +104,40 @@ export function useDDStream() {
     setState(prev => ({ ...prev, ...p }))
   }, [])
 
-  const handleEvent = useCallback((json: any) => {
+  const handleEvent = useCallback((value: unknown) => {
+    const json = asEvent(value)
     const t = json?.type
     if (!t) return
 
     switch (t) {
       case 'phase':
-        patch({ stage: json.content || json.phase || '' })
+        patch({ stage: typeof json.content === 'string' ? json.content : json.phase || '' })
         break
 
       case 'company_profile_loaded':
-        patch({ companyName: json.company_name || json.content?.company_name || '' })
+        patch({ companyName: json.company_name || eventPayload(json).company_name || '' })
         break
 
       case 'field_checks_updated':
+        {
+          const c = eventPayload(json)
         patch({
-          fieldChecks: json.field_checks || [],
-          completeness: json.completeness || null,
+          fieldChecks: json.field_checks || c.field_checks || [],
+          completeness: json.completeness || c.completeness || null,
         })
+        }
         break
 
       case 'research_step':
       case 'action': {
-        const c = json.content || json
-        if (c?.title) {
+        const c = eventPayload(json)
+        // 先取到局部再判空：属性上的收窄不会带进闭包，
+        // 直接写 c.title 会把 undefined 塞进必填字段
+        const title = c?.title
+        if (title) {
           setState(prev => ({
             ...prev,
-            steps: [...prev.steps, { title: c.title, detail: c.subtitle, at: Date.now() }],
+            steps: [...prev.steps, { title, detail: c.subtitle, at: Date.now() }],
           }))
         }
         break
@@ -96,16 +148,18 @@ export function useDDStream() {
       //    因此报告正文只能从撰写阶段的 report_draft 取——
       //    否则复核卡片弹出来时，右侧是空的，复核人只能凭等级和闸门签字。
       case 'report_draft': {
-        const c = json.content || json
-        if (c?.content) patch({ report: c.content })
+        const c = eventPayload(json)
+        if (typeof c.content === 'string') patch({ report: c.content })
         break
       }
 
       // 「迭代用尽仍有阻断级问题，已强制转人工复核」这类提示必须呈现，
       // 它解释了复核卡点为什么会出现
       case 'warning': {
-        const c = json.content || json
-        const text = typeof c === 'string' ? c : c?.content
+        const c = eventPayload(json)
+        const text = typeof json.content === 'string'
+          ? json.content
+          : typeof c.content === 'string' ? c.content : ''
         if (text) {
           setState(prev =>
             prev.errors.includes(text) ? prev : { ...prev, errors: [...prev.errors, text] })
@@ -113,8 +167,16 @@ export function useDDStream() {
         break
       }
 
+      // 调查层。**不并入 risk**：它不参与裁决，混进同一个对象里
+      // 迟早会有人顺手把它当成评级依据读出去。
+      case 'investigation': {
+        const c = eventPayload(json)
+        patch({ investigation: c as unknown as Investigation })
+        break
+      }
+
       case 'risk_assessment': {
-        const c = json.content || json
+        const c = eventPayload(json)
         setState(prev => ({
           ...prev,
           risk: { ...(prev.risk || {}), ...c } as RiskAssessment,
@@ -124,19 +186,31 @@ export function useDDStream() {
 
       // —— 复核卡点。暂停 ≠ 完成，界面必须显式区分 ——
       case 'human_review_required':
-        patch({ phase: 'awaiting_review', reviewRequest: json as HumanReviewRequest })
+        patch({
+          phase: 'awaiting_review',
+          reviewRequest: json as unknown as HumanReviewRequest,
+        })
         break
 
       case 'research_resumed':
         patch({ phase: 'running', stage: '已提交复核结论，从断点继续…' })
         break
 
+      // ⚠️ 事件里缺哪一项就保留原值，**不得写入 undefined**。
+      //    等级、闸门、授信结论都是必填字段：写进 undefined 之后界面上
+      //    是一片空白，而"复核完成后风险等级变成空的"会被读成没有风险。
+      //    这与后端 `unratable()` 同一原则——宁可显示旧值，不给空结论。
       case 'human_review_completed':
         setState(prev => ({
           ...prev,
           risk: prev.risk
-            ? { ...prev.risk, human_review: json.human_review, level: json.level,
-                gates_applied: json.gates_applied, credit_advice: json.credit_advice }
+            ? {
+                ...prev.risk,
+                human_review: json.human_review ?? prev.risk.human_review,
+                level: json.level ?? prev.risk.level,
+                gates_applied: json.gates_applied ?? prev.risk.gates_applied,
+                credit_advice: json.credit_advice ?? prev.risk.credit_advice,
+              }
             : prev.risk,
         }))
         break
@@ -149,6 +223,7 @@ export function useDDStream() {
           fieldChecks: json.field_checks || prev.fieldChecks,
           completeness: json.completeness || prev.completeness,
           risk: json.risk_assessment || prev.risk,
+          investigation: json.investigation || prev.investigation,
           // 必须与已累积的 warning 合并。终局事件只带 state["errors"]，
           // 流式过程中推来的告警不在其中，直接覆盖会让它们凭空消失。
           errors: Array.from(new Set([...prev.errors, ...(json.errors || [])])),
@@ -161,14 +236,17 @@ export function useDDStream() {
         break
 
       case 'error':
-        patch({ phase: 'error', errorMessage: String(json.content || '未知错误') })
+        patch({
+          phase: 'error',
+          errorMessage: typeof json.content === 'string' ? json.content : '未知错误',
+        })
         break
     }
   }, [patch])
 
   /** 读取一条 SSE 流直到结束。两个入口（发起 / 恢复复核）共用 */
-  const consume = useCallback(async (body: ReadableStream) => {
-    const reader = (body as any).getReader()
+  const consume = useCallback(async (body: ReadableStream<Uint8Array>) => {
+    const reader = body.getReader()
     const decoder = new TextDecoder('utf-8')
     let buffer = ''
     for (;;) {
@@ -193,23 +271,35 @@ export function useDDStream() {
     }
   }, [handleEvent])
 
-  const start = useCallback(async (query: string) => {
+  const start = useCallback(async (
+    query: string,
+    options?: { kbName?: string; asOf?: string; subjectName?: string; businessType?: string },
+  ) => {
     const sessionId = `dd-${Date.now()}`
     abortRef.current?.abort()
     abortRef.current = new AbortController()
     setState({ ...EMPTY, phase: 'running', sessionId, stage: '正在载入企业档案…' })
     try {
-      const res = await startDueDiligence({ query, session_id: sessionId },
-        { signal: abortRef.current.signal } as any)
-      await consume(res.data as any)
+      const res = await startDueDiligence({
+        query,
+        session_id: sessionId,
+        subject_name: options?.subjectName,
+        business_type: options?.businessType,
+        kb_name: options?.kbName,
+        as_of: options?.asOf,
+        search_modes: options?.kbName ? ['local'] : [],
+      },
+        { signal: abortRef.current.signal })
+      await consume(res.data)
       // 流结束但既未完成也未暂停：按未完成处理，不假装成功
       setState(prev =>
         prev.phase === 'running'
           ? { ...prev, phase: 'error', errorMessage: '连接中断，本次尽调未产出结论' }
           : prev)
-    } catch (e: any) {
-      if (e?.name !== 'CanceledError' && e?.name !== 'AbortError') {
-        patch({ phase: 'error', errorMessage: e?.message || '请求失败' })
+    } catch (e: unknown) {
+      const error = errorInfo(e)
+      if (error.name !== 'CanceledError' && error.name !== 'AbortError') {
+        patch({ phase: 'error', errorMessage: error.message || '请求失败' })
       }
     }
   }, [consume, patch])
@@ -220,9 +310,9 @@ export function useDDStream() {
     patch({ phase: 'running', stage: '正在提交复核结论…' })
     try {
       const res = await submitReview(sid, decision)
-      await consume(res.data as any)
-    } catch (e: any) {
-      patch({ phase: 'error', errorMessage: e?.message || '提交复核失败' })
+      await consume(res.data)
+    } catch (e: unknown) {
+      patch({ phase: 'error', errorMessage: errorInfo(e).message || '提交复核失败' })
     }
   }, [state.sessionId, consume, patch])
 

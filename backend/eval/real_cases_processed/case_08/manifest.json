@@ -1,0 +1,37 @@
+{
+  "business_scenario": "汽车零部件供应商持有“华晨系”采购应收账款申请保理，需识别准确合同债务人并判断其是否属于实质合并重整范围",
+  "business_types": [
+    "factoring"
+  ],
+  "case_id": "case_08",
+  "counts": {
+    "checklist_items": 32,
+    "post_cutoff_claims": 0,
+    "reference_claims": 60,
+    "sources": 17
+  },
+  "difficulty": "高难",
+  "label_policy": {
+    "generated_by": "deep_research",
+    "grade": "silver",
+    "human_review_status": "not_reviewed",
+    "raw_sources_retrievable_by_agent_after_verification": true,
+    "reference_retrievable_by_agent": false
+  },
+  "original_document": "D:/pythoncode/industry_information_assistant/industry_information_assistant/backend/eval/real_cases/case_08_华晨汽车集团控股有限公司_尽调案例包.md",
+  "original_sha256": "ac3badd3673cb31f1d9a49e0d91724183e18d5e4d546d368c623451bac080bc1",
+  "primary_business_type": "factoring",
+  "research_cutoff": "2023-08-31",
+  "schema_version": "real-case-v1",
+  "subject": {
+    "establishment_date": "2002-09-16",
+    "former_names": null,
+    "former_names_status": "unverified",
+    "name": "华晨汽车集团控股有限公司",
+    "registered_capital_cny": 800000000,
+    "registration_status": null,
+    "registration_status_status": "unverified",
+    "reported_ultimate_controller_as_of_2023H1": "辽宁省人民政府国有资产监督管理委员会",
+    "unified_social_credit_code": "91210000744327380Q"
+  }
+}

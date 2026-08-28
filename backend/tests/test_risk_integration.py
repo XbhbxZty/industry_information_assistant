@@ -124,8 +124,7 @@ def _events(state, event_type):
 
 def test_LLM全部失败时评级仍然产出():
     """
-    DataAnalyst 的三个 LLM 步骤全挂，评级必须已经存在。
-    这是 BC-17 的同款陷阱：把确定性组件写在不确定组件之后/之内。
+    尽调模式不应调用无 evidence_id 的派生 LLM 路径，评级必须独立产出。
     """
     state = _dd_state()
     agent = _analyst(llm_raises=True)
@@ -136,9 +135,9 @@ def test_LLM全部失败时评级仍然产出():
     except Exception:
         raised = True   # 生产中由 graph.run_agent_with_streaming 吞掉
 
-    assert raised, "前提：本用例要求 LLM 路径确实失败，否则测的不是这件事"
-    assert state["charts"] == [], "前提：LLM 挂了就不该有图表"
-    assert state["risk_assessment"], "LLM 失败不得影响纯规则评级的产出"
+    assert not raised, "尽调模式应在调用无证据派生 LLM 前安全跳过"
+    assert state["charts"] == [], "无独立 evidence_id 不得生成图表"
+    assert state["risk_assessment"], "跳过派生分析不得影响纯规则评级的产出"
     assert LEVELS.index(state["risk_assessment"]["level"]) >= LEVELS.index("高风险")
 
 

@@ -1,0 +1,91 @@
+{
+  "confidence": {
+    "overall_reference_assessment": 0.96
+  },
+  "credit_amount": null,
+  "eval_only": true,
+  "generated_reference": true,
+  "hard_gate_triggers": [
+    "监管认定的系统性财务虚假记载",
+    "历史审计报告被监管认定存在虚假记载",
+    "2020年度无法表示意见",
+    "截至2022-04-29仍发生重大追溯重述",
+    "重大历史关联方资金占用",
+    "2021年刚完成司法重整",
+    "证券虚假陈述生效民事判决"
+  ],
+  "human_review_status": "not_reviewed",
+  "key_risk_factors": [
+    "历史财务数据版本冲突",
+    "财务报表可靠性风险",
+    "2021盈利与扣非利润及现金流严重背离",
+    "重整后经营能力观察期较短",
+    "交易级应收账款证据缺失"
+  ],
+  "label_grade": "silver",
+  "missing_critical_evidence": [
+    "银行流水",
+    "企业征信",
+    "税务资料",
+    "重整后逐笔金融债务",
+    "抵质押及担保全量登记",
+    "应收账款质押转让保理登记",
+    "合同发票物流验收确权回款资料",
+    "完整司法执行历史快照"
+  ],
+  "mitigating_factors": [
+    "司法重整已经执行完毕",
+    "控股股东发生变化",
+    "年报披露无实际控制人",
+    "2021年末净资产恢复为正",
+    "负债规模显著下降",
+    "2021年度审计意见改善为带强调事项段的无保留意见",
+    "年报披露历史关联方资金占用已清偿"
+  ],
+  "normalized": {
+    "adverse_risk_gates": [
+      "监管认定的系统性财务虚假记载",
+      "历史审计报告被监管认定存在虚假记载",
+      "2020年度无法表示意见",
+      "截至2022-04-29仍发生重大追溯重述",
+      "重大历史关联方资金占用",
+      "2021年刚完成司法重整",
+      "证券虚假陈述生效民事判决"
+    ],
+    "assessment_confidence": {
+      "calibrated_probability": false,
+      "ordinal_score": {
+        "overall_reference_assessment": 0.96
+      },
+      "raw": {
+        "overall_reference_assessment": 0.96
+      }
+    },
+    "corporate_risk_level": null,
+    "decision_status": "blocked",
+    "information_gates": [],
+    "risk_level_raw": "高",
+    "risk_scope": null,
+    "transaction_readiness": "insufficient_evidence",
+    "transaction_risk_level": null
+  },
+  "reasoning_claim_ids": [
+    "C105",
+    "C147",
+    "C149",
+    "C150",
+    "C151",
+    "C154",
+    "C161",
+    "C162",
+    "C163",
+    "C170",
+    "C171",
+    "C190",
+    "C191",
+    "C192",
+    "C193"
+  ],
+  "recommended_action": "暂缓",
+  "risk_level": "高"
+}

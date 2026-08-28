@@ -1,0 +1,35 @@
+{
+  "case_id": "case_12",
+  "errors": [],
+  "metrics": {
+    "checklist_rows": 32,
+    "embedded_claim_rows": 48,
+    "embedded_source_rows": 15,
+    "markdown_claim_rows": 56,
+    "markdown_source_rows": 15,
+    "normalized_claim_rows": 56,
+    "normalized_source_rows": 15,
+    "post_cutoff_claim_rows": 2,
+    "reference_claim_rows": 54
+  },
+  "schema_version": "real-case-v1",
+  "status": "passed_with_warnings",
+  "warnings": [
+    {
+      "code": "embedded_json_claims_incomplete",
+      "detail": "embedded=48, normalized_markdown_merge=56"
+    },
+    {
+      "code": "source_cutoff_unknown",
+      "detail": "one or more sources have unknown cutoff eligibility"
+    },
+    {
+      "code": "mirror_source_present",
+      "detail": "one or more sources use a Sina mirror"
+    },
+    {
+      "code": "raw_sources_not_downloaded",
+      "detail": "this pass creates an acquisition queue; source files still require download and hashing"
+    }
+  ]
+}

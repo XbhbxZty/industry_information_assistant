@@ -1,9 +1,11 @@
 // Copyright © 2026 XbhbxZty
 // 本文件为「尽调智核」迭代中新增，不含原课程项目代码。
-import { useState } from 'react'
-import { Alert, Button, Card, Col, Empty, Input, Row, Space, Spin, Tag, Typography } from 'antd'
+import { useEffect, useState } from 'react'
+import { Alert, Button, Card, Col, Empty, Input, Row, Select, Space, Spin, Tag, Typography } from 'antd'
 import Markdown from '@/components/markdown'
+import { getKnowledgeBases, type KnowledgeBase } from '@/api/knowledge'
 import { ChecklistTable, CompletenessBar, ReviewCard, RiskCard } from './components'
+import { InvestigationPanel } from './investigation'
 import { useDDStream } from './useDDStream'
 import styles from './index.module.scss'
 
@@ -18,6 +20,17 @@ const SAMPLES = [
 export default function DueDiligencePage() {
   const { state, start, review, reset } = useDDStream()
   const [query, setQuery] = useState(SAMPLES[0])
+  const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([])
+  const [kbName, setKbName] = useState<string>()
+  const [asOf, setAsOf] = useState('')
+
+  useEffect(() => {
+    getKnowledgeBases()
+      .then(res => setKnowledgeBases(res.data || []))
+      .catch(() => setKnowledgeBases([]))
+  }, [])
+
+  const launch = () => start(query, { kbName, asOf: asOf.trim() || undefined })
 
   const running = state.phase === 'running'
   const idle = state.phase === 'idle'
@@ -33,15 +46,34 @@ export default function DueDiligencePage() {
 
       <Card size="small" className={styles.launcher}>
         <Space.Compact style={{ width: '100%' }}>
+          <Select
+            allowClear
+            value={kbName}
+            onChange={setKbName}
+            disabled={running}
+            placeholder="资料库（可选）"
+            style={{ width: 220 }}
+            options={knowledgeBases.map(kb => ({
+              value: kb.name,
+              label: `${kb.name}（${kb.document_count}份）`,
+            }))}
+          />
           <Input
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="输入尽调对象与授信申请，例如：请对某某有限公司做贷前尽职调查，授信2000万元"
-            onPressEnter={() => !running && query.trim() && start(query)}
+            onPressEnter={() => !running && query.trim() && launch()}
             disabled={running}
           />
+          <Input
+            value={asOf}
+            onChange={e => setAsOf(e.target.value)}
+            placeholder="截止日 YYYY-MM-DD"
+            disabled={running}
+            style={{ width: 170 }}
+          />
           <Button type="primary" loading={running} disabled={!query.trim()}
-            onClick={() => start(query)}>
+            onClick={launch}>
             发起尽调
           </Button>
           {!idle && <Button onClick={reset} disabled={running}>重置</Button>}
@@ -85,7 +117,7 @@ export default function DueDiligencePage() {
             <Space direction="vertical" size={2}>
               <Text>输入一家企业发起尽调</Text>
               <Text type="secondary" style={{ fontSize: 12 }}>
-                数据源为虚构的模拟数据，无需任何付费 Key 即可跑通
+                可直接使用已有企业档案，也可选择资料库检索已上传的文本型 PDF；未核实项不会被写成“无风险”
               </Text>
             </Space>
           }
@@ -115,6 +147,10 @@ export default function DueDiligencePage() {
                 <ReviewCard req={state.reviewRequest} onSubmit={review} submitting={false} />
               )}
               <RiskCard risk={state.risk} />
+              {/* 调查层排在评级之后、报告正文之前，与报告里的章节顺序一致：
+                  A 层裁决 → B 层调查 → 证据附录。两处顺序必须相同，
+                  否则同一份结论在界面上与在报告里读起来是两个东西 */}
+              <InvestigationPanel data={state.investigation} />
               {state.report && (
                 <Card size="small" title="尽职调查报告" className={styles.report}>
                   {/* gfm 必须开启：报告里的评级块、额度测算与溯源附录都是表格 */}

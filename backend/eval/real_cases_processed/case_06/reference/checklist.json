@@ -1,0 +1,650 @@
+[
+  {
+    "check_id": "CHK001",
+    "conclusion": "三者主体匹配",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C001",
+      "C003"
+    ],
+    "evidence_ids": [
+      "C001",
+      "C003"
+    ],
+    "hard_gate": false,
+    "item": "主体名称/信用代码/上市代码",
+    "manual_review": false,
+    "missing_evidence": "工商原始登记页未纳入",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK002",
+    "conclusion": "1991-06-13",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C007"
+    ],
+    "evidence_ids": [
+      "C007"
+    ],
+    "hard_gate": false,
+    "item": "成立日期",
+    "manual_review": null,
+    "missing_evidence": "工商登记一手页",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK003",
+    "conclusion": "未直接完成国家企业信用信息公示系统时点核验",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C008"
+    ],
+    "evidence_ids": [
+      "C008"
+    ],
+    "hard_gate": false,
+    "item": "工商登记状态",
+    "manual_review": true,
+    "missing_evidence": "工商登记公示",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK004",
+    "conclusion": "杨一",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C005"
+    ],
+    "evidence_ids": [
+      "C005"
+    ],
+    "hard_gate": false,
+    "item": "法定代表人",
+    "manual_review": false,
+    "missing_evidence": "—",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK005",
+    "conclusion": "云南合奥",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C009",
+      "C017"
+    ],
+    "evidence_ids": [
+      "C009",
+      "C017"
+    ],
+    "hard_gate": false,
+    "item": "控股股东",
+    "manual_review": false,
+    "missing_evidence": "—",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK006",
+    "conclusion": "曲靖高新区管委会",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C010",
+      "C017"
+    ],
+    "evidence_ids": [
+      "C010",
+      "C017"
+    ],
+    "hard_gate": false,
+    "item": "实际控制人",
+    "manual_review": false,
+    "missing_evidence": "—",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK007",
+    "conclusion": "第一大股东变化与控制权生效并非同一天；控制权正式于12月25日变化",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C015",
+      "C017"
+    ],
+    "evidence_ids": [
+      "C015",
+      "C017"
+    ],
+    "hard_gate": false,
+    "item": "控制权变化时间",
+    "manual_review": false,
+    "missing_evidence": "—",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK008",
+    "conclusion": "2024-09-13受理",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C012"
+    ],
+    "evidence_ids": [
+      "C012"
+    ],
+    "hard_gate": null,
+    "item": "司法重整受理",
+    "manual_review": null,
+    "missing_evidence": "法院原裁定PDF",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK009",
+    "conclusion": "2024-12-06完成并终结程序",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C016"
+    ],
+    "evidence_ids": [
+      "C016"
+    ],
+    "hard_gate": null,
+    "item": "重整执行完成",
+    "manual_review": null,
+    "missing_evidence": "法院原裁定PDF",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK010",
+    "conclusion": "历史规模巨大，288,405.29万元",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C018"
+    ],
+    "evidence_ids": [
+      "C018"
+    ],
+    "hard_gate": null,
+    "item": "历史资金占用",
+    "manual_review": true,
+    "missing_evidence": "—",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK011",
+    "conclusion": "经重整机制完成处置",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C019"
+    ],
+    "evidence_ids": [
+      "C019"
+    ],
+    "hard_gate": null,
+    "item": "资金占用整改",
+    "manual_review": true,
+    "missing_evidence": "—",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK012",
+    "conclusion": "公司被责令改正、警告、罚款250万元",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C020",
+      "C021"
+    ],
+    "evidence_ids": [
+      "C020",
+      "C021"
+    ],
+    "hard_gate": null,
+    "item": "历史证监会处罚",
+    "manual_review": true,
+    "missing_evidence": "—",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK013",
+    "conclusion": "属个人/原控制人风险",
+    "conflict": "无",
+    "direct_source_ids": [
+      "S04"
+    ],
+    "evidence_claim_ids": [],
+    "evidence_ids": [
+      "S04"
+    ],
+    "hard_gate": null,
+    "item": "原实控人市场禁入",
+    "manual_review": true,
+    "missing_evidence": "—",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK014",
+    "conclusion": "2024标准无保留",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C042"
+    ],
+    "evidence_ids": [
+      "C042"
+    ],
+    "hard_gate": false,
+    "item": "最近财务审计意见",
+    "manual_review": false,
+    "missing_evidence": "—",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK015",
+    "conclusion": "2024年报未形成该项审计不确定性",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C043"
+    ],
+    "evidence_ids": [
+      "C043"
+    ],
+    "hard_gate": false,
+    "item": "持续经营重大不确定性",
+    "manual_review": true,
+    "missing_evidence": "后续年度验证",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK016",
+    "conclusion": "2024标准无保留，较2023明显修复",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C044"
+    ],
+    "evidence_ids": [
+      "C044"
+    ],
+    "hard_gate": false,
+    "item": "内控意见",
+    "manual_review": true,
+    "missing_evidence": "—",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK017",
+    "conclusion": "2024归母盈利但扣非亏损10.85亿元",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C031",
+      "C032"
+    ],
+    "evidence_ids": [
+      "C031",
+      "C032"
+    ],
+    "hard_gate": null,
+    "item": "主营盈利能力",
+    "manual_review": true,
+    "missing_evidence": "2025后续季度",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK018",
+    "conclusion": "扣非利润874万元、经营现金流4822万元为正",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C051",
+      "C052"
+    ],
+    "evidence_ids": [
+      "C051",
+      "C052"
+    ],
+    "hard_gate": null,
+    "item": "2025Q1修复",
+    "manual_review": true,
+    "missing_evidence": "连续季度验证",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK019",
+    "conclusion": "负债率约89.89%降至59.35%",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C035",
+      "C036"
+    ],
+    "evidence_ids": [
+      "C035",
+      "C036"
+    ],
+    "hard_gate": null,
+    "item": "杠杆修复",
+    "manual_review": true,
+    "missing_evidence": "—",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK020",
+    "conclusion": "33.66亿元降至4.62亿元",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C037"
+    ],
+    "evidence_ids": [
+      "C037"
+    ],
+    "hard_gate": null,
+    "item": "短期借款",
+    "manual_review": true,
+    "missing_evidence": "借款清单/银行函证",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK021",
+    "conclusion": "年末仍有1.7448亿元逾期短借；重要明细属于子公司南京生化",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C038"
+    ],
+    "evidence_ids": [
+      "C038"
+    ],
+    "hard_gate": null,
+    "item": "逾期金融债务",
+    "manual_review": true,
+    "missing_evidence": "截止日银行结清/展期证明",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK022",
+    "conclusion": "年报披露时公司属于失信被执行人，但2025-05-31是否已经解除缺一手证据",
+    "conflict": "时间状态缺口",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C045",
+      "C047"
+    ],
+    "evidence_ids": [
+      "C045",
+      "C047"
+    ],
+    "hard_gate": null,
+    "item": "失信被执行状态",
+    "manual_review": true,
+    "missing_evidence": "中国执行信息公开网/法院解除文件",
+    "retrieval_attempt_ids": [],
+    "status": "unverified（截止日）"
+  },
+  {
+    "check_id": "CHK023",
+    "conclusion": "年末仍计预计负债约5494万元",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C053"
+    ],
+    "evidence_ids": [
+      "C053"
+    ],
+    "hard_gate": false,
+    "item": "证券索赔",
+    "manual_review": true,
+    "missing_evidence": "后续案件进度",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK024",
+    "conclusion": "年末净额6.62亿元",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C039"
+    ],
+    "evidence_ids": [
+      "C039"
+    ],
+    "hard_gate": false,
+    "item": "应收账款规模",
+    "manual_review": true,
+    "missing_evidence": "明细账",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK025",
+    "conclusion": "总账面余额8.94亿元，长账龄比例不可忽视",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C040"
+    ],
+    "evidence_ids": [
+      "C040"
+    ],
+    "hard_gate": null,
+    "item": "应收账款账龄",
+    "manual_review": true,
+    "missing_evidence": "客户级账龄/回款记录",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK026",
+    "conclusion": "年报披露期末无已质押应收票据；存在约4.93亿元已背书/贴现未到期票据",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C055"
+    ],
+    "evidence_ids": [
+      "C055"
+    ],
+    "hard_gate": false,
+    "item": "应收票据质押",
+    "manual_review": true,
+    "missing_evidence": "具体票据清单",
+    "retrieval_attempt_ids": [],
+    "status": "verified"
+  },
+  {
+    "check_id": "CHK027",
+    "conclusion": "无法由年报替代统一登记查询",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C056"
+    ],
+    "evidence_ids": [
+      "C056"
+    ],
+    "hard_gate": null,
+    "item": "应收账款质押/转让/保理",
+    "manual_review": true,
+    "missing_evidence": "中登网/统一动产融资登记证明",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK028",
+    "conclusion": "无交易级材料无法排除",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C056",
+      "C057"
+    ],
+    "evidence_ids": [
+      "C056",
+      "C057"
+    ],
+    "hard_gate": true,
+    "item": "重复融资风险",
+    "manual_review": true,
+    "missing_evidence": "历史融资、质押及保理台账",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK029",
+    "conclusion": "未取得足够实名公开信息支撑交易对手级集中度判断",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [],
+    "evidence_ids": [],
+    "hard_gate": false,
+    "item": "客户/供应商集中度",
+    "manual_review": true,
+    "missing_evidence": "前五客户/供应商完整清单",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK030",
+    "conclusion": "公开资料无法验证具体融资基础交易",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C057"
+    ],
+    "evidence_ids": [
+      "C057"
+    ],
+    "hard_gate": true,
+    "item": "合同/发票/物流",
+    "manual_review": true,
+    "missing_evidence": "原始合同、发票、物流、验收",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK031",
+    "conclusion": "无法验证",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C057"
+    ],
+    "evidence_ids": [
+      "C057"
+    ],
+    "hard_gate": true,
+    "item": "债务人确权",
+    "manual_review": true,
+    "missing_evidence": "确权函/对账单",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK032",
+    "conclusion": "非公开",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C058"
+    ],
+    "evidence_ids": [
+      "C058"
+    ],
+    "hard_gate": null,
+    "item": "银行流水",
+    "manual_review": true,
+    "missing_evidence": "银行流水",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK033",
+    "conclusion": "非公开",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C058"
+    ],
+    "evidence_ids": [
+      "C058"
+    ],
+    "hard_gate": null,
+    "item": "纳税/征信",
+    "manual_review": true,
+    "missing_evidence": "纳税、企业征信",
+    "retrieval_attempt_ids": [],
+    "status": "unverified"
+  },
+  {
+    "check_id": "CHK034",
+    "conclusion": "2024年报债券章节不适用；不能因此推断不存在银行债务压力",
+    "conflict": "无",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C054"
+    ],
+    "evidence_ids": [
+      "C054"
+    ],
+    "hard_gate": false,
+    "item": "债券违约",
+    "manual_review": true,
+    "missing_evidence": "其他融资清单",
+    "retrieval_attempt_ids": [],
+    "status": "not_applicable/有限范围"
+  },
+  {
+    "check_id": "CHK035",
+    "conclusion": "4月26日仍在申请撤销，5月31无取得新的截止日前一手结果",
+    "conflict": "时间状态缺口",
+    "direct_source_ids": [],
+    "evidence_claim_ids": [
+      "C048",
+      "C049"
+    ],
+    "evidence_ids": [
+      "C048",
+      "C049"
+    ],
+    "hard_gate": false,
+    "item": "截止日风险警示",
+    "manual_review": true,
+    "missing_evidence": "交易所最终审核公告",
+    "retrieval_attempt_ids": [],
+    "status": "unverified（精确时点）"
+  }
+]

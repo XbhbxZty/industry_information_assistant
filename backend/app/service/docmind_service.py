@@ -249,7 +249,9 @@ def process_document_with_docmind(
     file_path: str,
     file_name: str,
     index_name: str,
-    chunk_size: int = 500
+    chunk_size: int = 500,
+    kb_id: str = "",
+    document_id: str = "",
 ) -> Dict[str, Any]:
     """
     使用 DocMind 处理文档
@@ -257,11 +259,27 @@ def process_document_with_docmind(
     Args:
         file_path: 文件路径
         file_name: 文件名
-        index_name: ES 索引名
+        index_name: Milvus 集合名（`kb_<知识库UUID>`，由 kb_scope 生成）
         chunk_size: 切片大小
+        kb_id: 知识库 UUID。写进每条切片的 `kb_id` 字段
+        document_id: 文档 UUID。写进每条切片的 `doc_id` 字段
 
     Returns:
         处理结果
+
+    ## kb_id / document_id 为什么是必填（BC-53）
+
+    这两个参数以前不存在，切片里写的是：
+
+        "kb_id":  index_name              # 集合名本身，过滤时形同虚设
+        "doc_id": md5(file_name)          # 只由文件名决定
+
+    后果一：`kb_id` 过滤没有任何隔离作用（在集合 X 里筛 `kb_id == X`）。
+    后果二更严重——切片主键 `id = md5(f"{file_name}_{i}_{chunk[:50]}")`
+    同样只由文件名和内容决定。**两个用户上传同名同内容的文件，
+    会生成完全相同的主键**，在共用集合里互相覆盖。
+
+    改为数据库主键之后，两者都是全局唯一且不可变的。
     """
     result = {
         "success": False,
@@ -325,16 +343,25 @@ def process_document_with_docmind(
         print(f"向量生成完成，维度: {len(embeddings[0])}")
 
         # 6. 构建 Milvus 文档
-        doc_id = hashlib.md5(file_name.encode()).hexdigest()
+        #
+        # 身份一律取数据库主键，不再由文件名/内容派生（BC-53）：
+        #   doc_id   = 文档 UUID     —— 全局唯一，删除时可精确定位
+        #   kb_id    = 知识库 UUID   —— 真正可用于过滤的隔离键
+        #   id(主键) = <doc_id>_<切片序号> —— 跨知识库天然不碰撞
+        if not kb_id or not document_id:
+            result["message"] = (
+                "kb_id 与 document_id 为必填：切片身份必须来自数据库主键，"
+                "由文件名派生会让不同用户的同名文件产生相同主键（BC-53）"
+            )
+            print(result["message"])
+            return result
+
         documents = []
-
         for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-            chunk_id = hashlib.md5(f"{file_name}_{i}_{chunk[:50]}".encode()).hexdigest()
-
             doc = {
-                "id": chunk_id,
-                "doc_id": doc_id,
-                "kb_id": index_name,
+                "id": f"{document_id}_{i}",
+                "doc_id": str(document_id),
+                "kb_id": str(kb_id),
                 "filename": file_name,
                 "content": chunk,
                 "chunk_index": i,
