@@ -1,0 +1,16 @@
+{
+  "entities":[
+    {"entity_id":"ent-b-supplier","name":"峻河仓储装备（天津）有限公司【纯虚构】","entity_kind":"enterprise","unified_credit_code":"YFAKE000000000003T","roles":["applicant_supplier","primary_borrower","contract_party","invoice_issuer"]},
+    {"entity_id":"ent-b-debtor","name":"原野物流科技（河北）有限公司【纯虚构】","entity_kind":"enterprise","unified_credit_code":"YFAKE000000000004X","roles":["account_debtor","contract_party","payer"]},
+    {"entity_id":"ent-b-shareholder","name":"峻河实业控股有限公司【纯虚构】","entity_kind":"enterprise","unified_credit_code":"YFAKE0000000000051","roles":["shareholder"]},
+    {"entity_id":"person-b-controller","name":"许衡【纯虚构】","entity_kind":"individual","roles":["actual_controller"]},
+    {"entity_id":"person-b-guarantor","name":"杨韬【纯虚构】","entity_kind":"individual","roles":["guarantor"]}
+  ],
+  "relationships":[
+    {"relationship_id":"rel-b-contract","from_entity_id":"ent-b-supplier","to_entity_id":"ent-b-debtor","relationship_type":"contract_counterparty","as_of_date":"2026-05-12","supporting_material_ids":["b-material-transaction"]},
+    {"relationship_id":"rel-b-debtor","from_entity_id":"ent-b-debtor","to_entity_id":"ent-b-supplier","relationship_type":"account_debtor_of","as_of_date":"2026-06-30"},
+    {"relationship_id":"rel-b-shareholder","from_entity_id":"ent-b-shareholder","to_entity_id":"ent-b-supplier","relationship_type":"shareholder_of","as_of_date":"2026-06-30","percent":{"value":65,"unit":"PERCENT"}},
+    {"relationship_id":"rel-b-control","from_entity_id":"person-b-controller","to_entity_id":"ent-b-supplier","relationship_type":"controls","as_of_date":"2026-06-30"},
+    {"relationship_id":"rel-b-guarantee","from_entity_id":"person-b-guarantor","to_entity_id":"ent-b-supplier","relationship_type":"guarantees","as_of_date":"2026-06-30"}
+  ]
+}

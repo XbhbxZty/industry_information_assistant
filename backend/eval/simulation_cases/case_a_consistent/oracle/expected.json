@@ -1,0 +1,17 @@
+{
+  "schema_version":"simulation-factoring-case-v1",
+  "case_id":"SIM-FAC-A",
+  "expected_decision":"conditional_approve",
+  "expected_claim_verdicts":[
+    {"claim_id":"a-claim-entity","verdict":"supported","source_refs":["a-src-company"],"rationale":"登记查询在观察日显示主体正常存续。"},
+    {"claim_id":"a-claim-receivable","verdict":"supported","source_refs":["a-src-contract","a-src-bank"],"rationale":"合同与发票金额均为 CNY 5,000,000，且付款方存在可关联预付款。"},
+    {"claim_id":"a-claim-delivery","verdict":"supported","source_refs":["a-src-acceptance"],"rationale":"交付和验收摘要均为 CNY 5,000,000。"},
+    {"claim_id":"a-claim-confirmation","verdict":"supported","source_refs":["a-src-acceptance"],"rationale":"付款方对账确认金额为 CNY 5,000,000，并载明到期日。"},
+    {"claim_id":"a-claim-prior-transfer","verdict":"supported","source_refs":["a-src-transfer"],"rationale":"截至登记观察日，合同查询键下成功查询且无匹配转让或质押记录。"},
+    {"claim_id":"a-claim-financing","verdict":"supported","source_refs":["a-src-bank","a-src-credit"],"rationale":"可得流水和征信材料未显示重大未披露融资或动产抵押。"}
+  ],
+  "known_conflicts":[],
+  "conditions":["放款前再次查询应收账款转让或质押登记。","取得付款方付款路径通知确认。"],
+  "maximum_advance":{"value":4000000,"unit":"CNY"},
+  "rationale":"交易、验收、对账、流水和登记查询在各自时点基本相互印证；仍应在放款前完成时点敏感复核。"
+}

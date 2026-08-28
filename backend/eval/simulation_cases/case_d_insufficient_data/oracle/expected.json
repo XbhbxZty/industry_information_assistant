@@ -1,0 +1,16 @@
+{
+  "schema_version":"simulation-factoring-case-v1",
+  "case_id":"SIM-FAC-D",
+  "expected_decision":"defer_manual_review",
+  "expected_claim_verdicts":[
+    {"claim_id":"d-claim-entity","verdict":"unverified","source_refs":["d-src-company"],"rationale":"登记查询超时，主体存续状态未知。"},
+    {"claim_id":"d-claim-legal-credit","verdict":"unverified","source_refs":["d-src-legal-credit"],"rationale":"司法查询未执行，无法判断诉讼、失信或被执行情况。"},
+    {"claim_id":"d-claim-financing","verdict":"unverified","source_refs":["d-src-credit","d-src-bank"],"rationale":"征信未查询且流水未提供，融资情况未知。"},
+    {"claim_id":"d-claim-mortgage","verdict":"unverified","source_refs":["d-src-registry"],"rationale":"动产登记查询超时，抵押情况未知。"},
+    {"claim_id":"d-claim-receivable","verdict":"unverified","source_refs":["d-src-bank","d-src-trade"],"rationale":"基础贸易材料和银行流水均缺失，无法验证应收账款真实性或金额。"},
+    {"claim_id":"d-claim-prior-transfer","verdict":"unverified","source_refs":["d-src-registry","d-src-trade"],"rationale":"登记查询超时且付款方确权和交易材料缺失，转让或质押情况未知。"},
+    {"claim_id":"d-claim-operations","verdict":"unverified","source_refs":["d-src-site"],"rationale":"现场走访未完成，经营和履约能力未知。"}
+  ],
+  "known_conflicts":[],
+  "rationale":"timeout、not_queried 和 not_provided 都是未知或材料缺失，不得改写为无记录或无风险；须暂缓并人工补件。"
+}

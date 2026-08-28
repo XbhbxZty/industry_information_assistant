@@ -1,0 +1,19 @@
+{
+  "schema_version": "simulation-factoring-case-v1",
+  "case_id": "SIM-FAC-A",
+  "title": "A：多源基本一致的应收账款保理【纯虚构】",
+  "simulation_only": true,
+  "fictional_notice": "本案例中的所有企业、人员、统一社会信用代码、合同/文书/登记编号、地址和交易均为纯虚构测试数据。",
+  "as_of": "2026-06-30",
+  "cutoff_date": "2026-06-30",
+  "primary_subject_id": "ent-a-supplier",
+  "business_type": "有追索权国内保理",
+  "scenario": "申请、合同、发票、发货、验收、对账、银行流水和应收账款登记结果基本一致。",
+  "input": {
+    "application": "input/structured/application.json",
+    "entities": "input/structured/entities.json",
+    "claims": "input/structured/claims.jsonl",
+    "sources": "input/structured/sources.json",
+    "materials": "input/structured/materials.json"
+  }
+}

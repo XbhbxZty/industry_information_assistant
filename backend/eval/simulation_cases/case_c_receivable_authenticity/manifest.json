@@ -1,0 +1,19 @@
+{
+  "schema_version":"simulation-factoring-case-v1",
+  "case_id":"SIM-FAC-C",
+  "title":"C：应收真实性不足与疑似重复转让【纯虚构】",
+  "simulation_only":true,
+  "fictional_notice":"本案例中的所有企业、人员、统一社会信用代码、合同/文书/登记编号、地址和交易均为纯虚构测试数据。",
+  "as_of":"2026-06-30",
+  "cutoff_date":"2026-06-30",
+  "primary_subject_id":"ent-c-supplier",
+  "business_type":"有追索权国内保理",
+  "scenario":"合同与发票为 CNY 10,000,000（1,000 万元），发货为 CNY 7,200,000（720 万元），验收/对账为 CNY 6,800,000（680 万元）；未取得确权且登记呈现疑似重复转让。",
+  "input":{
+    "application":"input/structured/application.json",
+    "entities":"input/structured/entities.json",
+    "claims":"input/structured/claims.jsonl",
+    "sources":"input/structured/sources.json",
+    "materials":"input/structured/materials.json"
+  }
+}

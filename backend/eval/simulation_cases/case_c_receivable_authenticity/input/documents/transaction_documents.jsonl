@@ -1,0 +1,5 @@
+{"document_type":"contract_summary","document_no":"FICT-C-CON-20260430-01【纯虚构】","amount_cny":10000000,"date":"2026-04-30","status":"provided","note":"合同金额。"}
+{"document_type":"invoice_summary","document_no":"FICT-C-INV-20260510-01【纯虚构】","amount_cny":10000000,"date":"2026-05-10","status":"provided","note":"发票金额不单独证明全部货物交付或可融资金额。"}
+{"document_type":"delivery_summary","document_no":"FICT-C-DEL-20260605-01【纯虚构】","amount_cny":7200000,"date":"2026-06-05","status":"provided","note":"仅部分发货。"}
+{"document_type":"acceptance_reconciliation_summary","document_no":"FICT-C-REC-20260612-01【纯虚构】","amount_cny":6800000,"date":"2026-06-12","status":"provided","note":"验收和对账金额。"}
+{"document_type":"factoring_confirmation","document_no":"FICT-C-CONF-REQ-20260624【纯虚构】","amount_cny":10000000,"date":"2026-06-24","status":"not_received","note":"截至 as_of 未取得付款方确权回复。"}

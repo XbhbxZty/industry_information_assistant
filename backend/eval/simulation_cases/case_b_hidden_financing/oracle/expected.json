@@ -1,0 +1,17 @@
+{
+  "schema_version":"simulation-factoring-case-v1",
+  "case_id":"SIM-FAC-B",
+  "expected_decision":"reject",
+  "expected_claim_verdicts":[
+    {"claim_id":"b-claim-receivable","verdict":"supported","source_refs":["b-src-contract"],"rationale":"合同与发票金额均为 CNY 6,000,000。"},
+    {"claim_id":"b-claim-delivery","verdict":"supported","source_refs":["b-src-acceptance"],"rationale":"交付和验收摘要均为 CNY 6,000,000。"},
+    {"claim_id":"b-claim-financing","verdict":"contradicted","source_refs":["b-src-credit","b-src-bank"],"rationale":"征信与流水均显示申请中未披露的 CNY 3,500,000 保理融资。"},
+    {"claim_id":"b-claim-mortgage","verdict":"contradicted","source_refs":["b-src-mortgage"],"rationale":"登记结果显示有效动产抵押，担保债务本金为 CNY 5,500,000。"},
+    {"claim_id":"b-claim-prior-transfer","verdict":"supported","source_refs":["b-src-transfer"],"rationale":"截至登记观察日，合同查询键下成功查询且无匹配转让或质押记录。"}
+  ],
+  "known_conflicts":[
+    {"conflict_id":"b-conflict-financing","claim_id":"b-claim-financing","assertion_source":"b-src-application","contrary_source_ids":["b-src-credit","b-src-bank"],"description":"申请声明不存在未披露融资，但征信和流水均反映未披露的保理融资。","rationale":"两个独立来源共同反驳申请人的融资披露。"},
+    {"conflict_id":"b-conflict-mortgage","claim_id":"b-claim-mortgage","assertion_source":"b-src-application","contrary_source_ids":["b-src-mortgage"],"description":"申请声明不存在动产抵押，但登记显示有效动产抵押。","rationale":"有效登记与申请声明直接冲突。"}
+  ],
+  "rationale":"虽然基础贸易材料可支持应收账款，但融资和动产抵押披露被独立来源反驳，构成重大诚信和负债风险。"
+}

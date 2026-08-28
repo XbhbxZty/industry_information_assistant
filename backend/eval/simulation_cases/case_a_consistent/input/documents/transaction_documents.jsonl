@@ -1,0 +1,3 @@
+{"document_type":"contract_summary","document_no":"FICT-A-CON-20260508-01【纯虚构】","amount_cny":5000000,"date":"2026-05-08","status":"provided","note":"与发票、签收验收和对账关联。"}
+{"document_type":"invoice_summary","document_no":"FICT-A-INV-20260520-01【纯虚构】","amount_cny":5000000,"date":"2026-05-20","status":"provided","note":"含合同号关联。"}
+{"document_type":"acceptance_summary","document_no":"FICT-A-ACC-20260529-01【纯虚构】","amount_cny":5000000,"date":"2026-05-29","status":"provided","note":"付款方签收及验收。"}

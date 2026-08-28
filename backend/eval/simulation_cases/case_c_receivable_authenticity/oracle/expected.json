@@ -1,0 +1,18 @@
+{
+  "schema_version":"simulation-factoring-case-v1",
+  "case_id":"SIM-FAC-C",
+  "expected_decision":"reject",
+  "expected_claim_verdicts":[
+    {"claim_id":"c-claim-receivable","verdict":"contradicted","source_refs":["c-src-contract","c-src-delivery","c-src-reconciliation"],"rationale":"合同和发票为 CNY 10,000,000，但发货为 CNY 7,200,000，验收及对账仅为 CNY 6,800,000。"},
+    {"claim_id":"c-claim-delivery","verdict":"contradicted","source_refs":["c-src-delivery","c-src-reconciliation","c-src-site"],"rationale":"仅有部分发货记录，验收和对账金额低于申请全额，现场联系人亦称尚有设备待联调。"},
+    {"claim_id":"c-claim-confirmation","verdict":"contradicted","source_refs":["c-src-reconciliation","c-src-confirmation"],"rationale":"对账不等同于保理确权，且截至截止日付款方未回复正式确权请求。"},
+    {"claim_id":"c-claim-prior-transfer","verdict":"contradicted","source_refs":["c-src-transfer"],"rationale":"登记显示另一保理方对同合同、同金额应收账款存在有效转让登记。"}
+  ],
+  "known_conflicts":[
+    {"conflict_id":"c-conflict-receivable","claim_id":"c-claim-receivable","assertion_source":"c-src-application-supplier","contrary_source_ids":["c-src-delivery","c-src-reconciliation"],"description":"申请金额为 CNY 10,000,000，但发货和验收/对账分别只有 CNY 7,200,000 与 CNY 6,800,000。","rationale":"可验证的履约和应付金额低于申请金额。"},
+    {"conflict_id":"c-conflict-delivery","claim_id":"c-claim-delivery","assertion_source":"c-src-application-debtor","contrary_source_ids":["c-src-delivery","c-src-reconciliation"],"description":"申请声明已全部交付并验收，但交付、验收和对账材料均未达到全额。","rationale":"付款方材料与申请陈述不一致。"},
+    {"conflict_id":"c-conflict-confirmation","claim_id":"c-claim-confirmation","assertion_source":"c-src-application-debtor","contrary_source_ids":["c-src-confirmation"],"description":"申请声明付款方已确权，但截至截止日正式确权请求未获回复。","rationale":"无正式保理确权可支撑该声明。"},
+    {"conflict_id":"c-conflict-transfer","claim_id":"c-claim-prior-transfer","assertion_source":"c-src-application-supplier","contrary_source_ids":["c-src-transfer"],"description":"申请声明未转让或质押，但同合同同金额已有有效转让登记。","rationale":"存在疑似重复转让或权利优先顺位风险。"}
+  ],
+  "rationale":"可交叉验证的金额最高仅 CNY 6,800,000，且无付款方保理确权、存在疑似重复转让，真实性和权利完整性不能确认。"
+}

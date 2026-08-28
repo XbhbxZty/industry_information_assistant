@@ -1,0 +1,15 @@
+{
+  "application_id":"sim-fac-d-app-20260620",
+  "application_date":"2026-06-20",
+  "primary_borrower_id":"ent-d-supplier",
+  "applicant_supplier_id":"ent-d-supplier",
+  "debtor_entity_id":"ent-d-debtor",
+  "requested_amount":{"value":3000000,"unit":"CNY"},
+  "requested_term":{"value":90,"unit":"DAYS"},
+  "financing_purpose":"申请人为 FICT-D-CON-UNAVAILABLE【纯虚构】项下设备服务款补充营运资金。",
+  "receivable_face_amount":{"value":4000000,"unit":"CNY"},
+  "advance_rate":{"value":75,"unit":"PERCENT"},
+  "contract_number":"FICT-D-CON-UNAVAILABLE【纯虚构】",
+  "payment_due_date":"2026-09-20",
+  "trade_period":{"start_date":"2026-04-01","end_date":"2026-06-20"}
+}

@@ -1,0 +1,15 @@
+{
+  "application_id": "sim-fac-a-app-20260615",
+  "application_date": "2026-06-15",
+  "primary_borrower_id": "ent-a-supplier",
+  "applicant_supplier_id": "ent-a-supplier",
+  "debtor_entity_id": "ent-a-debtor",
+  "requested_amount": {"value": 4000000, "unit": "CNY"},
+  "requested_term": {"value": 90, "unit": "DAYS"},
+  "financing_purpose": "为 FICT-A-CON-20260508-01【纯虚构】项下设备采购补充营运资金。",
+  "receivable_face_amount": {"value": 5000000, "unit": "CNY"},
+  "advance_rate": {"value": 80, "unit": "PERCENT"},
+  "contract_number": "FICT-A-CON-20260508-01【纯虚构】",
+  "payment_due_date": "2026-08-27",
+  "trade_period": {"start_date": "2026-05-08", "end_date": "2026-05-29"}
+}

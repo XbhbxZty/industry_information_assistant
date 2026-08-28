@@ -1,0 +1,4 @@
+[
+  {"material_id":"c-material-transaction","subject_entity_id":"ent-c-supplier","material_type":"transaction_document_bundle","relative_path":"input/documents/transaction_documents.jsonl","provenance":"申请人提交的合同、发票、发货、验收、对账及确权请求摘要【纯虚构】","source_channel":"enterprise_submitted","issuer":"博陆智能成套（上海）有限公司【纯虚构】","document_date":"2026-06-24","sha256":"b33531601c80c59751ab37321a1fe03d9f41965b3e841ffce766cceafaea0fb9"},
+  {"material_id":"c-material-site-visit","subject_entity_id":"ent-c-supplier","material_type":"site_visit_record","relative_path":"input/site_visit/visit.txt","provenance":"2026-06-23 现场走访记录【纯虚构】","source_channel":"site_visit","issuer":"模拟现场走访【纯虚构】","observed_at":"2026-06-23","sha256":"4a724e689fe53088b7b10323a7ab1f5865e80814efc0f0e6682d5adfbe66a098"}
+]

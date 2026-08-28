@@ -1,0 +1,19 @@
+{
+  "schema_version":"simulation-factoring-case-v1",
+  "case_id":"SIM-FAC-D",
+  "title":"D：资料严重不足与查询失败【纯虚构】",
+  "simulation_only":true,
+  "fictional_notice":"本案例中的所有企业、人员、统一社会信用代码、合同/文书/登记编号、地址和交易均为纯虚构测试数据。",
+  "as_of":"2026-06-30",
+  "cutoff_date":"2026-06-30",
+  "primary_subject_id":"ent-d-supplier",
+  "business_type":"有追索权国内保理",
+  "scenario":"基础材料缺失，登记查询超时、征信未查询、流水未提交、现场走访未完成；访问失败不能解释为无记录。",
+  "input":{
+    "application":"input/structured/application.json",
+    "entities":"input/structured/entities.json",
+    "claims":"input/structured/claims.jsonl",
+    "sources":"input/structured/sources.json",
+    "materials":"input/structured/materials.json"
+  }
+}

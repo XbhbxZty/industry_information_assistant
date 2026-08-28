@@ -1,0 +1,4 @@
+[
+  {"material_id":"d-material-missing","subject_entity_id":"ent-d-supplier","material_type":"missing_materials_notice","relative_path":"input/documents/missing_materials.txt","provenance":"截至截止日的缺失材料清单【纯虚构】","source_channel":"enterprise_submitted","issuer":"临界机电服务（重庆）有限公司【纯虚构】","document_date":"2026-06-30","sha256":"1daad24b96cee0ccc4edafa25d6fe5e227900062a1d942bc89b19d89593a36e4"},
+  {"material_id":"d-material-site-visit","subject_entity_id":"ent-d-supplier","material_type":"site_visit_cancellation_record","relative_path":"input/site_visit/visit.txt","provenance":"截至截止日未完成的现场走访记录【纯虚构】","source_channel":"site_visit","issuer":"模拟现场走访【纯虚构】","observed_at":"2026-06-26","sha256":"99c04f4d24c2d78101a6be34e83dd66835981f8c1493244a9cd9f2c5f3df5120"}
+]

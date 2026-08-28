@@ -1,0 +1,20 @@
+{
+  "sources":[
+    {"source_id":"d-src-company","source_channel":"public","source_type":"company_registry","issuer":"模拟企业登记查询【纯虚构】","subject_entity_id":"ent-d-supplier","query_scope":"核验主体登记状态和统一社会信用代码。"},
+    {"source_id":"d-src-legal-credit","source_channel":"public","source_type":"court_and_enforcement_query","issuer":"模拟司法查询【纯虚构】","subject_entity_id":"ent-d-supplier","query_scope":"核验诉讼、失信和被执行信息。"},
+    {"source_id":"d-src-credit","source_channel":"authorized","source_type":"enterprise_credit_report","issuer":"模拟企业征信报告【纯虚构】","subject_entity_id":"ent-d-supplier","query_scope":"核验融资和保理余额。"},
+    {"source_id":"d-src-registry","source_channel":"public","source_type":"movable_and_receivable_registry","issuer":"模拟动产融资统一登记查询【纯虚构】","subject_entity_id":"ent-d-supplier","query_scope":"核验动产抵押及应收账款转让或质押登记。"},
+    {"source_id":"d-src-bank","source_channel":"enterprise_submitted","source_type":"bank_statement","issuer":"临界机电服务（重庆）有限公司【纯虚构】","subject_entity_id":"ent-d-supplier","query_scope":"核验交易回款和融资资金流。"},
+    {"source_id":"d-src-trade","source_channel":"enterprise_submitted","source_type":"trade_documents","issuer":"临界机电服务（重庆）有限公司【纯虚构】","subject_entity_id":"ent-d-supplier","query_scope":"核验合同、发票、发货、验收、对账和付款方确权。"},
+    {"source_id":"d-src-site","source_channel":"site_visit","source_type":"site_visit_observation","issuer":"模拟现场走访【纯虚构】","subject_entity_id":"ent-d-supplier","query_scope":"核验经营场所、库存和实际履约能力。"}
+  ],
+  "query_results":[
+    {"source_id":"d-src-company","outcome":"timeout","queried_field_ids":["entity_registration_status"],"records":[],"outcome_detail":"在 30 秒时限内未返回登记结果；该状态表示未知而非无记录。"},
+    {"source_id":"d-src-legal-credit","outcome":"not_queried","queried_field_ids":["legal_credit_record"],"records":[],"outcome_detail":"未取得司法查询授权，未执行查询；不得推断不存在诉讼、失信或被执行记录。"},
+    {"source_id":"d-src-credit","outcome":"not_queried","queried_field_ids":["undisclosed_financing"],"records":[],"outcome_detail":"征信授权未提交，没有报告；不得推断不存在融资。"},
+    {"source_id":"d-src-registry","outcome":"timeout","queried_field_ids":["movable_mortgage","prior_transfer_or_pledge"],"records":[],"outcome_detail":"登记查询超时；不得推断未发现抵押、转让或质押。"},
+    {"source_id":"d-src-bank","outcome":"not_provided","queried_field_ids":["receivable_face_amount","undisclosed_financing"],"records":[],"outcome_detail":"近六个月银行流水未提供，无法核对交易回款和融资资金流。"},
+    {"source_id":"d-src-trade","outcome":"not_provided","queried_field_ids":["receivable_face_amount","prior_transfer_or_pledge"],"records":[],"outcome_detail":"合同、发票、发货、验收、对账和付款方确权材料均未提供。"},
+    {"source_id":"d-src-site","outcome":"not_provided","queried_field_ids":["site_operations"],"records":[],"outcome_detail":"预约走访被取消且未重约，未形成现场核验记录。"}
+  ]
+}

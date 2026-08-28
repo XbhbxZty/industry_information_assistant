@@ -1,0 +1,16 @@
+{
+  "entities":[
+    {"entity_id":"ent-d-supplier","name":"临界机电服务（重庆）有限公司【纯虚构】","entity_kind":"enterprise","unified_credit_code":"YFAKE000000000009D","roles":["applicant_supplier","primary_borrower","contract_party","invoice_issuer"]},
+    {"entity_id":"ent-d-debtor","name":"明港工程配套（四川）有限公司【纯虚构】","entity_kind":"enterprise","unified_credit_code":"YFAKE00000000000AG","roles":["account_debtor","contract_party","payer"]},
+    {"entity_id":"ent-d-shareholder","name":"临界工程投资有限公司【纯虚构】","entity_kind":"enterprise","unified_credit_code":"YFAKE00000000000BK","roles":["shareholder"]},
+    {"entity_id":"person-d-controller","name":"白川【纯虚构】","entity_kind":"individual","roles":["actual_controller"]},
+    {"entity_id":"person-d-guarantor","name":"罗宁【纯虚构】","entity_kind":"individual","roles":["guarantor"]}
+  ],
+  "relationships":[
+    {"relationship_id":"rel-d-contract","from_entity_id":"ent-d-supplier","to_entity_id":"ent-d-debtor","relationship_type":"contract_counterparty","as_of_date":"2026-04-01","supporting_material_ids":["d-material-missing"]},
+    {"relationship_id":"rel-d-debtor","from_entity_id":"ent-d-debtor","to_entity_id":"ent-d-supplier","relationship_type":"account_debtor_of","as_of_date":"2026-06-30"},
+    {"relationship_id":"rel-d-shareholder","from_entity_id":"ent-d-shareholder","to_entity_id":"ent-d-supplier","relationship_type":"shareholder_of","as_of_date":"2026-06-30","percent":{"value":55,"unit":"PERCENT"}},
+    {"relationship_id":"rel-d-control","from_entity_id":"person-d-controller","to_entity_id":"ent-d-supplier","relationship_type":"controls","as_of_date":"2026-06-30"},
+    {"relationship_id":"rel-d-guarantee","from_entity_id":"person-d-guarantor","to_entity_id":"ent-d-supplier","relationship_type":"guarantees","as_of_date":"2026-06-30"}
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "application_id":"sim-fac-c-app-20260617",
+  "application_date":"2026-06-17",
+  "primary_borrower_id":"ent-c-supplier",
+  "applicant_supplier_id":"ent-c-supplier",
+  "debtor_entity_id":"ent-c-debtor",
+  "requested_amount":{"value":8000000,"unit":"CNY"},
+  "requested_term":{"value":120,"unit":"DAYS"},
+  "financing_purpose":"以 FICT-C-CON-20260430-01【纯虚构】项下应收账款申请周转融资。",
+  "receivable_face_amount":{"value":10000000,"unit":"CNY"},
+  "advance_rate":{"value":80,"unit":"PERCENT"},
+  "contract_number":"FICT-C-CON-20260430-01【纯虚构】",
+  "payment_due_date":"2026-09-10",
+  "trade_period":{"start_date":"2026-04-30","end_date":"2026-06-12"}
+}

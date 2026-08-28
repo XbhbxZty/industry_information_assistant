@@ -1,0 +1,4 @@
+[
+  {"material_id":"a-material-transaction","subject_entity_id":"ent-a-supplier","material_type":"transaction_document_bundle","relative_path":"input/documents/transaction_documents.jsonl","provenance":"申请人提交的合同、发票和签收验收摘要【纯虚构】","source_channel":"enterprise_submitted","issuer":"澄岳工业设备（无锡）有限公司【纯虚构】","document_date":"2026-06-02","sha256":"90d89f293d1e2a687ed1afa08ab0b8cea724f65379626afbf0d2c69a1fd7b087"},
+  {"material_id":"a-material-site-visit","subject_entity_id":"ent-a-supplier","material_type":"site_visit_record","relative_path":"input/site_visit/visit.txt","provenance":"2026-06-18 现场走访记录【纯虚构】","source_channel":"site_visit","issuer":"模拟现场走访【纯虚构】","observed_at":"2026-06-18","sha256":"eabfb378e8064ae90da2180658eba245801abefe163344eb141b8936d2b8a18d"}
+]

@@ -1,0 +1,18 @@
+{
+  "sources": [
+    {"source_id":"a-src-company","source_channel":"public","source_type":"company_registry","issuer":"模拟企业登记查询【纯虚构】","subject_entity_id":"ent-a-supplier","query_scope":"核验主体登记状态和统一社会信用代码。"},
+    {"source_id":"a-src-contract","source_channel":"enterprise_submitted","source_type":"commercial_contract_and_invoice","issuer":"澄岳工业设备（无锡）有限公司【纯虚构】","subject_entity_id":"ent-a-supplier","query_scope":"核验 FICT-A-CON-20260508-01【纯虚构】的合同、发票金额和主体。"},
+    {"source_id":"a-src-acceptance","source_channel":"enterprise_submitted","source_type":"delivery_acceptance_reconciliation","issuer":"启程新能源装备（江苏）有限公司【纯虚构】","subject_entity_id":"ent-a-debtor","query_scope":"核验交付、验收、对账金额与到期日。"},
+    {"source_id":"a-src-transfer","source_channel":"public","source_type":"accounts_receivable_registry","issuer":"模拟动产融资统一登记查询【纯虚构】","subject_entity_id":"ent-a-supplier","query_scope":"按 FICT-A-CON-20260508-01【纯虚构】核验应收账款转让或质押登记。"},
+    {"source_id":"a-src-bank","source_channel":"authorized","source_type":"bank_statement","issuer":"模拟银行流水【纯虚构】","subject_entity_id":"ent-a-supplier","query_scope":"核验合同回款和未披露融资资金流。"},
+    {"source_id":"a-src-credit","source_channel":"authorized","source_type":"enterprise_credit_report","issuer":"模拟企业征信报告【纯虚构】","subject_entity_id":"ent-a-supplier","query_scope":"核验重大融资和动产抵押信息。"}
+  ],
+  "query_results": [
+    {"source_id":"a-src-company","outcome":"success_with_records","queried_field_ids":["entity_registration_status"],"retrieved_at":"2026-07-01T08:10:00Z","observed_at":"2026-06-20","records":[{"legal_name":"澄岳工业设备（无锡）有限公司【纯虚构】","unified_credit_code":"YFAKE000000000000H","registration_state":"active"}]},
+    {"source_id":"a-src-contract","outcome":"success_with_records","queried_field_ids":["receivable_face_amount"],"retrieved_at":"2026-07-01T08:12:00Z","publication_date":"2026-05-20","records":[{"contract_number":"FICT-A-CON-20260508-01【纯虚构】","contract_amount_cny":5000000,"invoice_number":"FICT-A-INV-20260520-01【纯虚构】","invoice_amount_cny":5000000,"buyer":"启程新能源装备（江苏）有限公司【纯虚构】"}]},
+    {"source_id":"a-src-acceptance","outcome":"success_with_records","queried_field_ids":["delivery_and_acceptance","debtor_confirmation"],"retrieved_at":"2026-07-01T08:14:00Z","observed_at":"2026-06-02","records":[{"delivery_document_number":"FICT-A-DEL-20260529-01【纯虚构】","delivery_amount_cny":5000000,"acceptance_document_number":"FICT-A-ACC-20260529-01【纯虚构】","accepted_amount_cny":5000000,"reconciliation_number":"FICT-A-REC-20260602-01【纯虚构】","confirmed_payable_cny":5000000,"payment_due_date":"2026-08-27"}]},
+    {"source_id":"a-src-transfer","outcome":"success_no_record","queried_field_ids":["prior_transfer_or_pledge"],"retrieved_at":"2026-07-01T08:16:00Z","observed_at":"2026-06-21","records":[]},
+    {"source_id":"a-src-bank","outcome":"success_with_records","queried_field_ids":["receivable_face_amount","undisclosed_financing"],"retrieved_at":"2026-07-01T08:18:00Z","as_of_date":"2026-06-30","records":[{"period_start":"2026-05-01","period_end":"2026-06-30","inbound_payment_cny":500000,"payer":"启程新能源装备（江苏）有限公司【纯虚构】","payment_reference":"FICT-A-CON-20260508-01【纯虚构】预付款","unrelated_financing_detected":false}]},
+    {"source_id":"a-src-credit","outcome":"success_with_records","queried_field_ids":["undisclosed_financing"],"retrieved_at":"2026-07-01T08:20:00Z","publication_date":"2026-06-22","records":[{"report_number":"FICT-A-CR-20260622【纯虚构】","material_financing_balance_cny":0,"material_movable_mortgage_count":0}]}
+  ]
+}

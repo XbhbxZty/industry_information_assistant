@@ -1,0 +1,15 @@
+{
+  "application_id":"sim-fac-b-app-20260616",
+  "application_date":"2026-06-16",
+  "primary_borrower_id":"ent-b-supplier",
+  "applicant_supplier_id":"ent-b-supplier",
+  "debtor_entity_id":"ent-b-debtor",
+  "requested_amount":{"value":4800000,"unit":"CNY"},
+  "requested_term":{"value":75,"unit":"DAYS"},
+  "financing_purpose":"为 FICT-B-CON-20260512-01【纯虚构】项下自动分拣线项目补充营运资金。",
+  "receivable_face_amount":{"value":6000000,"unit":"CNY"},
+  "advance_rate":{"value":80,"unit":"PERCENT"},
+  "contract_number":"FICT-B-CON-20260512-01【纯虚构】",
+  "payment_due_date":"2026-08-18",
+  "trade_period":{"start_date":"2026-05-12","end_date":"2026-06-04"}
+}

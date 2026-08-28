@@ -1,0 +1,4 @@
+[
+  {"material_id":"b-material-transaction","subject_entity_id":"ent-b-supplier","material_type":"transaction_document_bundle","relative_path":"input/documents/transaction_documents.jsonl","provenance":"申请人提交的合同和验收摘要【纯虚构】","source_channel":"enterprise_submitted","issuer":"峻河仓储装备（天津）有限公司【纯虚构】","document_date":"2026-06-04","sha256":"029f248e1adde9573f60db0bc75705afcc0bc145b45279c37136fdf9751ec40e"},
+  {"material_id":"b-material-site-visit","subject_entity_id":"ent-b-supplier","material_type":"site_visit_record","relative_path":"input/site_visit/visit.txt","provenance":"2026-06-19 现场走访记录【纯虚构】","source_channel":"site_visit","issuer":"模拟现场走访【纯虚构】","observed_at":"2026-06-19","sha256":"f6c71a97b3120ad9cc7906eac3413a359f1e5c5934b209bb0765b215aa4b8c04"}
+]
