@@ -31,6 +31,7 @@
 
 运行：cd backend && python tests/test_as_of_cutoff.py
 """
+import copy
 import os
 import sys
 
@@ -310,6 +311,60 @@ def test_profile_snapshot_before_cutoff_passes():
         as_of=CUTOFF,
     )
     assert report.ok, f"截止日前的档案快照不该被拦：{report.mismatches}"
+
+
+def _managed_initial_profile_check(*, retrieved_at: str, as_of_date: str):
+    """A minimal authorized field source projected onto an initial-profile check."""
+    chk = _check("registration")
+    source = {
+        "source_id": "managed-registration",
+        "name": "工商登记快照",
+        "issuer": "登记机关",
+        "source_type": "official",
+        "retrieved_at": retrieved_at,
+        "as_of_date": as_of_date,
+        "reference": "managed://registration",
+        "sha256": None,
+    }
+    chk.update({
+        "status": "verified", "value": "存续",
+        "verification_origin": "initial_profile",
+        "source_adapter": "initial_profile",
+        "profile_sources": [source],
+        "retrieved_at": retrieved_at,
+        "as_of_date": as_of_date,
+        "evidence_ids": [],
+    })
+    return chk
+
+
+def _matching_initial_replay(check):
+    return lambda _company, _checks: {check["field_id"]: copy.deepcopy(check)}
+
+
+def test_managed_profile_late_fact_early_retrieval_cannot_bypass_cutoff():
+    """字段事实晚于截止日时，不能借早抓取时间通过回溯评测。"""
+    chk = _managed_initial_profile_check(
+        retrieved_at="2025-04-01T00:00:00", as_of_date="2025-07-31",
+    )
+    report = verify_evidence_chain(
+        {"name": "测试企业", "credit_code": "X"}, [chk], {},
+        profile_replay_fn=_matching_initial_replay(chk), as_of=CUTOFF,
+    )
+    assert not report.ok
+    assert report.mismatches[0]["reason"] == REASON_POST_CUTOFF_EVIDENCE
+
+
+def test_managed_profile_late_retrieval_early_fact_is_allowed_at_cutoff():
+    """晚抓取的历史事实可用于回溯，判据必须是字段来源的事实日期。"""
+    chk = _managed_initial_profile_check(
+        retrieved_at="2026-08-16T00:00:00", as_of_date="2025-03-15",
+    )
+    report = verify_evidence_chain(
+        {"name": "测试企业", "credit_code": "X"}, [chk], {},
+        profile_replay_fn=_matching_initial_replay(chk), as_of=CUTOFF,
+    )
+    assert report.ok, f"早事实不应因晚抓取被阻断：{report.mismatches}"
 
 
 # --------------------------------------------- 六、Scout 网页结果的尽力过滤

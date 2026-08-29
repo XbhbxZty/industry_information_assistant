@@ -34,7 +34,12 @@ from service.deep_research_v2.service import DeepResearchV2Service  # noqa: E402
 from service.deep_research_v2.state import create_initial_state  # noqa: E402
 
 
-def _snapshot(profile: dict[str, Any], scenario: str = "factoring") -> dict[str, Any]:
+def _snapshot(
+    profile: dict[str, Any],
+    scenario: str = "factoring",
+    *,
+    field_sources: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     scenario_data = {
         "accounts_receivable_gross": 1250,
         # A core field in scenario data must never overwrite the core field's
@@ -42,7 +47,7 @@ def _snapshot(profile: dict[str, Any], scenario: str = "factoring") -> dict[str,
         "revenue": 999999,
         "not_a_check": "must be ignored",
     }
-    field_sources = [{
+    default_field_sources = [{
         "source_id": "managed-factoring-source",
         "name": "受权应收账款台账",
         "issuer": "管理端",
@@ -53,6 +58,9 @@ def _snapshot(profile: dict[str, Any], scenario: str = "factoring") -> dict[str,
         "reference": "managed://factoring-source",
         "sha256": None,
     }]
+    field_sources = copy.deepcopy(
+        default_field_sources if field_sources is None else field_sources
+    )
     content = json.dumps({
         "profile": profile, "scenario": scenario, "scenario_data": scenario_data,
         "field_sources": field_sources, "materials": [],
@@ -227,6 +235,147 @@ def test_static_profile_path_remains_available(monkeypatch: pytest.MonkeyPatch):
     assert state["company_name"] == "静态档案有限公司"
     assert state["admin_profile_ref"] == {}
     assert not any(check["scope"].startswith("scenario:") for check in state["field_checks"])
+
+
+def _authorized_checks(
+    profile: dict[str, Any], field_sources: list[dict[str, Any]],
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Build checks from the same marked snapshot production research consumes."""
+    snapshot = _snapshot(profile, field_sources=field_sources)
+    company = profile_module.validate_admin_company_profile_snapshot(
+        snapshot["profile"], snapshot["ref"], scenario="factoring",
+    )
+    from config.dd_checklist import build_field_checks
+
+    checks = build_field_checks(scenario="factoring")
+    profile_module.fill_field_checks(company, profile_module.profile_to_facts(company), checks)
+    return company, checks
+
+
+def _field_source(
+    source_id: str, field_ids: list[str], *, retrieved_at: str, as_of_date: str,
+) -> dict[str, Any]:
+    return {
+        "source_id": source_id,
+        "name": f"{source_id} 名称",
+        "issuer": "管理端受信机构",
+        "source_type": "authorized",
+        "field_ids": field_ids,
+        "retrieved_at": retrieved_at,
+        "as_of_date": as_of_date,
+        "reference": f"managed://{source_id}",
+        "sha256": None,
+    }
+
+
+def test_unmarked_profile_cannot_consume_admin_field_sources():
+    """Private decoration alone is not a capability to turn a static profile managed."""
+    profile = _profile(registration={
+        "registered_capital": "100万元", "paid_in_capital": "100万元",
+        "established_date": "2020-01-01", "legal_representative": "张三",
+        "company_type": "有限责任公司", "operating_status": "存续",
+        "business_scope": "技术服务",
+    })
+    source = _field_source(
+        "untrusted-decoration", ["registration"],
+        retrieved_at="2025-01-05T00:00:00+00:00", as_of_date="2025-01-01",
+    )
+    profile["_admin_field_sources"] = [source]
+    from config.dd_checklist import build_field_checks
+
+    checks = build_field_checks()
+    profile_module.fill_field_checks(profile, profile_module.profile_to_facts(profile), checks)
+    registration = _check({"field_checks": checks}, "registration")
+    assert "profile_sources" not in registration
+    assert registration["retrieved_at"] == profile["coverage"]["retrieved_at"]
+
+
+def test_authorized_snapshot_keeps_field_times_and_source_chain_isolated():
+    """登记项不得借场景项的较晚来源时间，反之亦然。"""
+    profile = _profile(registration={
+        "registered_capital": "100万元", "paid_in_capital": "100万元",
+        "established_date": "2020-01-01", "legal_representative": "张三",
+        "company_type": "有限责任公司", "operating_status": "存续",
+        "business_scope": "技术服务",
+    })
+    registration_source = _field_source(
+        "registration-early", ["registration"],
+        retrieved_at="2025-01-05T00:00:00+00:00", as_of_date="2025-01-01",
+    )
+    receivable_source = _field_source(
+        "receivable-late", ["accounts_receivable_gross"],
+        retrieved_at="2026-08-20T00:00:00+00:00", as_of_date="2026-08-18",
+    )
+    _company, checks = _authorized_checks(profile, [receivable_source, registration_source])
+
+    registration = _check({"field_checks": checks}, "registration")
+    receivable = _check({"field_checks": checks}, "accounts_receivable_gross")
+    assert registration["retrieved_at"] == registration_source["retrieved_at"]
+    assert registration["as_of_date"] == registration_source["as_of_date"]
+    assert receivable["retrieved_at"] == receivable_source["retrieved_at"]
+    assert receivable["as_of_date"] == receivable_source["as_of_date"]
+    assert registration["profile_sources"] == [{
+        key: registration_source[key]
+        for key in ("source_id", "name", "issuer", "source_type", "retrieved_at",
+                    "as_of_date", "reference", "sha256")
+    }]
+    assert receivable["profile_sources"][0]["source_id"] == "receivable-late"
+
+
+def test_authorized_snapshot_multisource_provenance_is_stable_and_conservative():
+    """来源输入顺序不影响检查点；两个时间维度各自取字段来源中的最新值。"""
+    early_retrieval_late_fact = _field_source(
+        "a-late-fact", ["accounts_receivable_gross"],
+        retrieved_at="2025-06-20T00:00:00+00:00", as_of_date="2025-06-15",
+    )
+    late_retrieval_early_fact = _field_source(
+        "z-late-retrieval", ["accounts_receivable_gross"],
+        retrieved_at="2026-08-20T00:00:00+00:00", as_of_date="2025-04-30",
+    )
+    first_company, first_checks = _authorized_checks(
+        _profile(), [late_retrieval_early_fact, early_retrieval_late_fact],
+    )
+    _second_company, second_checks = _authorized_checks(
+        _profile(), [early_retrieval_late_fact, late_retrieval_early_fact],
+    )
+    first = _check({"field_checks": first_checks}, "accounts_receivable_gross")
+    second = _check({"field_checks": second_checks}, "accounts_receivable_gross")
+
+    assert [source["source_id"] for source in first["profile_sources"]] == [
+        "a-late-fact", "z-late-retrieval",
+    ]
+    assert first["profile_sources"] == second["profile_sources"]
+    assert first["retrieved_at"] == "2026-08-20T00:00:00+00:00"
+    assert first["as_of_date"] == "2025-06-15"
+
+    # The normal replay carries initial_profile; a managed profile must never
+    # acquire structured_adapter merely because it has a field-level source.
+    assert first["verification_origin"] == "initial_profile"
+    for field, change in (
+        ("profile_sources", [{**first["profile_sources"][0], "reference": "tampered://"}]),
+        ("retrieved_at", "2027-01-01T00:00:00+00:00"),
+        ("as_of_date", "2027-01-01"),
+    ):
+        damaged = copy.deepcopy(first_checks)
+        target = _check({"field_checks": damaged}, "accounts_receivable_gross")
+        target[field] = change
+        report = profile_module.verify_field_checks(first_company, damaged, {})
+        assert not report.ok, f"篡改 {field} 后必须 fail-closed"
+        assert any(item["reason"] == "profile_replay_mismatch" for item in report.mismatches)
+
+    # Deleting the provenance key must not downgrade a managed checkpoint to
+    # the static-profile compatibility path or let an early fake retrieval
+    # timestamp bypass a later fact date at the research cutoff.
+    damaged = copy.deepcopy(first_checks)
+    target = _check({"field_checks": damaged}, "accounts_receivable_gross")
+    target.pop("profile_sources")
+    target.pop("as_of_date")
+    target["retrieved_at"] = "2025-04-01T00:00:00+00:00"
+    report = profile_module.verify_field_checks(
+        first_company, damaged, {}, as_of="2025-05-31",
+    )
+    assert not report.ok
+    assert any(item["reason"] == "profile_replay_mismatch" for item in report.mismatches)
 
 
 def test_v2_service_forwards_snapshot_parameters_and_snapshot_path_never_touches_personal_kb(

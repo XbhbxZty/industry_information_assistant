@@ -89,6 +89,154 @@ def test_取证时间缺失时如实标注而非留空():
     assert "来源：司法公开信息" in format_provenance(c)
 
 
+def test_档案字段来源覆盖初始档案泛称并进入附录主表():
+    source = {
+        "source_id": "profile-registry-1",
+        "name": "国家企业信用信息公示系统",
+        "issuer": "市场监管部门",
+        "source_type": "official",
+        "retrieved_at": "2026-08-20T10:00:00+00:00",
+        "as_of_date": "2026-08-19",
+        "reference": "https://example.test/registry/1",
+        "sha256": "a" * 64,
+    }
+    check = {
+        "field_id": "registration",
+        "field_name": "工商登记基本信息",
+        "category": "identity",
+        "status": "verified",
+        "value": "存续",
+        "verification_origin": "initial_profile",
+        "as_of_date": "2026-08-19",
+        "retrieved_at": "2026-08-20T10:00:00+00:00",
+        "profile_sources": [source],
+    }
+
+    provenance = format_provenance(check)
+    assert "国家企业信用信息公示系统（市场监管部门）[profile-registry-1]" in provenance
+    assert "初始企业档案" not in provenance
+    assert "证据日期：2026-08-19" in provenance
+    assert "取证时间：2026-08-20T10:00:00+00:00" in provenance
+
+    block = render_appendix([check])
+    assert "| 核查项 | 结论 | 来源 | 证据日期 | 取证时间 | 证据/来源编号 |" in block
+    assert "国家企业信用信息公示系统（市场监管部门）" in block
+    assert "| profile-registry-1 |" in block
+    assert "source_id=profile-registry-1" in block
+    assert "名称=国家企业信用信息公示系统" in block
+    assert "机构=市场监管部门" in block
+    assert "引用=https://example.test/registry/1" in block
+    assert "证据日期=2026-08-19" in block
+    assert "取证时间=2026-08-20T10:00:00+00:00" in block
+    assert f"SHA-256={'a' * 64}" in block
+
+
+def test_档案字段来源多条去重且严格转义_markdown_分隔符():
+    source_one = {
+        "source_id": "profile-1",
+        "name": "来源|一\n换行",
+        "issuer": "机构|甲\r\n",
+        "source_type": "official",
+        "retrieved_at": "2026-08-20T10:00:00+00:00",
+        "as_of_date": "2026-08-19",
+        "reference": "ref|one\nline",
+        "sha256": None,
+    }
+    source_two = {
+        "source_id": "profile-2",
+        "name": "审计报告",
+        "issuer": "审计机构",
+        "source_type": "audited",
+        "retrieved_at": "2026-08-21T10:00:00+00:00",
+        "as_of_date": "2026-08-20",
+        "reference": "年报第 10 页",
+        "sha256": "b" * 64,
+    }
+    check = {
+        "field_id": "registration",
+        "field_name": "工商登记基本信息",
+        "category": "identity",
+        "status": "verified",
+        "value": "存续",
+        "verification_origin": "initial_profile",
+        "as_of_date": "2026-08-19",
+        "retrieved_at": "2026-08-21T10:00:00+00:00",
+        "profile_sources": [source_one, source_one.copy(), source_two],
+    }
+    duplicate_check = {**check, "field_id": "operating_status", "field_name": "登记状态"}
+
+    block = render_appendix([check, duplicate_check])
+    assert block.count("source_id=profile-1") == 1
+    assert block.count("source_id=profile-2") == 1
+    assert "名称=来源／一 换行" in block
+    assert "机构=机构／甲" in block
+    assert "引用=ref／one line" in block
+    assert "SHA-256=" + "b" * 64 in block
+    assert "| profile-1、profile-2 |" in block
+
+
+def test_档案字段来源中的_html_与_markdown_保持为纯文本():
+    source = {
+        "source_id": "profile-xss",
+        "name": "<img src=x onerror=alert(1)>",
+        "issuer": "[伪链接](javascript:alert(1))",
+        "source_type": "official",
+        "retrieved_at": "2026-08-20T10:00:00+00:00",
+        "as_of_date": "2026-08-19",
+        "reference": "<script>alert(1)</script>",
+        "sha256": None,
+    }
+    check = {
+        "field_id": "registration", "field_name": "工商登记基本信息",
+        "category": "identity", "status": "verified", "value": "存续",
+        "verification_origin": "initial_profile", "profile_sources": [source],
+        "as_of_date": source["as_of_date"], "retrieved_at": source["retrieved_at"],
+    }
+
+    block = render_appendix([check])
+    assert "<img" not in block
+    assert "<script" not in block
+    assert "&lt;img src=x onerror=alert(1)&gt;" in block
+    assert r"\[伪链接\](javascript:alert(1))" in block
+
+
+def test_无档案字段来源时保留旧初始档案与适配器输出():
+    initial = {
+        "field_id": "registration",
+        "field_name": "工商登记基本信息",
+        "category": "identity",
+        "status": "verified",
+        "value": "存续",
+        "verification_origin": "initial_profile",
+        "as_of_date": "2026-08-19",
+        "retrieved_at": "2026-08-20T10:00:00+00:00",
+    }
+    structured = {
+        "field_id": "litigation",
+        "field_name": "涉诉记录",
+        "category": "judicial",
+        "status": "verified",
+        "value": "未发现",
+        "source_adapter": "judicial",
+        "verification_origin": "structured_adapter",
+        "as_of_date": "2026-08-21",
+        "retrieved_at": "2026-08-22T10:00:00+00:00",
+        "evidence_ids": ["ev-judicial-1"],
+        "profile_sources": [{
+            "source_id": "forged-admin-source",
+            "name": "伪造管理端来源",
+            "issuer": "攻击者",
+        }],
+    }
+
+    assert "来源：初始企业档案" in format_provenance(initial)
+    assert "来源：司法公开信息" in format_provenance(structured)
+    block = render_appendix([initial, structured], {"ev-judicial-1": {}})
+    assert "伪造管理端来源" not in block
+    assert "| 初始企业档案 | 2026-08-19 | 2026-08-20T10:00:00+00:00 | — |" in block
+    assert "| 司法公开信息 | 2026-08-21 | 2026-08-22T10:00:00+00:00 | ev-judicial-1 |" in block
+
+
 def test_未声明取证时间的项被单独点名():
     _, checks, store, comp = _run()
     _pick(checks, "registration")["retrieved_at"] = ""

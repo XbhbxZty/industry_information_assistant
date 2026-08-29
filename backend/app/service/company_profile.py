@@ -41,6 +41,15 @@ _DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "companies.json"
 
 _ADMIN_PROFILE_REF_KEYS = frozenset({"id", "revision", "content_sha256", "source"})
 
+# 运行时 FieldCheck 只保留字段级来源的可审计身份与时点，不把管理端的
+# ``field_ids``（它是来源覆盖声明而不是该字段自己的属性）带进检查点。
+# 顺序也必须稳定：检查点会被持久化和重放，输入数组的偶然顺序不能改变
+# 一份等价档案的 provenance。
+_PROFILE_SOURCE_KEYS = (
+    "source_id", "name", "issuer", "source_type", "retrieved_at",
+    "as_of_date", "reference", "sha256",
+)
+
 
 def validate_admin_company_profile_snapshot(
     profile: Any,
@@ -386,6 +395,56 @@ def profile_retrieved_at(company: Dict[str, Any]) -> Dict[str, str]:
     return out
 
 
+def profile_sources_by_field(
+    company: Dict[str, Any],
+    field_ids: List[str],
+) -> Optional[Dict[str, List[Dict[str, Any]]]]:
+    """Project an authorized admin snapshot's sources onto each FieldCheck.
+
+    ``_admin_field_sources`` is service decoration, not a general profile
+    field.  A static/legacy profile must never gain an apparent managed source
+    merely because somebody added a similarly named private key, so callers
+    may consume it only after the in-process authorization marker has been
+    attached by :func:`validate_admin_company_profile_snapshot`.
+
+    ``None`` means "legacy/static profile" and is intentionally distinct from
+    ``{field_id: []}``: the former keeps the historic per-node/coverage
+    ``retrieved_at`` behaviour, while the latter says an authorized snapshot
+    has no source covering that particular field and must not borrow another
+    field's timestamp.
+    """
+    if company.get("_admin_profile_snapshot_authorized") is not True:
+        return None
+
+    wanted = {field_id for field_id in field_ids if isinstance(field_id, str)}
+    by_field: Dict[str, List[Dict[str, Any]]] = {field_id: [] for field_id in wanted}
+    raw_sources = company.get("_admin_field_sources")
+    if not isinstance(raw_sources, list):
+        return by_field
+
+    for raw_source in raw_sources:
+        if not isinstance(raw_source, dict):
+            continue
+        source = {key: deepcopy(raw_source.get(key)) for key in _PROFILE_SOURCE_KEYS}
+        for field_id in raw_source.get("field_ids") or []:
+            if isinstance(field_id, str) and field_id in by_field:
+                by_field[field_id].append(deepcopy(source))
+
+    # ``source_id`` is unique at the persistence boundary.  Include the full
+    # canonical projection as a tie breaker anyway, so malformed checkpoint
+    # input still has deterministic replay behaviour instead of retaining list
+    # order as an accidental part of the signed state.
+    def _sort_key(source: Dict[str, Any]) -> tuple[str, str]:
+        return (
+            str(source.get("source_id") or ""),
+            json.dumps(source, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+        )
+
+    for sources in by_field.values():
+        sources.sort(key=_sort_key)
+    return by_field
+
+
 def _scenario_value_text(value: Any) -> Optional[str]:
     """Render one managed scenario value without inventing a fact or a unit."""
     if value is None or isinstance(value, bool):
@@ -713,12 +772,29 @@ def fill_field_checks(
                 + f"另检索到疑似相关线索但主体归属未确认，需人工核对：{leads}"
             )
 
+    # 已授权管理端快照把每条来源投影到它实际覆盖的字段。绝不拿 A 字段的
+    # ``coverage.retrieved_at`` 去给 B 字段背书；静态档案则保留旧的档案级
+    # 时间逻辑，以便既有数据和历史检查点继续可读。
+    source_by_field = profile_sources_by_field(
+        company,
+        [str(check.get("field_id") or "") for check in field_checks],
+    )
+    if source_by_field is not None:
+        for check in field_checks:
+            field_id = check.get("field_id")
+            if isinstance(field_id, str):
+                check["profile_sources"] = deepcopy(source_by_field.get(field_id, []))
+
     # 打上来源标记：本函数产出的每一条 verified/conflicting 都来自初始档案。
     # 必须在这里标，而不是交给调用方——漏标一次，该清单在重放校验里
     # 就会被当成"来源不明的旧检查点"，走降级路径。
     #
     # 时间戳取档案自身声明的取证时间（见 profile_retrieved_at），不是 now。
-    undated = stamp_initial_profile_origin(field_checks, profile_retrieved_at(company))
+    undated = stamp_initial_profile_origin(
+        field_checks,
+        profile_retrieved_at(company),
+        profile_sources_by_field=source_by_field,
+    )
     if undated:
         logger.warning(
             f"[company_profile] {company.get('name')} 有 {len(undated)} 项未声明取证时间，"

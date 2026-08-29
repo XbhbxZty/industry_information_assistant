@@ -84,7 +84,12 @@ class FieldCheck(TypedDict):
     verification_origin: str         # initial_profile | structured_adapter
     evidence_ids: List[str]          # 指向 evidence_store，structured_adapter 必填
     source_adapter: str              # 产出该结论的适配器标识
-    retrieved_at: str                # 证据获取时间，缺失即不予采信
+    # initial_profile 的管理员快照会记录字段级来源链；静态/旧档案可缺该字段，
+    # 继续按其历史 retrieved_at 重放。每项仅包含覆盖该 field_id 的来源，且
+    # 保留 source_id/name/issuer/source_type/retrieved_at/as_of_date/reference/sha256。
+    profile_sources: List[Dict[str, Any]]
+    retrieved_at: str                # 字段来源中最新的取证时间；静态旧档案按原逻辑
+    as_of_date: str                  # 字段来源中最新的事实日期；研究截止日优先使用它
 
 
 @dataclass

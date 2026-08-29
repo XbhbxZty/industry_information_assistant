@@ -204,6 +204,27 @@ def test_source_gate_rebuilds_coverage_and_preserves_empty_semantics(db):
     assert event["profile"]["coverage"]["queried"] == ["dishonesty"]
 
 
+def test_source_rejects_fact_date_later_than_retrieval_time():
+    source = _trusted_registration_source("registration")
+    source["retrieved_at"] = "2026-08-20T10:00:00+00:00"
+    source["as_of_date"] = "2026-08-21"
+
+    with pytest.raises(
+        AdminCompanyProfileValidationError,
+        match="as_of_date 不得晚于 retrieved_at",
+    ):
+        prepare_company_profile_content(_write(field_sources=[source]))
+
+
+def test_source_date_uses_retrieval_local_calendar_day_at_timezone_boundary():
+    source = _trusted_registration_source("registration")
+    source["retrieved_at"] = "2026-08-20T00:30:00+08:00"
+    source["as_of_date"] = "2026-08-20"
+
+    content = prepare_company_profile_content(_write(field_sources=[source]))
+    assert content["field_sources"][0]["as_of_date"] == "2026-08-20"
+
+
 def test_materials_are_profile_scoped_scoreless_and_never_structured_evidence(db):
     material = {
         "material_id": "m-1",

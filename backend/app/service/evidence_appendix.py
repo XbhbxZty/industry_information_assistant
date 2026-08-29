@@ -22,6 +22,7 @@ v0.6a 花了三轮复核把溯源建起来：来源闭集、受信任适配器�
 因此本模块产出**唯一权威版本**，由 `writer._ensure_evidence_appendix()`
 在代码层收口，与 `RISK_BLOCK_MARKER` 的处理方式一致。
 """
+from html import escape as html_escape
 from typing import Any, Dict, List, Optional
 
 try:
@@ -54,6 +55,73 @@ def source_label(adapter_id: Optional[str]) -> str:
     return _SOURCE_LABEL.get(adapter_id, adapter_id)
 
 
+def _markdown_text(value: Any, missing: str = "") -> str:
+    """Render untrusted metadata as inert text inside a Markdown table/list."""
+    text = str(value or "").replace("\r", " ").replace("\n", " ").replace("|", "／").strip()
+    if not text:
+        return missing
+    # The report is ultimately parsed by Marked and inserted as HTML.  Escape
+    # raw HTML first, then neutralise Markdown link/emphasis delimiters so an
+    # administrator-supplied label/reference cannot become executable markup.
+    text = html_escape(text, quote=False)
+    for char in ("\\", "`", "*", "_", "[", "]"):
+        text = text.replace(char, f"\\{char}")
+    return text
+
+
+def _profile_sources(check: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Return the well-formed administrator profile sources attached to a check."""
+    if check.get("verification_origin") != "initial_profile":
+        return []
+    return [source for source in (check.get("profile_sources") or []) if isinstance(source, dict)]
+
+
+def _profile_source_key(source: Dict[str, Any]) -> tuple:
+    """Use source_id as the natural identity, with complete metadata as a safe fallback."""
+    source_id = _markdown_text(source.get("source_id"))
+    if source_id:
+        return ("source_id", source_id)
+    return (
+        "metadata",
+        _markdown_text(source.get("name")),
+        _markdown_text(source.get("issuer")),
+        _markdown_text(source.get("reference")),
+        _markdown_text(source.get("as_of_date")),
+        _markdown_text(source.get("retrieved_at")),
+        _markdown_text(source.get("sha256")),
+    )
+
+
+def _profile_source_label(source: Dict[str, Any], *, include_id: bool = False) -> str:
+    """Human-readable profile-source label for inline provenance and table cells."""
+    name = _markdown_text(source.get("name"), "未命名来源")
+    issuer = _markdown_text(source.get("issuer"), "机构未标注")
+    label = f"{name}（{issuer}）"
+    if include_id:
+        source_id = _markdown_text(source.get("source_id"), "ID 未标注")
+        label += f"[{source_id}]"
+    return label
+
+
+def _profile_source_labels(check: Dict[str, Any], *, include_id: bool = False) -> str:
+    """Deduplicate repeated source declarations while preserving first-seen order."""
+    labels = []
+    seen = set()
+    for source in _profile_sources(check):
+        key = _profile_source_key(source)
+        if key in seen:
+            continue
+        seen.add(key)
+        labels.append(_profile_source_label(source, include_id=include_id))
+    return "；".join(labels)
+
+
+def _source_display(check: Dict[str, Any]) -> str:
+    """Prefer concrete administrator provenance over the generic initial-profile label."""
+    return _profile_source_labels(check) or source_label(
+        check.get("source_adapter") or check.get("verification_origin"))
+
+
 def format_provenance(check: Dict[str, Any]) -> str:
     """
     单条核查项的溯源短句，供撰写提示词内联使用。
@@ -61,9 +129,10 @@ def format_provenance(check: Dict[str, Any]) -> str:
     取证时间缺失时**如实写"取证时间未声明"**，不留空也不编造——
     留空会让模型自行补一个日期（BC-48 的成因之一）。
     """
-    src = source_label(check.get("source_adapter") or check.get("verification_origin"))
-    ts = check.get("retrieved_at") or ""
-    evidence_date = check.get("as_of_date") or ""
+    src = _profile_source_labels(check, include_id=True) or source_label(
+        check.get("source_adapter") or check.get("verification_origin"))
+    ts = _markdown_text(check.get("retrieved_at"))
+    evidence_date = _markdown_text(check.get("as_of_date"))
     return (
         f"来源：{src}；证据日期：{evidence_date or '未确认'}；"
         f"取证时间：{ts or '未声明'}"
@@ -71,12 +140,22 @@ def format_provenance(check: Dict[str, Any]) -> str:
 
 
 def _evidence_note(check: Dict[str, Any], evidence_store: Dict[str, Dict]) -> str:
-    """证据编号，供审计时回查原始返回。"""
+    """Return a structured evidence ID or managed-profile source ID."""
     ids = check.get("evidence_ids") or []
     found = [e for e in ids if e in (evidence_store or {})]
-    if not found:
-        return "—"
-    return "、".join(found)
+    if found:
+        return "、".join(found)
+    if not ids:
+        source_ids = []
+        seen = set()
+        for source in _profile_sources(check):
+            source_id = _markdown_text(source.get("source_id"))
+            if source_id and source_id not in seen:
+                seen.add(source_id)
+                source_ids.append(source_id)
+        if source_ids:
+            return "、".join(source_ids)
+    return "—"
 
 
 def render_appendix(
@@ -130,8 +209,8 @@ def render_appendix(
             "",
         ]
     lines += [
-        "| 核查项 | 结论 | 来源 | 取证时间 | 证据编号 |",
-        "|---|---|---|---|---|",
+        "| 核查项 | 结论 | 来源 | 证据日期 | 取证时间 | 证据/来源编号 |",
+        "|---|---|---|---|---|---|",
     ]
     for c in sorted(asserted, key=lambda x: (x.get("category", ""), x.get("field_id", ""))):
         value = c.get("value")
@@ -140,18 +219,21 @@ def render_appendix(
                 f"{d.get('source')}={d.get('value')}"
                 for d in (c.get("conflict_detail") or [])
             )
-        text = str(value or "").replace("|", "／").replace("\n", " ")
+        text = _markdown_text(value)
         if len(text) > 60:
             text = text[:60] + "…"
         lines.append(
-            f"| {c.get('field_name')} | {text} "
-            f"| {source_label(c.get('source_adapter') or c.get('verification_origin'))} "
-            f"| {c.get('retrieved_at') or '**未声明**'} "
+            f"| {_markdown_text(c.get('field_name'))} | {text} "
+            f"| {_source_display(c)} "
+            f"| {_markdown_text(c.get('as_of_date'), '**未确认**')} "
+            f"| {_markdown_text(c.get('retrieved_at'), '**未声明**')} "
             f"| {_evidence_note(c, evidence_store)} |"
         )
 
     source_rows = []
     seen_sources = set()
+    profile_source_rows = []
+    seen_profile_sources = set()
     for check in asserted:
         for evidence_id in check.get("evidence_ids") or []:
             evidence = evidence_store.get(evidence_id) or {}
@@ -161,7 +243,13 @@ def render_appendix(
                     continue
                 seen_sources.add(key)
                 source_rows.append(source)
-    if source_rows:
+        for source in _profile_sources(check):
+            key = _profile_source_key(source)
+            if key in seen_profile_sources:
+                continue
+            seen_profile_sources.add(key)
+            profile_source_rows.append(source)
+    if source_rows or profile_source_rows:
         lines += ["", "**原始证据来源**", ""]
         for source in source_rows:
             label = source.get("title") or source.get("source_id") or "未命名来源"
@@ -175,6 +263,21 @@ def render_appendix(
                 f"- {citation} {label}；{locator}；"
                 f"发布日期：{source.get('publication_date') or '未确认'}；{url}"
             )
+        for source in profile_source_rows:
+            source_id = _markdown_text(source.get("source_id"), "未标注")
+            name = _markdown_text(source.get("name"), "未命名来源")
+            issuer = _markdown_text(source.get("issuer"), "机构未标注")
+            reference = _markdown_text(source.get("reference"), "未标注")
+            as_of_date = _markdown_text(source.get("as_of_date"), "未确认")
+            retrieved_at = _markdown_text(source.get("retrieved_at"), "未声明")
+            sha256 = _markdown_text(source.get("sha256"))
+            line = (
+                f"- 档案字段来源：source_id={source_id}；名称={name}；机构={issuer}；"
+                f"引用={reference}；证据日期={as_of_date}；取证时间={retrieved_at}"
+            )
+            if sha256:
+                line += f"；SHA-256={sha256}"
+            lines.append(line)
 
     if gaps:
         lines += [

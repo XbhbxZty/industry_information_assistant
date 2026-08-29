@@ -55,7 +55,7 @@ from service.verification import (  # noqa: E402
     REASON_PATCH_FIELD_MISMATCH, REASON_PATCH_RAW_MISMATCH, REASON_PATCH_VALUE_MISMATCH,
     REASON_INVALID_ORIGIN, REASON_MISSING_CONFLICT_VALUES, REASON_MISSING_ORIGIN,
     REASON_MISSING_TIMESTAMP, REASON_NO_EVIDENCE_IDS, REASON_PROFILE_REPLAY_MISMATCH,
-    REASON_TIMESTAMP_MISMATCH, REASON_UNTRUSTED_ADAPTER,
+    REASON_TIMESTAMP_MISMATCH, REASON_UNEXPECTED_PROFILE_SOURCES, REASON_UNTRUSTED_ADAPTER,
     build_scoring_view, record_structured_evidence, register_adapter,
     unregister_adapter, verify_evidence_chain,
 )
@@ -292,6 +292,22 @@ def test_适配器证据与档案并存时各按各的来源重放():
     assert report.ok
     assert _pick(checks, "registration")["verification_origin"] == ORIGIN_INITIAL_PROFILE
     assert g["verification_origin"] == ORIGIN_STRUCTURED_ADAPTER
+
+
+def test_结构化适配器不能注入管理员字段来源伪装身份():
+    checks = _filled_checks()
+    store = {}
+    g = _pick(checks, "guarantee")
+    _record_guarantee(store, g)
+    g["profile_sources"] = [{
+        "source_id": "forged-admin-source",
+        "name": "伪造管理端来源",
+        "issuer": "攻击者",
+    }]
+
+    report = verify_field_checks(_COMPANY, checks, store)
+    assert not report.ok
+    assert REASON_UNEXPECTED_PROFILE_SOURCES in _reasons(report)
 
 
 # ============================ 必测 4-5：只改状态不写证据 / 原子写入口

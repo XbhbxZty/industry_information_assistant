@@ -131,8 +131,32 @@ def _normalise_sources(sources: Iterable[Dict[str, Any]], scenario: str) -> List
         if unknown:
             raise AdminCompanyProfileValidationError(
                 f"field_sources 声明了当前场景不可用的字段：{unknown}")
-        _iso_key(str(source.get("retrieved_at") or ""), "field_sources.retrieved_at")
-        _iso_key(str(source.get("as_of_date") or ""), "field_sources.as_of_date")
+        retrieved_at_raw = str(source.get("retrieved_at") or "").strip()
+        as_of_date_raw = str(source.get("as_of_date") or "").strip()
+        retrieved_at = _iso_key(
+            retrieved_at_raw,
+            "field_sources.retrieved_at",
+        )
+        as_of_date = _iso_key(
+            as_of_date_raw,
+            "field_sources.as_of_date",
+        )
+        # ``as_of_date`` 通常只有日粒度。此时应按来源字符串中的本地日历日
+        # 比较，不能先把带偏移的 retrieved_at 转成 UTC；否则同一当地日期
+        # 的凌晨取证会被误判成“先取证、后发生”。若 as_of 声明到具体时刻，
+        # 才按规范化后的绝对时间比较。
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", as_of_date_raw):
+            retrieved_parsed = parse_iso(retrieved_at_raw)
+            impossible_order = (
+                retrieved_parsed is not None
+                and as_of_date.date() > retrieved_parsed.date()
+            )
+        else:
+            impossible_order = as_of_date > retrieved_at
+        if impossible_order:
+            raise AdminCompanyProfileValidationError(
+                "field_sources.as_of_date 不得晚于 retrieved_at"
+            )
         digest = source.get("sha256")
         if digest and not re.fullmatch(r"[0-9a-fA-F]{64}", str(digest)):
             raise AdminCompanyProfileValidationError("field_sources.sha256 必须是 64 位十六进制摘要")

@@ -191,6 +191,7 @@ REASON_EVIDENCE_INACTIVE = "evidence_inactive"
 REASON_POST_CUTOFF_EVIDENCE = "post_cutoff_evidence"
 REASON_AS_OF_DATE_UNKNOWN = "as_of_date_unknown"
 REASON_INVALID_AS_OF_DATE = "invalid_as_of_date"
+REASON_UNEXPECTED_PROFILE_SOURCES = "unexpected_profile_sources"
 
 
 def _fail(field_check: Dict, reason: str, detail: str, **extra) -> Dict[str, Any]:
@@ -568,6 +569,8 @@ def record_structured_evidence(
 def stamp_initial_profile_origin(
     field_checks: List[Dict],
     retrieved_at_by_field: Dict[str, str],
+    *,
+    profile_sources_by_field: Optional[Dict[str, List[Dict[str, Any]]]] = None,
 ) -> List[str]:
     """
     给由初始档案填充的清单打上来源标记。
@@ -575,22 +578,47 @@ def stamp_initial_profile_origin(
     在 `fill_field_checks()` 之后调用。只标记需要证据的状态——
     unverified 不主张任何事实，标了反而会让"有来源"失去含义。
 
-    `retrieved_at` 必须取**档案自身声明的获取时间**，不能用 `datetime.now()`。
-    后者记录的是程序读取时刻，把它当成证据获取时间就是拿运行时间冒充取证时间
-    （BC-35）。档案没声明时留空，由重放校验记为降级，不伪造。
+    `profile_sources_by_field` 仅由已授权的管理端快照传入。给定时，时间必须
+    来自**覆盖这个 field_id 的来源**：多个来源分别取最新的 ``retrieved_at``
+    与最新的 ``as_of_date``，同时完整保留稳定排序后的来源列表。不能以别的
+    字段或整份档案的时间来填补一个字段的来源链。
+
+    静态/旧档案不会传 ``profile_sources_by_field``，保持历史行为：
+    `retrieved_at` 取档案自身声明的时间，不能用 `datetime.now()`。后者记录的是
+    程序读取时刻，把它当成证据获取时间就是拿运行时间冒充取证时间（BC-35）。
+    档案没声明时留空，由重放校验记为降级，不伪造。
 
     Returns: 无法确定取证时间的 field_id 列表，供调用方披露。
     """
+    def _latest_source_time(sources: List[Dict[str, Any]], key: str) -> str:
+        candidates = []
+        for source in sources:
+            value = source.get(key)
+            timestamp = _timestamp_key(value)
+            if timestamp is not None:
+                candidates.append((timestamp, value))
+        return max(candidates, key=lambda row: row[0])[1] if candidates else ""
+
     undated: List[str] = []
     for c in field_checks:
         if c.get("status") not in EVIDENCE_REQUIRED_STATUSES:
             continue
         c["verification_origin"] = ORIGIN_INITIAL_PROFILE
         c["source_adapter"] = ORIGIN_INITIAL_PROFILE
-        ts = retrieved_at_by_field.get(c["field_id"]) or ""
+        field_id = c.get("field_id")
+        if profile_sources_by_field is None:
+            ts = retrieved_at_by_field.get(field_id) or ""
+        else:
+            # An authorized snapshot with no source for this field must remain
+            # undated.  Falling back to coverage here would let one field's
+            # source silently authenticate another field's conclusion.
+            sources = deepcopy(profile_sources_by_field.get(field_id, []))
+            c["profile_sources"] = sources
+            ts = _latest_source_time(sources, "retrieved_at")
+            c["as_of_date"] = _latest_source_time(sources, "as_of_date")
         if parse_iso(ts) is None:
             ts = ""
-            undated.append(c["field_id"])
+            undated.append(field_id)
         c["retrieved_at"] = ts
         c.setdefault("evidence_ids", [])
     return undated
@@ -876,6 +904,17 @@ def verify_evidence_chain(
             ))
             continue
 
+        # ``profile_sources`` is reserved for service-authorized
+        # initial_profile snapshots.  A structured adapter already has its
+        # own evidence_store chain; accepting this sidecar would let report
+        # rendering disguise the adapter as an administrator source.
+        if origin != ORIGIN_INITIAL_PROFILE and "profile_sources" in check:
+            report.mismatches.append(_fail(
+                check, REASON_UNEXPECTED_PROFILE_SOURCES,
+                "非初始档案结论不得携带 profile_sources 字段来源链",
+            ))
+            continue
+
         if origin == ORIGIN_STRUCTURED_ADAPTER:
             # 结构化来源的时间戳是硬要求：证据本体与清单副本都要有且一致
             if not check.get("retrieved_at"):
@@ -907,18 +946,34 @@ def verify_evidence_chain(
             ))
             continue
         elif as_of:
-            # 档案是**查询时点的快照**：登记状态、涉诉记录都反映抓取当时的情形。
-            # 因此对初始档案而言，取证时间就是事实日期——这是这条路径可以拿
-            # retrieved_at 比截止日的唯一理由，结构化适配器不适用（见 check_as_of）。
-            problem = check_as_of({"as_of_date": ts}, as_of)
+            # 管理端快照的字段来源链同时记录了事实/发布日期。存在该链时，
+            # 截止日只能依 ``as_of_date`` 判断：晚事实 + 早抓取不能绕过闸门，
+            # 晚抓取 + 早事实则仍可用于回溯研究。静态旧档案没有该字段，才按
+            # 原兼容口径把快照 retrieved_at 当作事实日期。
+            # 管理端快照身份来自服务验证后的 company capability，不能由
+            # 检查点是否还保留 ``profile_sources`` 这个可删键决定。否则删除
+            # 该键就能把新快照伪装成静态旧档案，退回 retrieved_at 口径。
+            has_profile_sources = (
+                company.get("_admin_profile_snapshot_authorized") is True
+                or "profile_sources" in check
+            )
+            fact_date = check.get("as_of_date", "") if has_profile_sources else ts
+            problem = check_as_of({"as_of_date": fact_date}, as_of)
             if problem is not None:
                 reason, detail = problem
-                report.mismatches.append(_fail(
+                entry = _fail(
                     check, reason,
-                    f"初始档案快照时间 {ts}：{detail}",
+                    f"初始档案字段事实日期 {fact_date or '未声明'}：{detail}",
                     research_as_of=as_of,
-                ))
-                continue
+                )
+                # 日期不明是信息不足而非确凿越界，与结构化证据保持同一
+                # 三档语义。对于已授权字段来源链，随后 provenance 重放仍会
+                # 捕捉遭删除/漂移的 as_of_date，不能借此静默放行。
+                if reason == REASON_AS_OF_DATE_UNKNOWN:
+                    report.degradations.append(entry)
+                else:
+                    report.mismatches.append(entry)
+                    continue
         need_profile_replay.append(check)
 
     # —— 档案重放：一次性批量比对 ——
@@ -941,6 +996,24 @@ def verify_evidence_chain(
                     check_value=check.get("value"),
                     profile_value=exp.get("value"),
                 ))
+                continue
+            # 字段级来源链是结论的一部分，而不只是展示信息。若只重放值，
+            # 改掉 source_id/reference/sha256 或把某字段的时点换成别的字段的
+            # 时点都会保持"值相同"而绕过审计。新管理端快照带
+            # ``profile_sources``；静态/旧档案没有它，保持其既有重放兼容性。
+            if "profile_sources" in check or "profile_sources" in exp:
+                provenance_fields = ("profile_sources", "retrieved_at", "as_of_date")
+                changed = {
+                    key: {"check": check.get(key), "profile": exp.get(key)}
+                    for key in provenance_fields
+                    if check.get(key) != exp.get(key)
+                }
+                if changed:
+                    report.mismatches.append(_fail(
+                        check, REASON_PROFILE_REPLAY_MISMATCH,
+                        "初始档案重放出的字段级来源链与检查点不一致",
+                        provenance_difference=changed,
+                    ))
     elif need_profile_replay:
         for check in need_profile_replay:
             report.mismatches.append(_fail(
