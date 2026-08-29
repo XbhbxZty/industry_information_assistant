@@ -273,7 +273,13 @@ export function useDDStream() {
 
   const start = useCallback(async (
     query: string,
-    options?: { kbName?: string; asOf?: string; subjectName?: string; businessType?: string },
+    options?: {
+      kbName?: string
+      asOf?: string
+      subjectName?: string
+      businessType?: string
+      companyProfileId?: string
+    },
   ) => {
     const sessionId = `dd-${Date.now()}`
     abortRef.current?.abort()
@@ -284,6 +290,7 @@ export function useDDStream() {
         query,
         session_id: sessionId,
         subject_name: options?.subjectName,
+        company_profile_id: options?.companyProfileId,
         business_type: options?.businessType,
         kb_name: options?.kbName,
         as_of: options?.asOf,

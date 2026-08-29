@@ -4,6 +4,7 @@
 // 本文件在原课程项目基础上二次开发（已获授权）。
 // 改造部分 © 2026 XbhbxZty
 import { AuthGuard } from '@/components/auth-guard'
+import { RoleGuard } from '@/components/auth-guard/role-guard'
 import { BaseLayout } from '@/layout/base'
 import NotFound from '@/pages/404'
 import LoginPage from '@/pages/auth/login'
@@ -16,6 +17,9 @@ import DatabasePage from '@/pages/database'
 import DueDiligencePage from '@/pages/due-diligence'
 import NewsPage from '@/pages/news'
 import BiddingPage from '@/pages/bidding'
+import CompanyProfileListPage from '@/pages/company-profiles/list'
+import CompanyProfileDetailPage from '@/pages/company-profiles/detail'
+import CompanyProfileEditorPage from '@/pages/company-profiles/editor'
 import {
   Navigate,
   Outlet,
@@ -28,7 +32,7 @@ export type IRouteObject = {
   name?: string
   auth?: boolean
   pure?: boolean
-  meta?: any
+  meta?: unknown
 } & Omit<RouteObject, 'children'>
 
 export const routes: IRouteObject[] = [
@@ -72,6 +76,22 @@ export const routes: IRouteObject[] = [
   {
     path: '/bidding',
     Component: BiddingPage,
+  },
+  {
+    path: '/company-profiles',
+    Component: CompanyProfileListPage,
+  },
+  {
+    path: '/company-profiles/new',
+    element: <RoleGuard><CompanyProfileEditorPage /></RoleGuard>,
+  },
+  {
+    path: '/company-profiles/:id/edit',
+    element: <RoleGuard><CompanyProfileEditorPage /></RoleGuard>,
+  },
+  {
+    path: '/company-profiles/:id',
+    Component: CompanyProfileDetailPage,
   },
   {
     path: '/404',

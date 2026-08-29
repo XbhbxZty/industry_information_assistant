@@ -38,8 +38,9 @@ const LEVEL_COLOR: Record<string, string> = {
 export function CompletenessBar({ data }: { data: Completeness | null }) {
   if (!data) return null
   const pct = Math.round((data.verified_rate || 0) * 100)
+  const scenario = data.scenario
   return (
-    <Card size="small" title="必查项核实率">
+    <Card size="small" title="核心主体必查项核实率">
       <Progress
         percent={pct}
         status={pct >= 90 ? 'success' : pct >= 60 ? 'normal' : 'exception'}
@@ -58,6 +59,18 @@ export function CompletenessBar({ data }: { data: Completeness | null }) {
           </Tooltip>
         )}
       </Space>
+      {scenario && scenario.total > 0 && (
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #f0f0f0' }}>
+          <Text strong style={{ fontSize: 12 }}>场景清单覆盖率（单独统计）</Text>
+          <Progress
+            size="small"
+            percent={Math.round((scenario.rate || 0) * 100)}
+            format={() => `${scenario.verified}/${scenario.total}`}
+            style={{ marginTop: 4 }}
+          />
+          {scenario.unverified_fields?.length > 0 && <Tag color="purple">场景待核实 {scenario.unverified_fields.length} 项</Tag>}
+        </div>
+      )}
     </Card>
   )
 }
@@ -66,8 +79,19 @@ export function CompletenessBar({ data }: { data: Completeness | null }) {
 
 export function ChecklistTable({ checks }: { checks: FieldCheck[] }) {
   if (!checks?.length) return null
+  const coreChecks = checks.filter(check => !check.scope || check.scope === 'core')
+  const scenarioChecks = checks.filter(check => check.scope?.startsWith('scenario:'))
   return (
-    <Card size="small" title="核查清单（20 项固定，缺失显式可计数）">
+    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      <ChecklistTableSection title="核心主体清单" checks={coreChecks} />
+      {scenarioChecks.length > 0 && <ChecklistTableSection title="业务场景清单（单独统计，不影响核心核实率）" checks={scenarioChecks} scenario />}
+    </Space>
+  )
+}
+
+function ChecklistTableSection({ title, checks, scenario = false }: { title: string; checks: FieldCheck[]; scenario?: boolean }) {
+  return (
+    <Card size="small" title={title}>
       <Table<FieldCheck>
         size="small"
         rowKey="field_id"
@@ -80,7 +104,7 @@ export function ChecklistTable({ checks }: { checks: FieldCheck[] }) {
             render: (v, r) => (
               <Space size={4}>
                 <Text>{v}</Text>
-                {r.required && <Tag color="blue">必查</Tag>}
+                {scenario ? <Tag color="purple">场景项</Tag> : r.required && <Tag color="blue">尽调必查</Tag>}
               </Space>
             ),
           },

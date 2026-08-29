@@ -4,6 +4,7 @@
 # 本文件在原课程项目基础上二次开发（已获授权）。
 # 改造部分 © 2026 XbhbxZty
 from typing import Dict, Any, Optional, Literal
+import json
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -57,6 +58,9 @@ class ResearchRequest(BaseModel):
     subject_name: Optional[str] = None
     business_type: Optional[str] = None
     due_diligence: Optional[bool] = None
+    # 只接受受控档案 ID；档案内容与修订号必须在服务端按登录身份和 DB 会话读取，
+    # 不接受客户端提交的 payload/ref，以免把任意数据伪装成已发布快照。
+    company_profile_id: Optional[str] = None
     # 调查层（B 层）开关。留空 = 随尽调模式默认开启（计划 9.1）。
     # 它只控制**探索性**抽取；确定性图表来自已核实字段，不受此开关影响，
     # 也不该受——那些图与证据附录同源，关掉它们等于让报告少说已核实的事。
@@ -162,6 +166,66 @@ def _assert_checkpoint_access(info: Dict[str, Any], current_user: User) -> None:
         # 对历史遗留的无归属检查点同样失败关闭，不能把旧数据变成公共数据。
         raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="无权访问该研究会话")
 
+
+def _load_admin_company_profile_snapshot(db: Session, company_profile_id: str) -> Dict[str, Any]:
+    """Read one active admin profile before streaming and freeze it as JSON.
+
+    The company-profile CRUD service is the only persistence boundary.  This
+    router deliberately does not accept a profile payload and never falls back
+    to ``companies.json`` when an explicit ID cannot be resolved.
+    """
+    requested_id = str(company_profile_id or "").strip()
+    if not requested_id:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="company_profile_id 不能为空")
+
+    try:
+        try:
+            from service.admin_company_profile_service import (
+                AdminCompanyProfileNotFound,
+                AdminCompanyProfileValidationError,
+                get_active_profile_snapshot,
+            )
+        except ImportError:
+            from app.service.admin_company_profile_service import (  # type: ignore
+                AdminCompanyProfileNotFound,
+                AdminCompanyProfileValidationError,
+                get_active_profile_snapshot,
+            )
+    except ImportError as exc:
+        # Do not silently degrade an explicit managed-profile request to fuzzy
+        # name matching while the CRUD feature is unavailable.
+        logger.error("[research] 管理端企业档案服务不可用", exc_info=True)
+        raise HTTPException(
+            status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="企业档案服务不可用，无法加载指定快照",
+        ) from exc
+
+    try:
+        snapshot = get_active_profile_snapshot(db, requested_id)
+    except AdminCompanyProfileNotFound as exc:
+        raise HTTPException(status_code=404, detail="企业档案不存在或已归档") from exc
+    except AdminCompanyProfileValidationError as exc:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=f"企业档案快照无效：{exc}") from exc
+
+    # ``json`` round-trip is intentional.  It both rejects ORM/Pydantic objects
+    # leaking across the streaming boundary and breaks all references to the
+    # active database object before the async generator starts.
+    try:
+        frozen = json.loads(json.dumps(snapshot, ensure_ascii=False, allow_nan=False))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=HTTP_400_BAD_REQUEST,
+            detail="企业档案服务返回的快照不是纯 JSON",
+        ) from exc
+
+    if not isinstance(frozen, dict) or set(frozen) != {"profile", "ref", "scenario"}:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="企业档案快照形状非法")
+    if not isinstance(frozen["profile"], dict) or not isinstance(frozen["ref"], dict):
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="企业档案快照内容非法")
+    if not isinstance(frozen["scenario"], str):
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="企业档案快照场景非法")
+    return frozen
+
 @router.post("/stream", status_code=HTTP_200_OK)
 async def stream_research(
     request: ResearchRequest,
@@ -200,6 +264,11 @@ async def stream_research(
         search_local = request.get_search_local()
         logger.info(f"Using DeepResearch V2 for query: {request.query[:50]}... (session_id: {request.session_id}, search_web={search_web}, search_local={search_local})")
         service_v2 = get_research_service_v2()
+        admin_snapshot = None
+        if request.company_profile_id is not None:
+            # 必须在返回 StreamingResponse 前完成：流开始后再查库既会失去
+            # 事务/登录边界，也可能把执行期间的新版本混进同一份研究状态。
+            admin_snapshot = _load_admin_company_profile_snapshot(db, request.company_profile_id)
         # 本地检索范围在**这一层**解析：授权信息在 PostgreSQL 的
         # KnowledgeBase.user_id 里，Milvus schema 中没有 user_id。
         # 检索层拿不到做这个判断的信息，就不该由它拼装集合名。
@@ -221,6 +290,9 @@ async def stream_research(
                     business_type=request.business_type or "",
                     due_diligence=request.due_diligence,
                     investigation=request.investigation,
+                    provided_company_profile=(admin_snapshot or {}).get("profile"),
+                    admin_profile_ref=(admin_snapshot or {}).get("ref"),
+                    admin_profile_scenario=(admin_snapshot or {}).get("scenario", ""),
                 ):
                     yield event
             except Exception as e:
@@ -231,6 +303,12 @@ async def stream_research(
         return StreamingResponse(
             generate_sse_v2(),
             media_type="text/event-stream"
+        )
+
+    if request.company_profile_id is not None:
+        raise HTTPException(
+            status_code=HTTP_400_BAD_REQUEST,
+            detail="company_profile_id 仅支持 v2 研究流程",
         )
 
     # V1 原有逻辑

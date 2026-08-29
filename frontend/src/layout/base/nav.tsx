@@ -19,12 +19,14 @@ import { DownOutlined } from '@ant-design/icons'
 import { NavItem } from './nav-item'
 import { SessionDrawer } from '@/components/session-drawer'
 import { industryState, setCurrentIndustry } from '@/store/industry'
+import { authState } from '@/store/auth'
 import './nav.scss'
 
 export function Nav() {
   const { pathname } = useLocation()
   const [sessionDrawerOpen, setSessionDrawerOpen] = useState(false)
   const { currentIndustryId, industries } = useSnapshot(industryState)
+  const { user } = useSnapshot(authState)
 
   const currentIndustry = useMemo(() => {
     const industry = industries.find((i) => i.id === currentIndustryId)
@@ -61,6 +63,12 @@ export function Nav() {
         label: '贷前尽调',
         icon: IconDatabase,
         href: '/due-diligence',
+      },
+      {
+        key: 'company-profiles',
+        label: '企业档案',
+        icon: IconDatabase,
+        href: '/company-profiles',
       },
       {
         key: 'newchat',
@@ -137,7 +145,7 @@ export function Nav() {
                 padding: 4,
               }}
             >
-              {React.cloneElement(menu as React.ReactElement, {
+              {React.cloneElement(menu as React.ReactElement<{ style?: React.CSSProperties }>, {
                 style: {
                   backgroundColor: '#fff',
                   boxShadow: 'none',
@@ -151,6 +159,7 @@ export function Nav() {
             <DownOutlined className="industry-selector__icon" />
           </div>
         </Dropdown>
+        {user?.is_superuser && <div className="admin-mode-badge">管理员模式</div>}
       </div>
 
       <div className="base-layout-nav">

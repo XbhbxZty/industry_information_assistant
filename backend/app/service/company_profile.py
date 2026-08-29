@@ -14,12 +14,13 @@
     正是 v0.1 的实验目的。
 """
 import json
+import hashlib
 import logging
 import uuid
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 try:
     from config.dd_checklist import CHECKLIST_BY_ID, NO_RECORD_VALUE
@@ -37,6 +38,89 @@ except ImportError:  # 兼容以 app 为包根的导入方式
 logger = logging.getLogger(__name__)
 
 _DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "companies.json"
+
+_ADMIN_PROFILE_REF_KEYS = frozenset({"id", "revision", "content_sha256", "source"})
+
+
+def validate_admin_company_profile_snapshot(
+    profile: Any,
+    ref: Any,
+    scenario: str = "",
+    payload_sha256: str = "",
+) -> Dict[str, Any]:
+    """Validate and detach a managed profile snapshot before it reaches state.
+
+    An explicit admin-profile ID is a fail-closed path.  This function validates
+    the exact service reference and its service-bound decoration so a damaged
+    checkpoint cannot silently fall back to name matching or a newer profile.
+    The returned copy is marked only after hash validation; the marker permits
+    the narrowly-scoped ``_scenario_data`` projection in ``fill_field_checks``.
+    """
+    if not isinstance(profile, Mapping) or not isinstance(ref, Mapping):
+        raise ValueError("管理端企业档案快照必须包含 profile 与 ref 对象")
+    if set(ref) != _ADMIN_PROFILE_REF_KEYS:
+        raise ValueError("管理端企业档案 ref 必须且只能包含 id/revision/content_sha256/source")
+
+    profile_id = ref.get("id")
+    revision = ref.get("revision")
+    digest = ref.get("content_sha256")
+    if not isinstance(profile_id, str) or not profile_id.strip():
+        raise ValueError("管理端企业档案 ref.id 非法")
+    if isinstance(revision, bool) or not isinstance(revision, (int, str)) or str(revision).strip() == "":
+        raise ValueError("管理端企业档案 ref.revision 非法")
+    if not isinstance(digest, str) or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+        raise ValueError("管理端企业档案 ref.content_sha256 非法")
+    if ref.get("source") != "admin_company_profile":
+        raise ValueError("管理端企业档案 ref.source 非法")
+
+    try:
+        detached = json.loads(json.dumps(profile, ensure_ascii=False, sort_keys=True, allow_nan=False))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("管理端企业档案 profile 必须是纯 JSON") from exc
+    if payload_sha256:
+        if not isinstance(payload_sha256, str) or len(payload_sha256) != 64:
+            raise ValueError("管理端企业档案快照哈希非法")
+        canonical = json.dumps(
+            detached, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ).encode("utf-8")
+        if hashlib.sha256(canonical).hexdigest() != payload_sha256:
+            raise ValueError("管理端企业档案快照 payload 已变化")
+    # ``content_sha256`` is the persisted-content digest.  The persistence
+    # service includes submitted materials in that digest but deliberately does
+    # not copy materials into the research snapshot.  Therefore it cannot be
+    # recomputed from this payload alone.  ``get_active_profile_snapshot``
+    # verifies it at the DB boundary; here we bind the payload to that verified
+    # ref again and fail closed if either decoration is absent or inconsistent.
+    embedded_ref = detached.get("_admin_profile_ref")
+    if not isinstance(embedded_ref, dict) or set(embedded_ref) != _ADMIN_PROFILE_REF_KEYS:
+        raise ValueError("管理端企业档案缺少受服务签发的 ref 装饰")
+    if embedded_ref != dict(ref):
+        raise ValueError("管理端企业档案内嵌 ref 与运行 ref 不一致")
+    if not isinstance(detached.get("_scenario_data"), dict):
+        raise ValueError("管理端企业档案缺少场景数据装饰")
+    if not isinstance(detached.get("_admin_field_sources"), list):
+        raise ValueError("管理端企业档案缺少字段来源装饰")
+    if not isinstance(scenario, str):
+        raise ValueError("管理端企业档案场景非法")
+    if not isinstance(detached.get("name"), str) or not detached["name"].strip():
+        raise ValueError("管理端企业档案缺少非空企业名称")
+    if "coverage" in detached and not isinstance(detached["coverage"], dict):
+        raise ValueError("管理端企业档案 coverage 必须是对象")
+
+    try:
+        from service.profile_schema import validate_profile
+    except ImportError:
+        from app.service.profile_schema import validate_profile
+    problems = validate_profile(detached)
+    if problems:
+        raise ValueError("管理端企业档案未通过结构校验：" + "；".join(problems))
+
+    # This is an in-process capability, not a persisted profile field.  It is
+    # deliberately absent from the hash and can only be attached after the
+    # router has called the authorized profile service and this function has
+    # validated the returned ref.
+    detached["_admin_profile_snapshot_authorized"] = True
+    return detached
 
 # 来源类型 → 可信度。尽调场景的证据等级：官方登记 > 审计 > 企业自报 > 媒体
 _CREDIBILITY = {
@@ -302,6 +386,79 @@ def profile_retrieved_at(company: Dict[str, Any]) -> Dict[str, str]:
     return out
 
 
+def _scenario_value_text(value: Any) -> Optional[str]:
+    """Render one managed scenario value without inventing a fact or a unit."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, str):
+        return value.strip() or None
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, (dict, list)):
+        # Scenario records (for example an ageing table) are deliberately not
+        # transformed into profile facts or scoring inputs in Stage 3.  A stable
+        # JSON rendering is enough for the scenario FieldCheck and for replay.
+        return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return None
+
+
+def _managed_scenario_values(
+    company: Dict[str, Any],
+    field_checks: List[Dict[str, Any]],
+) -> Dict[str, tuple[str, None]]:
+    """Return only authorized values for scenario checks selected this run.
+
+    ``_scenario_data`` is intentionally ignored for legacy/static profiles.  It
+    becomes eligible only after ``validate_admin_company_profile_snapshot`` has
+    attached its in-process authorization marker.  The function derives the
+    allowed field IDs from generated checks, so a snapshot cannot use an extra
+    key to create a new check or change a core field's policy.
+    """
+    if company.get("_admin_profile_snapshot_authorized") is not True:
+        return {}
+    raw = company.get("_scenario_data")
+    if not isinstance(raw, dict):
+        return {}
+
+    # The CRUD service accepts scenario_data as a flat field-id map and verifies
+    # it is covered by trusted field_sources before it produces the snapshot.
+    # Retain that guard here so only explicitly authorized scenario values may
+    # become initial_profile checks.
+    authorized_ids: set[str] = set()
+    for source in company.get("_admin_field_sources") or []:
+        if isinstance(source, dict):
+            authorized_ids.update(
+                field_id for field_id in source.get("field_ids") or []
+                if isinstance(field_id, str)
+            )
+
+    allowed_by_scenario: Dict[str, set[str]] = {}
+    for check in field_checks:
+        scope = str(check.get("scope") or "")
+        if not scope.startswith("scenario:"):
+            continue
+        scenario = scope.split(":", 1)[1]
+        field_id = check.get("field_id")
+        if scenario and isinstance(field_id, str):
+            allowed_by_scenario.setdefault(scenario, set()).add(field_id)
+
+    resolved: Dict[str, tuple[str, None]] = {}
+    for _scenario, allowed_ids in allowed_by_scenario.items():
+        for field_id in sorted(allowed_ids):
+            if field_id not in authorized_ids:
+                continue
+            item = raw.get(field_id)
+            # The CRUD service may decorate a field with display metadata; only
+            # its explicit value participates in a FieldCheck.  This does not
+            # give the editor a way to set `required` or another check property.
+            if isinstance(item, dict) and "value" in item:
+                item = item["value"]
+            text = _scenario_value_text(item)
+            if text is not None:
+                resolved[field_id] = (text, None)
+    return resolved
+
+
 def fill_field_checks(
     company: Dict[str, Any],
     facts: List[Dict[str, Any]],
@@ -456,6 +613,13 @@ def fill_field_checks(
         ]
     } if unconfirmed else {}
 
+    # Stage 3 managed profiles may carry non-core scenario input under the
+    # private decoration.  It is not made into facts, scoring-profile fields,
+    # or knowledge-base content.  Only the selected scenario FieldChecks may
+    # receive it, and only after the service-authorized snapshot gate above.
+    scenario_resolved = _managed_scenario_values(company, field_checks)
+    resolved.update(scenario_resolved)
+
     # 数据源覆盖范围：区分「查了但无记录」与「未查询」。
     # 这两者在尽调中的业务含义完全不同——前者是可支持授信的正面结论，
     # 后者是必须补查的信息缺口。混为一谈会直接误导审批。
@@ -506,6 +670,8 @@ def fill_field_checks(
             chk["status"] = "verified"
             chk["value"] = value
             chk["sources"] = facts_by_cat.get(cat, [])
+            if fid in scenario_resolved:
+                chk["attempted_sources"] = ["admin_company_profile"]
             chk["failure_reason"] = ""
 
         elif fid in queried:

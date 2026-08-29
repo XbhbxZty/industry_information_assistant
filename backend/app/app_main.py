@@ -24,12 +24,14 @@ from router.attachment_router import router as attachment_router
 from router.memory_router import router as memory_router
 from router.database_router import router as database_router
 from router.news_router import router as news_router
+from router.company_profile_router import router as company_profile_router
 from core.database import engine, Base
 # 导入所有模型以确保它们被注册
 from models import (
     User, ChatSession, ChatMessage, ChatAttachment, LongTermMemory,
     KnowledgeBase, Document, IndustryStats, CompanyData, PolicyData,
-    ResearchCheckpoint, IndustryNews, BiddingInfo, NewsCollectionTask
+    ResearchCheckpoint, IndustryNews, BiddingInfo, NewsCollectionTask,
+    AdminCompanyProfile, AdminCompanyProfileAudit,
 )
 
 # 创建所有数据表（如果不存在）
@@ -90,6 +92,7 @@ app.include_router(search_router)
 app.include_router(chat_router)
 app.include_router(research_router)
 app.include_router(news_router)
+app.include_router(company_profile_router)
 app.include_router(local_data_router.router)
 
 @app.get("/hello")

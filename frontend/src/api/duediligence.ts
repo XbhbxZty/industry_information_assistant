@@ -8,12 +8,15 @@ import type { AxiosRequestConfig } from 'axios'
  *  unverified                    = 信息缺口，必须补查
  */
 export type CheckStatus = 'verified' | 'unverified' | 'conflicting' | 'not_applicable'
+export type CheckScope = 'core' | `scenario:${string}`
 
 export interface FieldCheck {
   field_id: string
   field_name: string
   category: string
   section_id: string
+  /** 核心主体项与业务场景项必须分区呈现、分开统计。 */
+  scope?: CheckScope
   required: boolean
   status: CheckStatus
   value: string | null
@@ -35,6 +38,14 @@ export interface Completeness {
   conflicting_fields: string[]
   capability_gaps?: string[]
   by_category?: Record<string, { total: number; verified: number; rate: number }>
+  /** 场景清单覆盖率不参与核心主体核实率、闸门或评级。 */
+  scenario?: {
+    name: string
+    total: number
+    verified: number
+    rate: number
+    unverified_fields: string[]
+  }
 }
 
 export interface CreditRecommendation {
@@ -183,6 +194,7 @@ export function startDueDiligence(
     query: string
     session_id?: string
     subject_name?: string
+    company_profile_id?: string
     business_type?: string
     kb_name?: string
     as_of?: string

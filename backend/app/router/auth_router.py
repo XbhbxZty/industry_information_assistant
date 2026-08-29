@@ -108,6 +108,18 @@ async def get_current_user_required(
     return user
 
 
+async def require_superuser(
+    current_user: User = Depends(get_current_user_required),
+) -> User:
+    """管理员写入口统一使用的 RBAC 依赖。"""
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="仅超级用户可执行此操作",
+        )
+    return current_user
+
+
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     user_data: UserCreate,

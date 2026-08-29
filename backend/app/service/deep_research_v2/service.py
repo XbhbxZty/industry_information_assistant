@@ -100,6 +100,9 @@ class DeepResearchV2Service:
         business_type: str = "",
         due_diligence: Optional[bool] = None,
         investigation: Optional[bool] = None,
+        provided_company_profile: Optional[Dict[str, Any]] = None,
+        admin_profile_ref: Optional[Dict[str, Any]] = None,
+        admin_profile_scenario: str = "",
     ) -> AsyncGenerator[str, None]:
         """
         执行深度研究（SSE 流式输出）
@@ -155,6 +158,9 @@ class DeepResearchV2Service:
                 business_type=business_type,
                 due_diligence=due_diligence,
                 investigation=investigation,
+                provided_company_profile=provided_company_profile,
+                admin_profile_ref=admin_profile_ref,
+                admin_profile_scenario=admin_profile_scenario,
             ):
                 # 转换为 SSE 格式
                 yield self._format_sse(event)

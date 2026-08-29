@@ -10,6 +10,7 @@ export interface UserInfo {
   username: string
   email: string
   is_active: boolean
+  is_superuser: boolean
   created_at: string
 }
 
@@ -26,7 +27,16 @@ function loadAuthState(): AuthState {
   try {
     const saved = localStorage.getItem(AUTH_STORAGE_KEY)
     if (saved) {
-      return JSON.parse(saved)
+      const parsed = JSON.parse(saved) as Partial<AuthState>
+      // 兼容第三阶段前存下来的会话：旧数据没有管理员字段时必须按普通用户处理。
+      const user = parsed.user
+        ? { ...parsed.user, is_superuser: Boolean(parsed.user.is_superuser) }
+        : null
+      return {
+        token: parsed.token || null,
+        user,
+        isLoggedIn: Boolean(parsed.isLoggedIn && parsed.token && user),
+      }
     }
   } catch (e) {
     console.error('Failed to load auth state:', e)

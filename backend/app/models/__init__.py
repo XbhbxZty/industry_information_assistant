@@ -9,6 +9,7 @@ from .knowledge import KnowledgeBase, Document
 from .industry_data import IndustryStats, CompanyData, PolicyData
 from .research import ResearchCheckpoint
 from .news import IndustryNews, BiddingInfo, NewsCollectionTask
+from .company_profile import AdminCompanyProfile, AdminCompanyProfileAudit
 
 __all__ = [
     "User",
@@ -25,4 +26,6 @@ __all__ = [
     "IndustryNews",
     "BiddingInfo",
     "NewsCollectionTask",
+    "AdminCompanyProfile",
+    "AdminCompanyProfileAudit",
 ]

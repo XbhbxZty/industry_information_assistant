@@ -12,6 +12,9 @@ DeepResearch V2.0 - 状态管理模块
 
 from typing import TypedDict, List, Dict, Any, Optional, Literal
 from dataclasses import dataclass, field
+from copy import deepcopy
+import hashlib
+import json
 from datetime import datetime
 from enum import Enum
 
@@ -198,6 +201,16 @@ class ResearchState(TypedDict):
     business_type: str                      # 保理/授信/供应链金融等业务场景
     due_diligence_mode: bool                # 是否启用固定二十项清单与证据闸门
 
+    # 管理端企业档案快照（Stage 3）。路由层只按 ID 从受控服务读取，
+    # 这里保存的是该次运行已冻结的纯 JSON，而不是可再次查询的档案 ID。
+    # 检查点据此重放历史运行，避免"恢复时读到了更新后的档案"。
+    provided_company_profile: Dict[str, Any]
+    admin_profile_ref: Dict[str, Any]       # {id, revision, content_sha256, source}
+    admin_profile_scenario: str              # 受控服务给出的场景标识；仍须由清单映射解析
+    # 覆盖快照可见 payload 的运行内哈希。持久化 ref 的 content_sha256 同时
+    # 覆盖未暴露的 materials，不能在图中重算；该哈希用于检查点篡改检测。
+    admin_profile_payload_sha256: str
+
     # 尽调对象（v0.1：来自硬编码档案；v0.4 起改由数据源适配层提供）
     company_name: str                       # 识别出的尽调对象企业名，未识别则为空
     credit_context: str                     # 授信申请背景，拼入 Architect 规划提示词
@@ -350,6 +363,9 @@ def create_initial_state(
     business_type: str = "",
     due_diligence: Optional[bool] = None,
     investigation: Optional[bool] = None,
+    provided_company_profile: Optional[Dict[str, Any]] = None,
+    admin_profile_ref: Optional[Dict[str, Any]] = None,
+    admin_profile_scenario: str = "",
 ) -> ResearchState:
     """创建初始状态
 
@@ -365,6 +381,15 @@ def create_initial_state(
     dd_mode = bool(due_diligence) if due_diligence is not None else bool(
         subject_name or business_type or any(marker in query for marker in dd_markers)
     )
+    frozen_profile = deepcopy(provided_company_profile or {})
+    frozen_ref = deepcopy(admin_profile_ref or {})
+    try:
+        profile_bytes = json.dumps(
+            frozen_profile, ensure_ascii=False, sort_keys=True,
+            separators=(",", ":"), allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise ValueError("管理端企业档案快照必须是纯 JSON") from exc
     return ResearchState(
         query=query,
         session_id=session_id,
@@ -378,6 +403,12 @@ def create_initial_state(
         subject_name=subject_name.strip(),
         business_type=business_type.strip(),
         due_diligence_mode=dd_mode,
+        # 不保留调用者对象引用。快照会进入检查点，后续外部档案更新不得影响
+        # 本次运行或已经开始的尽调。
+        provided_company_profile=frozen_profile,
+        admin_profile_ref=frozen_ref,
+        admin_profile_scenario=(admin_profile_scenario or "").strip(),
+        admin_profile_payload_sha256=hashlib.sha256(profile_bytes).hexdigest() if frozen_profile else "",
         company_name="",
         credit_context="",
         field_checks=[],

@@ -796,6 +796,9 @@ class DeepResearchGraph:
         business_type: str = "",
         due_diligence: Optional[bool] = None,
         investigation: Optional[bool] = None,
+        provided_company_profile: Optional[Dict[str, Any]] = None,
+        admin_profile_ref: Optional[Dict[str, Any]] = None,
+        admin_profile_scenario: str = "",
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         执行研究流程（流式输出）
@@ -838,6 +841,9 @@ class DeepResearchGraph:
                 business_type=business_type,
                 due_diligence=due_diligence,
                 investigation=investigation,
+                provided_company_profile=provided_company_profile,
+                admin_profile_ref=admin_profile_ref,
+                admin_profile_scenario=admin_profile_scenario,
             )
             state["max_iterations"] = self.max_iterations
 
@@ -854,6 +860,7 @@ class DeepResearchGraph:
                 # 事后无法判断当时该不该看到某条信息
                 "as_of": as_of,
                 "company_name": state.get("company_name", ""),
+                "profile_ref": state.get("admin_profile_ref") or None,
                 "timestamp": datetime.now().isoformat()
             }
 
@@ -862,6 +869,7 @@ class DeepResearchGraph:
                     "type": "company_profile_loaded",
                     "company_name": state["company_name"],
                     "facts_count": len(state["facts"]),
+                    "profile_ref": state.get("admin_profile_ref") or None,
                     "timestamp": datetime.now().isoformat()
                 }
                 # 核查清单状态：前端展示核实率，评测据此计算未核实识别率
@@ -887,7 +895,8 @@ class DeepResearchGraph:
         """
         try:
             from service.company_profile import (
-                find_company, profile_to_facts, build_credit_context, fill_field_checks
+                find_company, profile_to_facts, build_credit_context, fill_field_checks,
+                validate_admin_company_profile_snapshot,
             )
             from config.dd_checklist import (
                 build_field_checks, compute_completeness, resolve_scenario,
@@ -895,7 +904,8 @@ class DeepResearchGraph:
         except ImportError:
             try:
                 from app.service.company_profile import (
-                    find_company, profile_to_facts, build_credit_context, fill_field_checks
+                    find_company, profile_to_facts, build_credit_context, fill_field_checks,
+                    validate_admin_company_profile_snapshot,
                 )
                 from app.config.dd_checklist import (
                     build_field_checks, compute_completeness, resolve_scenario,
@@ -904,7 +914,26 @@ class DeepResearchGraph:
                 logger.warning("[graph] company_profile 模块不可用，跳过档案注入")
                 return None
 
-        company = find_company(query)
+        provided_profile = state.get("provided_company_profile") or {}
+        admin_ref = state.get("admin_profile_ref") or {}
+        if bool(provided_profile) != bool(admin_ref):
+            # An explicit snapshot must be complete.  In particular, do not
+            # fall through to query-name matching if a checkpoint lost either
+            # its profile payload or its audit reference.
+            raise ValueError("管理端企业档案快照缺少 profile 或 ref，拒绝回退到名称匹配")
+        if provided_profile:
+            try:
+                company = validate_admin_company_profile_snapshot(
+                    provided_profile, admin_ref, state.get("admin_profile_scenario", ""),
+                    state.get("admin_profile_payload_sha256", ""),
+                )
+            except ValueError as exc:
+                raise ValueError(f"管理端企业档案快照校验失败：{exc}") from exc
+            # The explicit snapshot, never its name, selects the due-diligence
+            # subject.  This is intentionally ahead of `find_company()`.
+            state["subject_name"] = company["name"]
+        else:
+            company = find_company(query)
         if not company:
             if not state.get("due_diligence_mode"):
                 logger.info("[graph] 未识别到尽调对象，按普通研究流程执行")
@@ -945,6 +974,7 @@ class DeepResearchGraph:
         # 场景扩展项由 business_type / credit_application 的产品名**确定性**选出
         # （BC-58），不由模型决定字段集合。核心二十项恒在，扩展只做加法。
         scenario = resolve_scenario(
+            state.get("admin_profile_scenario"),
             state.get("business_type"),
             state.get("business_scenario"),
             (company.get("credit_application") or {}).get("product"),

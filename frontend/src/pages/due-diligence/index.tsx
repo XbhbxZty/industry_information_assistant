@@ -1,9 +1,11 @@
 // Copyright © 2026 XbhbxZty
 // 本文件为「尽调智核」迭代中新增，不含原课程项目代码。
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Card, Col, Empty, Input, Row, Select, Space, Spin, Tag, Typography } from 'antd'
 import Markdown from '@/components/markdown'
 import { getKnowledgeBases, type KnowledgeBase } from '@/api/knowledge'
+import { getCompanyProfiles, type CompanyProfileSummary } from '@/api/company-profiles'
+import { useLocation } from 'react-router-dom'
 import { ChecklistTable, CompletenessBar, ReviewCard, RiskCard } from './components'
 import { InvestigationPanel } from './investigation'
 import { useDDStream } from './useDDStream'
@@ -19,8 +21,11 @@ const SAMPLES = [
 
 export default function DueDiligencePage() {
   const { state, start, review, reset } = useDDStream()
+  const location = useLocation()
   const [query, setQuery] = useState(SAMPLES[0])
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([])
+  const [companyProfiles, setCompanyProfiles] = useState<CompanyProfileSummary[]>([])
+  const [companyProfileId, setCompanyProfileId] = useState(() => new URLSearchParams(location.search).get('company_profile_id') || undefined)
   const [kbName, setKbName] = useState<string>()
   const [asOf, setAsOf] = useState('')
 
@@ -28,9 +33,27 @@ export default function DueDiligencePage() {
     getKnowledgeBases()
       .then(res => setKnowledgeBases(res.data || []))
       .catch(() => setKnowledgeBases([]))
+    getCompanyProfiles({ page: 1, page_size: 100 })
+      .then(res => setCompanyProfiles(res.data.items || []))
+      .catch(() => setCompanyProfiles([]))
   }, [])
 
-  const launch = () => start(query, { kbName, asOf: asOf.trim() || undefined })
+  const selectedProfile = useMemo(
+    () => companyProfiles.find(profile => profile.id === companyProfileId),
+    [companyProfileId, companyProfiles],
+  )
+
+  useEffect(() => {
+    if (selectedProfile) setQuery(`请对${selectedProfile.name}做贷前尽职调查`)
+  }, [selectedProfile])
+
+  const launch = () => start(query, {
+    kbName,
+    asOf: asOf.trim() || undefined,
+    companyProfileId,
+    subjectName: selectedProfile?.name,
+    businessType: selectedProfile?.scenario || undefined,
+  })
 
   const running = state.phase === 'running'
   const idle = state.phase === 'idle'
@@ -46,6 +69,18 @@ export default function DueDiligencePage() {
 
       <Card size="small" className={styles.launcher}>
         <Space.Compact style={{ width: '100%' }}>
+          <Select
+            allowClear
+            value={companyProfileId}
+            onChange={setCompanyProfileId}
+            disabled={running}
+            placeholder="企业档案（可选）"
+            style={{ width: 250 }}
+            options={companyProfiles.map(profile => ({
+              value: profile.id,
+              label: `${profile.name}${profile.scenario === 'factoring' ? ' · 保理' : ''}`,
+            }))}
+          />
           <Select
             allowClear
             value={kbName}
