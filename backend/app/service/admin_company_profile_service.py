@@ -21,12 +21,18 @@ from models.company_profile import AdminCompanyProfile, AdminCompanyProfileAudit
 from schemas.company_profile import CompanyProfileWrite
 
 try:
-    from config.dd_checklist import CORE_IDS, SCENARIO_IDS_BY_SCENARIO, build_field_checks
+    from config.dd_checklist import (
+        CHECKLIST, CORE_IDS, SCENARIO_CHECKLISTS, SCENARIO_IDS_BY_SCENARIO,
+        build_field_checks,
+    )
     from service.company_profile import fill_field_checks, profile_to_facts
     from service.profile_schema import validate_profile
     from service.verification import parse_iso
 except ImportError:  # pragma: no cover - package import compatibility
-    from app.config.dd_checklist import CORE_IDS, SCENARIO_IDS_BY_SCENARIO, build_field_checks
+    from app.config.dd_checklist import (
+        CHECKLIST, CORE_IDS, SCENARIO_CHECKLISTS, SCENARIO_IDS_BY_SCENARIO,
+        build_field_checks,
+    )
     from app.service.company_profile import fill_field_checks, profile_to_facts
     from app.service.profile_schema import validate_profile
     from app.service.verification import parse_iso
@@ -36,6 +42,12 @@ MAX_MATERIALS = 20
 MAX_MATERIAL_CHARS = 12_000
 MAX_MATERIAL_TOTAL_CHARS = 100_000
 TRUSTED_FIELD_SOURCE_TYPES = frozenset({"official", "authorized", "audited"})
+SCENARIO_NUMBER_INPUT_IDS = frozenset({
+    "accounts_receivable_gross", "accounts_receivable_net",
+    "accounts_receivable_impairment", "top5_customer_share",
+    "top5_supplier_share", "inventory", "capex_cash_outflow",
+    "construction_in_progress", "overseas_revenue", "guarantee_balance",
+})
 FIELD_SOURCE_KEYS = frozenset({
     "source_id", "name", "issuer", "source_type", "field_ids", "retrieved_at",
     "as_of_date", "reference", "sha256",
@@ -518,17 +530,47 @@ def get_active_profile_snapshot(db: Session, profile_id: str) -> Dict[str, Any]:
 
 
 def company_profile_templates() -> Dict[str, Any]:
-    """Stable UI contract; it intentionally exposes no client-controlled required flag."""
+    """Return the checklist-derived, front-end consumable profile template.
+
+    ``core`` and ``scenarios`` are deliberately derived from the authoritative
+    due-diligence checklists instead of mirroring their field IDs here.  This
+    keeps the administrative input UI aligned when the fixed checklist gains a
+    field or a business scenario.
+    """
+    def template_field(item: Any, scope: str) -> Dict[str, Any]:
+        return {
+            "field_id": item.field_id,
+            "field_name": item.field_name,
+            "category": item.category,
+            "required": item.required,
+            "description": item.description,
+            "scope": scope,
+            # Input semantics live in the server template so clients do not
+            # duplicate scenario field lists or silently change number values
+            # into strings after an edit round-trip.
+            "input_type": "number" if item.field_id in SCENARIO_NUMBER_INPUT_IDS else "text",
+        }
+
+    core = [template_field(item, "core") for item in CHECKLIST]
+    scenarios = {
+        name: [template_field(item, f"scenario:{name}") for item in items]
+        for name, items in SCENARIO_CHECKLISTS.items()
+    }
     return {
+        "version": "company-profile-template-v1",
+        "core": core,
+        "scenarios": scenarios,
+        # Legacy template hints remain available for existing consumers.  New
+        # clients should render the checklist from ``core`` and ``scenarios``.
         "profile": {"name": "企业名称", "credit_code": "", "registration": {}, "financials": []},
-        "scenario_options": ["", "factoring"],
+        "scenario_options": ["", *SCENARIO_CHECKLISTS],
         "scenario_data_keys": {
-            scenario: sorted(field_ids)
-            for scenario, field_ids in SCENARIO_IDS_BY_SCENARIO.items()
+            scenario: [item.field_id for item in items]
+            for scenario, items in SCENARIO_CHECKLISTS.items()
         },
         "field_source": {
             "source_id": "source-001", "name": "来源名称", "issuer": "出具机构",
-            "source_type": "official", "field_ids": ["registration"],
+            "source_type": "official", "field_ids": [core[0]["field_id"]] if core else [],
             "retrieved_at": "2026-08-28T00:00:00", "as_of_date": "2026-08-28",
             "reference": "可追溯引用", "sha256": None,
         },

@@ -33,7 +33,7 @@ export default function DueDiligencePage() {
     getKnowledgeBases()
       .then(res => setKnowledgeBases(res.data || []))
       .catch(() => setKnowledgeBases([]))
-    getCompanyProfiles({ page: 1, page_size: 100 })
+    getCompanyProfiles({ offset: 0, limit: 100 })
       .then(res => setCompanyProfiles(res.data.items || []))
       .catch(() => setCompanyProfiles([]))
   }, [])

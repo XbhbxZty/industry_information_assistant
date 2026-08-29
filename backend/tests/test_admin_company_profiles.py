@@ -28,6 +28,7 @@ for path in (os.fspath(BACKEND), os.fspath(APP)):
         sys.path.insert(0, path)
 
 from core.database import get_db  # noqa: E402
+from config.dd_checklist import CHECKLIST, SCENARIO_CHECKLISTS  # noqa: E402
 from models.company_profile import AdminCompanyProfile, AdminCompanyProfileAudit  # noqa: E402
 from router.auth_router import get_current_user_required, require_superuser  # noqa: E402
 from router.company_profile_router import router  # noqa: E402
@@ -100,10 +101,30 @@ def test_schema_requires_only_name_and_rejects_custom_required():
         prepare_company_profile_content(_write(profile={"name": "甲", "required": []}))
 
 
-def test_templates_explain_server_owned_coverage_and_fixed_required_semantics():
+def test_templates_are_checklist_derived_and_explain_server_owned_semantics():
     template = company_profile_templates()
-    assert template["scenario_options"] == ["", "factoring"]
-    assert "factoring" in template["scenario_data_keys"]
+    assert template["version"] == "company-profile-template-v1"
+    assert [field["field_id"] for field in template["core"]] == [
+        item.field_id for item in CHECKLIST
+    ]
+    assert [field["field_id"] for field in template["scenarios"]["factoring"]] == [
+        item.field_id for item in SCENARIO_CHECKLISTS["factoring"]
+    ]
+    assert all(
+        set(field) == {
+            "field_id", "field_name", "category", "required", "description", "scope",
+            "input_type",
+        }
+        and field["scope"] == "core"
+        for field in template["core"]
+    )
+    factoring = {field["field_id"]: field for field in template["scenarios"]["factoring"]}
+    assert factoring["accounts_receivable_gross"]["input_type"] == "number"
+    assert factoring["accounts_receivable_aging"]["input_type"] == "text"
+    assert template["scenario_options"] == ["", *SCENARIO_CHECKLISTS]
+    assert template["scenario_data_keys"]["factoring"] == [
+        item.field_id for item in SCENARIO_CHECKLISTS["factoring"]
+    ]
     assert "自动重建" in template["coverage"]
     assert "不接受" in template["required"]
 
@@ -249,11 +270,64 @@ def test_router_rbac_and_sqlite_crud_flow(db):
     app.dependency_overrides[require_superuser] = lambda: admin
     client = TestClient(app)
 
-    assert client.get("/company-profiles/templates").status_code == 200
-    create_response = client.post("/company-profiles", json={"profile": {"name": "API 企业"}})
+    template_response = client.get("/company-profiles/templates")
+    assert template_response.status_code == 200
+    template = template_response.json()
+    canonical_keys = {
+        "field_id", "field_name", "category", "required", "description", "scope",
+        "input_type",
+    }
+    assert template["version"] == "company-profile-template-v1"
+    assert all(set(field) == canonical_keys for field in template["core"])
+    assert all(
+        field["scope"] == "scenario:factoring"
+        for field in template["scenarios"]["factoring"]
+    )
+
+    source = _trusted_registration_source("accounts_receivable_gross")
+    material = {
+        "material_id": "api-material-1",
+        "source_type": "company_submitted",
+        "title": "保理应收账款台账",
+        "content": "截至报告日，应收账款账面余额为 1200 万元。",
+        "reference": "内部台账 2026-08-20",
+        "as_of_date": "2026-08-20",
+    }
+    draft = {
+        "profile": {"name": "API 保理企业"},
+        "scenario": "factoring",
+        # Scenario data is keyed directly by field ID, never nested under the
+        # selected scenario name.
+        "scenario_data": {"accounts_receivable_gross": 1200},
+        "field_sources": [source],
+        "materials": [material],
+        "change_reason": "HTTP 契约创建",
+    }
+    create_response = client.post("/company-profiles", json=draft)
     assert create_response.status_code == 201
-    profile_id = create_response.json()["id"]
-    assert client.get(f"/company-profiles/{profile_id}").status_code == 200
+    created = create_response.json()
+    profile_id = created["id"]
+    assert created["scenario_data"] == {"accounts_receivable_gross": 1200}
+    assert created["field_sources"] == [{**source, "sha256": None}]
+    assert created["materials"] == [{
+        **material,
+        "date_unknown_reason": None,
+        "eligible_for_structured_evidence": False,
+    }]
+
+    fetched = client.get(f"/company-profiles/{profile_id}")
+    assert fetched.status_code == 200
+    assert fetched.json()["scenario_data"] == {"accounts_receivable_gross": 1200}
+    assert fetched.json()["field_sources"] == created["field_sources"]
+    assert fetched.json()["materials"] == created["materials"]
+
+    material_search = client.post(
+        f"/company-profiles/{profile_id}/materials/search", json={"query": "应收账款 台账"},
+    )
+    assert material_search.status_code == 200
+    assert set(material_search.json()) == {"items", "total"}
+    assert material_search.json()["total"] == 1
+    assert material_search.json()["items"] == created["materials"]
 
     # Restore the real dependency to verify its direct 403 guard rather than
     # merely trusting the route declaration.
@@ -266,7 +340,10 @@ def test_router_rbac_and_sqlite_crud_flow(db):
     })
     assert stale.status_code == 422  # schema disallows a non-positive revision
     first_update = client.put(f"/company-profiles/{profile_id}", json={
-        "profile": {"name": "API 企业 2"}, "expected_revision": 1, "change_reason": "测试",
+        **draft,
+        "profile": {"name": "API 保理企业（更正）"},
+        "expected_revision": 1,
+        "change_reason": "HTTP 契约更新",
     })
     assert first_update.status_code == 200
     conflict = client.put(f"/company-profiles/{profile_id}", json={
@@ -274,3 +351,25 @@ def test_router_rbac_and_sqlite_crud_flow(db):
     })
     assert conflict.status_code == 409
 
+    history = client.get(f"/company-profiles/{profile_id}/history")
+    assert history.status_code == 200
+    assert set(history.json()) == {"items", "total"}
+    assert history.json()["total"] == 2
+    assert [item["revision"] for item in history.json()["items"]] == [2, 1]
+
+    missing_archive_revision = client.post(
+        f"/company-profiles/{profile_id}/archive", json={"change_reason": "遗漏版本号"},
+    )
+    assert missing_archive_revision.status_code == 422
+    stale_archive = client.post(
+        f"/company-profiles/{profile_id}/archive",
+        json={"expected_revision": 1, "change_reason": "陈旧版本"},
+    )
+    assert stale_archive.status_code == 409
+    archived = client.post(
+        f"/company-profiles/{profile_id}/archive",
+        json={"expected_revision": 2, "change_reason": "归档测试"},
+    )
+    assert archived.status_code == 200
+    assert archived.json()["status"] == "archived"
+    assert archived.json()["revision"] == 3

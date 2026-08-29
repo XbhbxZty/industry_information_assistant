@@ -30,7 +30,7 @@ export function ChecklistLegend({ template, scenario }: { template: CompanyProfi
         {!template ? <Text type="secondary">正在加载尽调模板…</Text> : <FieldTags items={template.core} />}
       </Card>
       {scenario && (
-        <Card size="small" title={scenario === 'factoring' ? '应收账款保理场景清单' : '场景清单'}>
+        <Card size="small" title={`业务场景清单 · ${scenario}`}>
           {!template ? <Text type="secondary">正在加载尽调模板…</Text> : <FieldTags items={scenarioItems} scenario />}
         </Card>
       )}

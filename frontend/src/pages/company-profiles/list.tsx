@@ -26,7 +26,7 @@ export default function CompanyProfileListPage() {
     setLoading(true)
     setError('')
     try {
-      const response = await getCompanyProfiles({ keyword: keyword.trim() || undefined, page: 1, page_size: 100 })
+      const response = await getCompanyProfiles({ query: keyword.trim() || undefined, offset: 0, limit: 100 })
       setRows(response.data.items || [])
     } catch (requestError: unknown) {
       setError(errorMessage(requestError))

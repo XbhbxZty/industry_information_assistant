@@ -5,12 +5,13 @@ import {
   searchCompanyProfileMaterials,
   type CompanyProfile,
   type CompanyProfileHistoryItem,
+  type SupplementalMaterial,
 } from '@/api/company-profiles'
 import { authState } from '@/store/auth'
 import { EditOutlined, InboxOutlined, SearchOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Descriptions, Empty, Input, Modal, Result, Space, Spin, Table, Tag, Timeline, Typography, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useSnapshot } from 'valtio'
 import styles from './index.module.scss'
@@ -44,8 +45,10 @@ export default function CompanyProfileDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [archiving, setArchiving] = useState(false)
+  const [archiveModalOpen, setArchiveModalOpen] = useState(false)
+  const [archiveReason, setArchiveReason] = useState('')
   const [materialQuery, setMaterialQuery] = useState('')
-  const [materialResults, setMaterialResults] = useState<Record<string, unknown>[]>([])
+  const [materialResults, setMaterialResults] = useState<SupplementalMaterial[]>([])
   const [searchingMaterials, setSearchingMaterials] = useState(false)
 
   const load = useCallback(async () => {
@@ -57,7 +60,7 @@ export default function CompanyProfileDetailPage() {
       setData(response.data)
       if (user?.is_superuser) {
         const historyResponse = await getCompanyProfileHistory(id)
-        setHistory(historyResponse.data || [])
+        setHistory(historyResponse.data.items || [])
       }
     } catch (requestFailure: unknown) {
       setError(requestError(requestFailure))
@@ -71,14 +74,18 @@ export default function CompanyProfileDetailPage() {
   }, [load])
 
   const registration = data?.profile.registration || {}
-  const scenarioData = useMemo(() => data?.scenario ? data.scenario_data?.[data.scenario] || {} : {}, [data])
+  const scenarioData = data?.scenario_data || {}
 
   const archive = async () => {
-    if (!id) return
+    if (!id || !data || !archiveReason.trim()) return
     setArchiving(true)
     try {
-      await archiveCompanyProfile(id, '管理员归档企业档案')
+      await archiveCompanyProfile(id, {
+        expected_revision: data.revision,
+        change_reason: archiveReason.trim(),
+      })
       message.success('企业档案已归档')
+      setArchiveModalOpen(false)
       navigate('/company-profiles')
     } catch (requestFailure: unknown) {
       message.error(requestError(requestFailure))
@@ -92,7 +99,7 @@ export default function CompanyProfileDetailPage() {
     setSearchingMaterials(true)
     try {
       const response = await searchCompanyProfileMaterials(id, materialQuery.trim())
-      setMaterialResults(response.data || [])
+      setMaterialResults(response.data.items || [])
     } catch (requestFailure: unknown) {
       message.error(requestError(requestFailure))
     } finally {
@@ -112,10 +119,27 @@ export default function CompanyProfileDetailPage() {
         </div>
         <Space>
           {user?.is_superuser && <Button icon={<EditOutlined />} onClick={() => navigate(`/company-profiles/${id}/edit`)}>编辑</Button>}
-          {user?.is_superuser && <Button danger icon={<InboxOutlined />} loading={archiving} onClick={() => Modal.confirm({ title: '归档企业档案？', content: '归档后普通用户将不可见，当前操作可在历史中追溯。', okText: '归档', okButtonProps: { danger: true }, onOk: archive })}>归档</Button>}
+          {user?.is_superuser && <Button danger icon={<InboxOutlined />} loading={archiving} onClick={() => setArchiveModalOpen(true)}>归档</Button>}
           <Button type="primary" onClick={() => navigate(`/due-diligence?company_profile_id=${encodeURIComponent(id)}`)}>发起尽调</Button>
         </Space>
       </div>
+      <Modal
+        open={archiveModalOpen}
+        title="归档企业档案？"
+        okText="归档"
+        okButtonProps={{ danger: true, disabled: !archiveReason.trim() }}
+        confirmLoading={archiving}
+        onCancel={() => {
+          setArchiveModalOpen(false)
+          setArchiveReason('')
+        }}
+        onOk={() => void archive()}
+      >
+        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+          <Text>归档后普通用户将不可见，当前操作可在历史中追溯。</Text>
+          <Input.TextArea value={archiveReason} onChange={event => setArchiveReason(event.target.value)} placeholder="必须填写归档原因" rows={3} />
+        </Space>
+      </Modal>
       {!user?.is_superuser && <Alert className={styles.readOnly} type="info" showIcon message="只读模式" description="您可以查看当前有效档案；创建、编辑和归档仅限管理员。" />}
       <div className={styles.detailLayout}>
         <Space direction="vertical" size={12} className={styles.detailMain}>
@@ -133,10 +157,15 @@ export default function CompanyProfileDetailPage() {
           {Object.keys(scenarioData).length > 0 && <Card size="small" title="场景数据（单独统计）"><Descriptions size="small" column={2} bordered>{Object.entries(scenarioData).map(([key, value]) => <Descriptions.Item key={key} label={key}>{String(value ?? '—')}</Descriptions.Item>)}</Descriptions></Card>}
           <Card size="small" title="字段来源">
             {data.field_sources?.length ? <Table rowKey={(_, index) => String(index)} size="small" dataSource={data.field_sources} pagination={false} columns={[
+              { title: '来源 ID', dataIndex: 'source_id' },
+              { title: '来源名称', dataIndex: 'name' },
+              { title: '出具机构', dataIndex: 'issuer' },
               { title: '覆盖字段', dataIndex: 'field_ids', render: (fields: string[]) => fields?.join('、') || '—' },
-              { title: '来源类型', dataIndex: 'source', render: (source: string) => <Tag>{source}</Tag> },
-              { title: '取证日期', dataIndex: 'date' },
+              { title: '来源类型', dataIndex: 'source_type', render: (source: string) => <Tag>{source}</Tag> },
+              { title: '获取时间', dataIndex: 'retrieved_at' },
+              { title: '数据截止日', dataIndex: 'as_of_date' },
               { title: '引用', dataIndex: 'reference', render: (value?: string) => value || '—' },
+              { title: 'SHA-256', dataIndex: 'sha256', render: (value?: string) => value || '—' },
             ]} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未声明字段来源" />}
           </Card>
           <Card size="small" title="补充材料">
@@ -147,7 +176,7 @@ export default function CompanyProfileDetailPage() {
             {materialResults.length > 0 ? <Table rowKey={(_, index) => String(index)} size="small" dataSource={materialResults} columns={recordColumns(materialResults)} pagination={false} /> : data.materials?.length ? <Table rowKey={(_, index) => String(index)} size="small" dataSource={data.materials} columns={recordColumns(data.materials)} pagination={false} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="无补充材料" />}
           </Card>
         </Space>
-        {user?.is_superuser && <Card size="small" title="修改历史" className={styles.detailSide}>{history.length ? <Timeline items={history.map(item => ({ children: <><Text>r{item.revision} · {item.changed_at}</Text><br /><Text type="secondary">{item.changed_by || '管理员'}{item.change_reason ? `：${item.change_reason}` : ''}</Text></> }))} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史记录" />}</Card>}
+        {user?.is_superuser && <Card size="small" title="修改历史" className={styles.detailSide}>{history.length ? <Timeline items={history.map(item => ({ children: <><Text>r{item.revision} · {item.created_at} · {item.action}</Text><br /><Text type="secondary">{item.actor_id || '管理员'}：{item.change_reason}</Text></> }))} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史记录" />}</Card>}
       </div>
     </div>
   )

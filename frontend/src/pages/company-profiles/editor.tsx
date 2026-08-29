@@ -4,6 +4,7 @@ import {
   getCompanyProfileTemplate,
   updateCompanyProfile,
   type CompanyProfile,
+  type CompanyProfileDraft,
   type CompanyProfileTemplate,
 } from '@/api/company-profiles'
 import { Alert, Button, Result, Spin, Typography, message } from 'antd'
@@ -29,6 +30,38 @@ function failureText(error: unknown) {
   if (status === 409) return '档案已被其他管理员更新，请重新加载后核对并再次提交。'
   if (status === 422) return '部分字段不符合服务端规则，请核对表单中的结构化记录。'
   return error instanceof Error ? error.message : '保存失败，请稍后重试。'
+}
+
+function optionalText(value: string | null | undefined) {
+  const trimmed = value?.trim()
+  return trimmed || undefined
+}
+
+function normaliseDraft(draft: CompanyProfileDraft): CompanyProfileDraft {
+  return {
+    ...draft,
+    scenario_data: Object.fromEntries(
+      Object.entries(draft.scenario_data || {}).filter(([, value]) => (
+        value !== null && value !== undefined && (typeof value !== 'string' || Boolean(value.trim()))
+      )),
+    ),
+    field_sources: (draft.field_sources || []).map(source => ({
+      ...source,
+      sha256: optionalText(source.sha256),
+    })),
+    materials: (draft.materials || []).map(material => {
+      const input = Object.fromEntries(
+        Object.entries(material).filter(([key]) => key !== 'eligible_for_structured_evidence'),
+      ) as typeof material
+      return {
+        ...input,
+        material_id: optionalText(input.material_id),
+        reference: optionalText(input.reference),
+        as_of_date: optionalText(input.as_of_date),
+        date_unknown_reason: optionalText(input.date_unknown_reason),
+      }
+    }),
+  }
 }
 
 export default function CompanyProfileEditorPage() {
@@ -76,13 +109,18 @@ export default function CompanyProfileEditorPage() {
 
   const submit = async (values: CompanyProfileFormValues) => {
     const { change_reason, ...draft } = values
+    const payload = normaliseDraft(draft)
     setSaving(true)
     setError('')
     setErrorStatus(undefined)
     try {
       const response = editing && id && current
-        ? await updateCompanyProfile(id, { ...draft, expected_revision: current.revision, change_reason })
-        : await createCompanyProfile(draft)
+        ? await updateCompanyProfile(id, {
+            ...payload,
+            expected_revision: current.revision,
+            change_reason: change_reason?.trim() || '',
+          })
+        : await createCompanyProfile(payload)
       message.success(editing ? '企业档案已更新' : '企业档案已创建')
       navigate(`/company-profiles/${response.data.id}`, { replace: true })
     } catch (requestFailure: unknown) {
