@@ -43,7 +43,20 @@ except ImportError:
         "手写编排已删除——请安装 langgraph 后再运行。"
     )
 
-from .state import ResearchState, ResearchPhase, create_initial_state
+from .state import (
+    ResearchState, ResearchPhase, create_initial_state,
+    verify_admin_profile_snapshot_binding,
+)
+try:
+    from service.checkpoint_integrity import (
+        GRAPH_SEAL_FIELD, MODE_MANAGED, MODE_STANDARD,
+        issue_graph_state_seal, mode_from_state, verify_graph_state_seal,
+    )
+except ImportError:
+    from app.service.checkpoint_integrity import (
+        GRAPH_SEAL_FIELD, MODE_MANAGED, MODE_STANDARD,
+        issue_graph_state_seal, mode_from_state, verify_graph_state_seal,
+    )
 from .agents import ChiefArchitect, DeepScout, CodeWizard, CriticMaster, LeadWriter, DataAnalyst
 from .agents.writer import _canonicalize_risk_block
 
@@ -346,6 +359,11 @@ class DeepResearchGraph:
             return False
 
         try:
+            # Business checkpoint storage signs the cleaned JSON in a separate
+            # persistence record.  Refresh the graph-domain seal first so the
+            # exact state handed to that service is also independently valid
+            # when LangGraph later restores it.
+            self._seal_graph_state(state)
             checkpoint_id = self.checkpoint_service.save_checkpoint(
                 session_id=session_id,
                 state=state,
@@ -375,6 +393,312 @@ class DeepResearchGraph:
             logger.warning(f"Failed to load checkpoint: {e}")
 
         return None
+
+    def _checkpoint_integrity_mode(
+        self,
+        session_id: str,
+        state: Dict[str, Any],
+    ) -> Optional[str]:
+        """Resolve mode from state-external metadata, falling back only for legacy.
+
+        New checkpoints persist their mode outside ``state_json``.  This is the
+        key distinction between a genuine old static checkpoint and a managed
+        checkpoint whose in-state profile decorations were all removed.
+        """
+        external = None
+        getter = getattr(
+            getattr(self, "checkpoint_service", None),
+            "get_checkpoint_integrity_mode",
+            None,
+        )
+        if callable(getter) and session_id:
+            external = getter(session_id)
+        local = mode_from_state(state)
+        if external:
+            if local and local != external:
+                raise ValueError("检查点外部完整性模式与图状态不一致")
+            state["_checkpoint_integrity_mode"] = external
+            return external
+        if local:
+            return local
+        return None
+
+    def _seal_graph_state(
+        self,
+        state: Dict[str, Any],
+        mode: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Issue the seal stored at a LangGraph node/checkpoint boundary."""
+        resolved = mode or mode_from_state(state)
+        if not resolved:
+            resolved = MODE_MANAGED if self._has_managed_profile_trace(state) else MODE_STANDARD
+        if resolved not in {MODE_MANAGED, MODE_STANDARD}:
+            raise ValueError(f"检查点完整性模式非法：{resolved!r}")
+        if resolved == MODE_STANDARD and self._has_managed_profile_trace(state):
+            raise ValueError("标准检查点不得携带管理端企业档案状态")
+        state["_checkpoint_integrity_mode"] = resolved
+        state[GRAPH_SEAL_FIELD] = issue_graph_state_seal(state, resolved)
+        return state
+
+    @staticmethod
+    def _has_managed_profile_trace(state: Dict[str, Any]) -> bool:
+        """Return whether a restored state ever claims managed-profile origin.
+
+        A damaged managed checkpoint must not masquerade as an old static
+        profile merely because one of its outer fields was dropped.  Static
+        legacy checkpoints have none of these decorations and stay supported.
+        """
+        for key in (
+            "provided_company_profile", "admin_profile_ref",
+            "admin_profile_payload_sha256", "admin_profile_snapshot_binding",
+            "admin_profile_scenario",
+        ):
+            if state.get(key):
+                return True
+
+        company = state.get("company_profile")
+        if isinstance(company, dict) and any(
+            key in company for key in (
+                "_admin_profile_ref", "_scenario_data", "_admin_field_sources",
+                "_admin_profile_snapshot_authorized",
+            )
+        ):
+            return True
+
+        return any(
+            isinstance(check, dict) and "profile_sources" in check
+            for check in (state.get("field_checks") or [])
+        )
+
+    def _restore_managed_profile_snapshot(
+        self,
+        state: Dict[str, Any],
+        session_id: str,
+        integrity_mode: Optional[str] = None,
+        *,
+        require_graph_seal: bool = True,
+    ) -> Dict[str, Any]:
+        """Re-authorize a managed snapshot before *any* restored execution.
+
+        The business and LangGraph checkpoint stores both contain plain JSON.
+        Consequently their nested authorization marker is not a capability on
+        its own: it is re-issued only after the HMAC-bound source snapshot,
+        evidence chain, and scoring view have all been reconstructed.
+        """
+        has_managed_trace = self._has_managed_profile_trace(state)
+        mode = integrity_mode or mode_from_state(state)
+        if mode is None and has_managed_trace:
+            # There were no committed managed checkpoints before this format.
+            # A managed trace without the v1 graph seal is therefore damaged,
+            # not a legacy-static compatibility case.
+            mode = MODE_MANAGED
+        if mode is not None:
+            if mode not in {MODE_MANAGED, MODE_STANDARD}:
+                raise ValueError(f"恢复的检查点完整性模式非法：{mode!r}")
+            if require_graph_seal:
+                try:
+                    verify_graph_state_seal(state, mode)
+                except ValueError as exc:
+                    raise ValueError(f"恢复的检查点图状态完整性校验失败：{exc}") from exc
+            state["_checkpoint_integrity_mode"] = mode
+
+        if mode == MODE_STANDARD:
+            if has_managed_trace:
+                raise ValueError("标准检查点携带管理端企业档案痕迹，拒绝恢复")
+            return state
+        if mode is None and not has_managed_trace:
+            # Explicit compatibility path for pre-integrity static checkpoints.
+            return state
+        if mode != MODE_MANAGED:
+            raise ValueError("管理端企业档案检查点缺少受支持的完整性模式")
+
+        profile = state.get("provided_company_profile")
+        ref = state.get("admin_profile_ref")
+        payload_sha256 = state.get("admin_profile_payload_sha256")
+        binding = state.get("admin_profile_snapshot_binding")
+        scenario = state.get("admin_profile_scenario", "")
+
+        if not isinstance(profile, dict) or not profile or not isinstance(ref, dict) or not ref:
+            raise ValueError("恢复的管理端企业档案快照缺少 profile 或 ref，拒绝降级为静态档案")
+        if not isinstance(payload_sha256, str) or not payload_sha256:
+            raise ValueError("恢复的管理端企业档案快照缺少 payload 哈希")
+        if state.get("session_id") != session_id:
+            raise ValueError("恢复的管理端企业档案快照 session_id 不一致")
+
+        try:
+            verify_admin_profile_snapshot_binding(
+                binding, session_id, profile, ref, scenario,
+            )
+        except ValueError as exc:
+            raise ValueError(f"恢复的管理端企业档案快照绑定校验失败：{exc}") from exc
+
+        try:
+            from service.company_profile import (
+                validate_admin_company_profile_snapshot, verify_field_checks,
+                replay_from_profile,
+            )
+            from service.verification import build_scoring_view
+            from service.risk_scorecard import PROFILE_BACKED_FIELDS
+            from config.dd_checklist import (
+                build_field_checks, compute_completeness, resolve_scenario,
+            )
+        except ImportError:
+            from app.service.company_profile import (
+                validate_admin_company_profile_snapshot, verify_field_checks,
+                replay_from_profile,
+            )
+            from app.service.verification import build_scoring_view
+            from app.service.risk_scorecard import PROFILE_BACKED_FIELDS
+            from app.config.dd_checklist import (
+                build_field_checks, compute_completeness, resolve_scenario,
+            )
+
+        try:
+            canonical_company = validate_admin_company_profile_snapshot(
+                profile, ref, scenario, payload_sha256,
+            )
+        except ValueError as exc:
+            raise ValueError(f"恢复的管理端企业档案快照校验失败：{exc}") from exc
+
+        # Do not silently heal a persisted company profile.  A mismatch means
+        # an already-derived score/checklist might be tied to altered data.
+        if state.get("company_profile") != canonical_company:
+            raise ValueError("恢复态 company_profile 与经验证的管理端企业档案不一致")
+
+        checks = state.get("field_checks")
+        evidence_store = state.get("evidence_store")
+        if not isinstance(checks, list) or not isinstance(evidence_store, dict):
+            raise ValueError("恢复的管理端企业档案缺少 field_checks 或 evidence_store")
+
+        # Evidence replay validates asserted values, but by design it skips
+        # unverified checks.  Therefore it cannot notice that a checkpoint
+        # deleted an unverified required field, changed ``required`` to false,
+        # or downgraded a profile-backed assertion to unverified.  Rebuild the
+        # immutable checklist skeleton first and require an exact match.
+        resolved_scenario = resolve_scenario(
+            scenario,
+            state.get("business_type"),
+            state.get("business_scenario"),
+            (canonical_company.get("credit_application") or {}).get("product"),
+        )
+        expected_checks = build_field_checks(scenario=resolved_scenario)
+        immutable_keys = (
+            "field_id", "field_name", "category", "section_id", "scope", "required",
+        )
+        if len(checks) != len(expected_checks):
+            raise ValueError("恢复的管理端企业档案 field_checks 数量与固定清单不一致")
+        for current, expected in zip(checks, expected_checks):
+            if not isinstance(current, dict) or any(
+                current.get(key) != expected.get(key) for key in immutable_keys
+            ):
+                raise ValueError("恢复的管理端企业档案 field_checks 骨架与固定清单不一致")
+
+        # This graph never creates exclusions: build_field_checks() above and
+        # the production load path both use exclude_ids=None.  Letting a saved
+        # required field change to ``not_applicable`` (or an unknown status)
+        # would remove it from the completeness denominator without evidence.
+        allowed_statuses = {"unverified", "verified", "conflicting"}
+        for current in checks:
+            status = current.get("status")
+            if status not in allowed_statuses:
+                raise ValueError(
+                    f"恢复的管理端企业档案字段 {current.get('field_id', '?')} "
+                    f"status 非法：{status!r}"
+                )
+            if status == "unverified" and (
+                current.get("verification_origin")
+                or current.get("evidence_ids")
+            ):
+                raise ValueError(
+                    f"恢复的管理端企业档案字段 {current.get('field_id', '?')} "
+                    "已降级为 unverified 但仍携带核实来源"
+                )
+
+        # A profile-backed assertion may not disappear during persistence.
+        # Structured adapters only supplement fields that were unverified;
+        # replacing an initial-profile assertion is a separate, explicit
+        # supersession workflow and is not authorized by checkpoint restore.
+        profile_replay = replay_from_profile(canonical_company, checks)
+        by_field = {check.get("field_id"): check for check in checks}
+        for field_id, expected in profile_replay.items():
+            if expected.get("status") not in {"verified", "conflicting"}:
+                continue
+            current = by_field.get(field_id) or {}
+            if (
+                current.get("status") != expected.get("status")
+                or current.get("value") != expected.get("value")
+                or current.get("verification_origin") != "initial_profile"
+            ):
+                raise ValueError(
+                    f"恢复的管理端企业档案字段 {field_id} 丢失初始档案断言"
+                )
+
+        replay = verify_field_checks(
+            canonical_company, checks, evidence_store,
+            as_of=state.get("as_of", "") or "",
+        )
+        if replay.mismatches:
+            fields = "、".join(
+                f"{item.get('field_id', '?')}({item.get('reason', 'unknown')})"
+                for item in replay.mismatches
+            )
+            raise ValueError(f"恢复的管理端企业档案证据链重放失败：{fields}")
+
+        # verify_field_checks is intentionally directional (check -> evidence).
+        # Restore also needs the reverse invariant: every active structured
+        # evidence record must still be the current assertion of exactly one
+        # check.  Otherwise a checkpoint can downgrade an adverse adapter
+        # result to unverified while leaving its evidence silently orphaned.
+        active_evidence: Dict[str, str] = {}
+        for evidence_id, evidence in evidence_store.items():
+            if (
+                not isinstance(evidence_id, str)
+                or not isinstance(evidence, dict)
+                or evidence.get("evidence_id") != evidence_id
+            ):
+                raise ValueError("恢复的管理端企业档案 evidence_store 形状非法")
+            if evidence.get("active") is not False and not evidence.get("superseded_by"):
+                active_evidence[evidence_id] = str(evidence.get("field_id") or "")
+
+        referenced_evidence: Dict[str, str] = {}
+        for current in checks:
+            if current.get("verification_origin") != "structured_adapter":
+                continue
+            field_id = str(current.get("field_id") or "")
+            for evidence_id in current.get("evidence_ids") or []:
+                if not isinstance(evidence_id, str) or evidence_id in referenced_evidence:
+                    raise ValueError("恢复的管理端企业档案存在重复或非法 evidence_id")
+                referenced_evidence[evidence_id] = field_id
+        if referenced_evidence != active_evidence:
+            raise ValueError("恢复的管理端企业档案存在孤立或未引用的活动证据")
+
+        rebuilt_completeness = compute_completeness(checks)
+        if state.get("completeness") != rebuilt_completeness:
+            raise ValueError("恢复态 completeness 与经验证的固定清单不一致")
+        state["completeness"] = rebuilt_completeness
+
+        scoring_view = state.get("scoring_view")
+        if scoring_view:
+            if not isinstance(scoring_view, dict):
+                raise ValueError("恢复的管理端企业档案 scoring_view 非法")
+            rebuilt_view, unmergeable = build_scoring_view(
+                canonical_company,
+                checks,
+                evidence_store,
+                profile_backed_fields=PROFILE_BACKED_FIELDS,
+                profile_replay_fn=replay_from_profile,
+            )
+            if unmergeable:
+                fields = "、".join(str(item.get("field_id", "?")) for item in unmergeable)
+                raise ValueError(f"恢复的管理端企业档案评分视图无法重建：{fields}")
+            if scoring_view != rebuilt_view:
+                raise ValueError("恢复态 scoring_view 与经验证的管理端企业档案不一致")
+            state["scoring_view"] = rebuilt_view
+
+        # validate_admin_company_profile_snapshot returns a fresh copy and is
+        # the only place that issues this in-process authorization marker.
+        state["company_profile"] = canonical_company
+        return state
 
     def get_checkpoint_info(self, session_id: str) -> Dict[str, Any]:
         """获取检查点信息"""
@@ -413,17 +737,17 @@ class DeepResearchGraph:
         """
         workflow = StateGraph(ResearchState)
 
-        workflow.add_node("plan", self._plan_node)
-        workflow.add_node("research", self._research_node)
+        workflow.add_node("plan", self._sealed_node(self._plan_node))
+        workflow.add_node("research", self._sealed_node(self._research_node))
         # analyze / visualize 必须是两个节点：DataAnalyst 产出风险评级（纯规则），
         # CodeWizard 产出图表（依赖 LLM）。合成一个节点会让评级被 LLM 成败门控。
-        workflow.add_node("analyze", self._analyze_node)
-        workflow.add_node("visualize", self._visualize_node)
-        workflow.add_node("write", self._write_node)
-        workflow.add_node("review", self._review_node)
-        workflow.add_node("re_research", self._re_research_node)
-        workflow.add_node("rewrite", self._rewrite_node)
-        workflow.add_node("revise", self._revise_node)
+        workflow.add_node("analyze", self._sealed_node(self._analyze_node))
+        workflow.add_node("visualize", self._sealed_node(self._visualize_node))
+        workflow.add_node("write", self._sealed_node(self._write_node))
+        workflow.add_node("review", self._sealed_node(self._review_node))
+        workflow.add_node("re_research", self._sealed_node(self._re_research_node))
+        workflow.add_node("rewrite", self._sealed_node(self._rewrite_node))
+        workflow.add_node("revise", self._sealed_node(self._revise_node))
 
         workflow.set_entry_point("plan")
 
@@ -439,7 +763,7 @@ class DeepResearchGraph:
 
         # 审核后的三种走向。原图只有 revise / complete 两种，
         # 漏掉了"信息不足需补充检索"这条实际存在的路径。
-        workflow.add_node("human_review", self._human_review_node)
+        workflow.add_node("human_review", self._sealed_node(self._human_review_node))
 
         workflow.add_conditional_edges(
             "review",
@@ -459,6 +783,21 @@ class DeepResearchGraph:
         workflow.add_conditional_edges("revise", self._guard("review"), ["review", END])
 
         return workflow.compile(checkpointer=_get_graph_checkpointer())
+
+    def _sealed_node(self, node):
+        """Seal every successfully returned node state before LangGraph stores it.
+
+        The human-review node interrupts before returning, so its pause snapshot
+        uses the already-sealed output of the preceding review node.  On resume
+        it returns normally and receives a fresh seal for the human decision.
+        """
+        async def _wrapped(state: ResearchState):
+            result = await node(state)
+            if isinstance(result, dict):
+                self._seal_graph_state(result)
+            return result
+
+        return _wrapped
 
     @staticmethod
     def _guard(next_node: str):
@@ -821,13 +1160,42 @@ class DeepResearchGraph:
         state = None
         if resume and session_id:
             state = self._load_checkpoint(session_id)
-            if state:
-                yield {
-                    "type": "research_resumed",
-                    "phase": state.get("phase", ""),
-                    "session_id": session_id,
-                    "timestamp": datetime.now().isoformat()
-                }
+            if not state:
+                # ``resume`` is never a request to start a new study.  Falling
+                # through here would rebuild a blank state and can select a
+                # same-named static profile via find_company().
+                raise ValueError("恢复失败：未能加载该会话的检查点，拒绝回退为新研究")
+            integrity_mode = self._checkpoint_integrity_mode(session_id, state)
+            state = self._restore_managed_profile_snapshot(
+                state, session_id, integrity_mode,
+            )
+
+            # Ordinary resume is handed the business checkpoint, while
+            # LangGraph may also have a newer node-boundary snapshot for the
+            # same thread.  Validate that second store before astream can use
+            # it; otherwise a valid business row could mask a damaged graph
+            # checkpoint.
+            graph_state_getter = getattr(getattr(self, "graph", None), "aget_state", None)
+            if callable(graph_state_getter):
+                snapshot = await graph_state_getter(
+                    {"configurable": {"thread_id": session_id}}
+                )
+                graph_values = dict(getattr(snapshot, "values", {}) or {})
+                if graph_values:
+                    graph_mode = self._checkpoint_integrity_mode(session_id, graph_values)
+                    self._restore_managed_profile_snapshot(
+                        graph_values, session_id, graph_mode,
+                    )
+            # Upgrade a successfully read legacy-static business state before
+            # it is handed back to LangGraph.  Modern states simply receive the
+            # same deterministic seal again.
+            self._seal_graph_state(state, integrity_mode)
+            yield {
+                "type": "research_resumed",
+                "phase": state.get("phase", ""),
+                "session_id": session_id,
+                "timestamp": datetime.now().isoformat()
+            }
 
         # 如果没有检查点，创建初始状态
         if not state:
@@ -849,6 +1217,13 @@ class DeepResearchGraph:
 
             # 注入尽调对象档案（v0.1：硬编码 JSON；v0.4 起改由 datasource 适配层提供）
             company = self._load_company_profile(query, state)
+            # 新建的管理员档案同样先验 HMAC 绑定，再把 capability 交给图。
+            # 静态档案在 helper 内保持原有兼容行为。
+            integrity_mode = self._checkpoint_integrity_mode(session_id, state)
+            state = self._restore_managed_profile_snapshot(
+                state, session_id, integrity_mode, require_graph_seal=False,
+            )
+            self._seal_graph_state(state, integrity_mode)
 
             yield {
                 "type": "research_start",
@@ -1226,10 +1601,33 @@ class DeepResearchGraph:
                    "content": f"会话 {session_id} 没有待复核的中断点（可能已完成或从未暂停）"}
             return
 
+        try:
+            snapshot_values = dict(snapshot.values or {})
+            integrity_mode = self._checkpoint_integrity_mode(
+                session_id, snapshot_values,
+            )
+            restored_state = self._restore_managed_profile_snapshot(
+                snapshot_values, session_id, integrity_mode,
+            )
+            self._seal_graph_state(restored_state, integrity_mode)
+            # LangGraph checkpoint also serializes nested dicts.  Replace the
+            # capability only after validation so a later node never consumes a
+            # marker copied verbatim from persistent storage.
+            await self.graph.aupdate_state(config, {
+                "company_profile": restored_state.get("company_profile"),
+                "scoring_view": restored_state.get("scoring_view"),
+                GRAPH_SEAL_FIELD: restored_state.get(GRAPH_SEAL_FIELD),
+                "_checkpoint_integrity_mode": integrity_mode,
+            })
+        except ValueError as e:
+            logger.warning(f"[Graph] 拒绝恢复受损管理端档案: session={session_id}, error={e}")
+            yield {"type": "error", "content": str(e)}
+            return
+
         # 在恢复 Command 前先做完整业务校验。非法结论必须让检查点继续保持
         # paused；若先恢复再校验，LangGraph 已越过 interrupt，旧实现甚至会
         # 继续发 research_complete，形成未复核却完成的 fail-open。
-        assessment = (snapshot.values or {}).get("risk_assessment") or {}
+        assessment = restored_state.get("risk_assessment") or {}
         try:
             apply_human_review(assessment, decision or {})
         except ValueError as e:

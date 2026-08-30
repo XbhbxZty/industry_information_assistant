@@ -34,6 +34,12 @@ from service.deep_research_v2.service import DeepResearchV2Service  # noqa: E402
 from service.deep_research_v2.state import create_initial_state  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _managed_snapshot_hmac_key(monkeypatch: pytest.MonkeyPatch):
+    """Managed runs now require a server-only checkpoint binding key."""
+    monkeypatch.setenv("ADMIN_PROFILE_SNAPSHOT_HMAC_KEY", "test-managed-snapshot-hmac-key")
+
+
 def _snapshot(
     profile: dict[str, Any],
     scenario: str = "factoring",

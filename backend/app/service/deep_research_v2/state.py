@@ -14,7 +14,9 @@ from typing import TypedDict, List, Dict, Any, Optional, Literal
 from dataclasses import dataclass, field
 from copy import deepcopy
 import hashlib
+import hmac
 import json
+import os
 from datetime import datetime
 from enum import Enum
 
@@ -22,6 +24,103 @@ try:
     from service.investigation_layer import empty_investigation
 except ImportError:  # 兼容以 app 为包根的导入方式
     from app.service.investigation_layer import empty_investigation
+
+
+ADMIN_PROFILE_SNAPSHOT_BINDING_VERSION = 2
+_ADMIN_PROFILE_SNAPSHOT_BINDING_KEYS = frozenset({"version", "algorithm", "mac"})
+_ADMIN_PROFILE_SNAPSHOT_HMAC_ENV = "ADMIN_PROFILE_SNAPSHOT_HMAC_KEY"
+_ADMIN_PROFILE_SNAPSHOT_HMAC_CONTEXT = b"admin-profile-snapshot-binding-v2"
+
+
+def _admin_profile_snapshot_binding_bytes(
+    session_id: Any,
+    profile: Any,
+    ref: Any,
+    scenario: Any,
+) -> bytes:
+    """Return the exact, versioned envelope protected across a resume.
+
+    ``profile`` already carries service-issued decorations, but the outer ref
+    and selected scenario are separately consumed by the graph.  They must be
+    covered too; hashing profile alone lets a restored state change its
+    checklist scenario without changing the payload hash.
+    """
+    if not isinstance(session_id, str) or not session_id:
+        raise ValueError("管理端企业档案快照缺少合法 session_id")
+    if not isinstance(scenario, str):
+        raise ValueError("管理端企业档案快照场景非法")
+    try:
+        return json.dumps(
+            {
+                "version": ADMIN_PROFILE_SNAPSHOT_BINDING_VERSION,
+                "session_id": session_id,
+                "profile": profile,
+                "ref": ref,
+                "scenario": scenario,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise ValueError("管理端企业档案快照绑定内容必须是纯 JSON") from exc
+
+
+def _admin_profile_snapshot_hmac_key() -> bytes:
+    """Derive a purpose-separated key from configured server secrets."""
+    key = os.getenv(_ADMIN_PROFILE_SNAPSHOT_HMAC_ENV) or os.getenv("JWT_SECRET_KEY")
+    if not key:
+        raise ValueError(
+            f"缺少服务端 {_ADMIN_PROFILE_SNAPSHOT_HMAC_ENV} 或 JWT_SECRET_KEY，"
+            "拒绝创建或恢复管理端企业档案快照"
+        )
+    # The fallback deliberately reuses only the configured server secret, not
+    # the JWT signing key bytes directly.  A fixed context derives a separate
+    # HMAC sub-key so tokens and checkpoint bindings are different protocols.
+    return hmac.new(
+        key.encode("utf-8"),
+        _ADMIN_PROFILE_SNAPSHOT_HMAC_CONTEXT,
+        hashlib.sha256,
+    ).digest()
+
+
+def create_admin_profile_snapshot_binding(
+    session_id: Any,
+    profile: Any,
+    ref: Any,
+    scenario: Any,
+) -> Dict[str, Any]:
+    """Create the HMAC envelope persisted with a managed-profile run."""
+    body = _admin_profile_snapshot_binding_bytes(session_id, profile, ref, scenario)
+    return {
+        "version": ADMIN_PROFILE_SNAPSHOT_BINDING_VERSION,
+        "algorithm": "hmac-sha256",
+        "mac": hmac.new(_admin_profile_snapshot_hmac_key(), body, hashlib.sha256).hexdigest(),
+    }
+
+
+def verify_admin_profile_snapshot_binding(
+    binding: Any,
+    session_id: Any,
+    profile: Any,
+    ref: Any,
+    scenario: Any,
+) -> None:
+    """Fail closed unless the stored binding exactly covers this snapshot."""
+    if not isinstance(binding, dict) or set(binding) != _ADMIN_PROFILE_SNAPSHOT_BINDING_KEYS:
+        raise ValueError("管理端企业档案快照绑定缺失或形状非法")
+    if binding.get("version") != ADMIN_PROFILE_SNAPSHOT_BINDING_VERSION:
+        raise ValueError("管理端企业档案快照绑定版本不受支持")
+    if binding.get("algorithm") != "hmac-sha256":
+        raise ValueError("管理端企业档案快照绑定算法非法")
+    supplied = binding.get("mac")
+    if not isinstance(supplied, str) or len(supplied) != 64:
+        raise ValueError("管理端企业档案快照绑定 MAC 非法")
+    body = _admin_profile_snapshot_binding_bytes(session_id, profile, ref, scenario)
+    expected = hmac.new(_admin_profile_snapshot_hmac_key(), body, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(supplied, expected):
+        raise ValueError("管理端企业档案快照绑定不一致")
 
 
 class ResearchPhase(str, Enum):
@@ -215,6 +314,12 @@ class ResearchState(TypedDict):
     # 覆盖快照可见 payload 的运行内哈希。持久化 ref 的 content_sha256 同时
     # 覆盖未暴露的 materials，不能在图中重算；该哈希用于检查点篡改检测。
     admin_profile_payload_sha256: str
+    # v2：HMAC 覆盖 session_id/profile/ref/scenario。普通 payload 哈希只覆盖
+    # profile，不能防止恢复时把同一份档案改绑到另一场景或会话。
+    admin_profile_snapshot_binding: Dict[str, Any]
+    # LangGraph 每个节点边界的完整业务态签名。业务检查点另有 state_json
+    # 外的一对一完整性记录；两套存储分别验证，不能互相充当信任源。
+    checkpoint_graph_seal: Dict[str, Any]
 
     # 尽调对象（v0.1：来自硬编码档案；v0.4 起改由数据源适配层提供）
     company_name: str                       # 识别出的尽调对象企业名，未识别则为空
@@ -355,6 +460,7 @@ class ResearchState(TypedDict):
     _cancelled: bool                        # 取消标志，守卫边据此路由到 END
     _user_id: str                           # 检查点归属用户
     _ui_state: Dict[str, Any]               # 前端恢复用的 UI 投影
+    _checkpoint_integrity_mode: str         # managed_v1 / standard_v1；业务落库时移除
 
 
 def create_initial_state(
@@ -388,6 +494,7 @@ def create_initial_state(
     )
     frozen_profile = deepcopy(provided_company_profile or {})
     frozen_ref = deepcopy(admin_profile_ref or {})
+    frozen_scenario = (admin_profile_scenario or "").strip()
     try:
         profile_bytes = json.dumps(
             frozen_profile, ensure_ascii=False, sort_keys=True,
@@ -395,6 +502,13 @@ def create_initial_state(
         ).encode("utf-8")
     except (TypeError, ValueError) as exc:
         raise ValueError("管理端企业档案快照必须是纯 JSON") from exc
+    managed_snapshot_requested = bool(frozen_profile) or bool(frozen_ref)
+    binding = (
+        create_admin_profile_snapshot_binding(
+            session_id, frozen_profile, frozen_ref, frozen_scenario
+        )
+        if managed_snapshot_requested else {}
+    )
     return ResearchState(
         query=query,
         session_id=session_id,
@@ -412,8 +526,10 @@ def create_initial_state(
         # 本次运行或已经开始的尽调。
         provided_company_profile=frozen_profile,
         admin_profile_ref=frozen_ref,
-        admin_profile_scenario=(admin_profile_scenario or "").strip(),
+        admin_profile_scenario=frozen_scenario,
         admin_profile_payload_sha256=hashlib.sha256(profile_bytes).hexdigest() if frozen_profile else "",
+        admin_profile_snapshot_binding=binding,
+        checkpoint_graph_seal={},
         company_name="",
         credit_context="",
         field_checks=[],
@@ -459,7 +575,8 @@ def create_initial_state(
         pending_search_queries=[],
         logs=[],
         errors=[],
-        messages=[]
+        messages=[],
+        _checkpoint_integrity_mode=("managed_v1" if managed_snapshot_requested else "standard_v1"),
     )
 
 

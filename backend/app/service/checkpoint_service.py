@@ -4,6 +4,7 @@
 # 本文件在原课程项目基础上二次开发（已获授权）。
 # 改造部分 © 2026 XbhbxZty
 """检查点服务 - 用于保存和恢复深度研究状态"""
+import copy
 import json
 import logging
 from typing import Dict, Any, Optional, List
@@ -11,8 +12,19 @@ from uuid import UUID
 from datetime import datetime
 from sqlalchemy.orm import Session
 
-from models.research import ResearchCheckpoint
+from models.research import ResearchCheckpoint, ResearchCheckpointIntegrity
 from core.database import SessionLocal
+from service.checkpoint_integrity import (
+    CheckpointIntegrityError,
+    INTEGRITY_VERSION,
+    MODE_MANAGED,
+    MODE_STANDARD,
+    business_key_id,
+    issue_business_state_seal,
+    mode_from_state,
+    verify_business_state_seal,
+    verify_graph_state_seal,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +38,57 @@ class CheckpointService:
     def _get_db(self) -> Session:
         """获取数据库会话"""
         return SessionLocal()
+
+    @staticmethod
+    def _checkpoint_id(checkpoint: ResearchCheckpoint) -> str:
+        checkpoint_id = getattr(checkpoint, "id", None)
+        if checkpoint_id is None:
+            raise CheckpointIntegrityError("检查点缺少持久化标识")
+        return str(checkpoint_id)
+
+    @staticmethod
+    def _integrity_row(db: Session, session_id: str) -> Optional[ResearchCheckpointIntegrity]:
+        return db.query(ResearchCheckpointIntegrity).filter(
+            ResearchCheckpointIntegrity.session_id == session_id
+        ).first()
+
+    def _verify_integrity_pair(
+        self,
+        checkpoint: ResearchCheckpoint,
+        integrity: ResearchCheckpointIntegrity,
+        session_id: str,
+        required_mode: Optional[str] = None,
+    ) -> str:
+        """Verify persisted metadata and both seals before accepting an update/read."""
+        if integrity.session_id != session_id:
+            raise CheckpointIntegrityError("检查点完整性 session_id 不一致")
+        if integrity.checkpoint_id != self._checkpoint_id(checkpoint):
+            raise CheckpointIntegrityError("检查点完整性 checkpoint_id 不一致")
+
+        mode = integrity.mode
+        if mode not in (MODE_MANAGED, MODE_STANDARD):
+            raise CheckpointIntegrityError("检查点完整性模式非法")
+        if required_mode is not None and mode != required_mode:
+            raise CheckpointIntegrityError("检查点完整性模式不可漂移")
+        if integrity.integrity_version != INTEGRITY_VERSION:
+            raise CheckpointIntegrityError("检查点完整性版本不受支持")
+        if integrity.key_id != business_key_id(mode):
+            raise CheckpointIntegrityError("检查点完整性密钥标识不一致")
+
+        revision = integrity.business_revision
+        if isinstance(revision, bool) or not isinstance(revision, int) or revision < 1:
+            raise CheckpointIntegrityError("检查点完整性业务版本非法")
+
+        state = checkpoint.state_json
+        verify_graph_state_seal(state, mode)
+        verify_business_state_seal(
+            state,
+            session_id,
+            mode,
+            revision,
+            integrity.business_seal,
+        )
+        return mode
 
     def save_checkpoint(
         self,
@@ -50,6 +113,14 @@ class CheckpointService:
         """
         db = self._get_db()
         try:
+            mode = mode_from_state(state)
+            if mode not in (MODE_MANAGED, MODE_STANDARD):
+                raise CheckpointIntegrityError("检查点缺少完整性模式或图封签")
+            # The graph seal authenticates the uncleaned graph state.  It is
+            # checked before storage cleaning deliberately, so the cleaner can
+            # never normalize an attacker-controlled value into a valid state.
+            verify_graph_state_seal(state, mode)
+
             # 提取关键信息
             query = state.get("query", "")
             phase = state.get("phase", "planning")
@@ -58,11 +129,29 @@ class CheckpointService:
             # 清理 state 中不可序列化的内容
             clean_state = self._clean_state_for_storage(state)
             clean_ui_state = self._clean_state_for_storage(ui_state) if ui_state else None
+            # The JSONB payload is the value that will later be restored and
+            # verified.  Reject any cleaner-induced semantic change now rather
+            # than committing a checkpoint whose graph seal can never validate
+            # on the next read.
+            verify_graph_state_seal(clean_state, mode)
 
             # 查找现有检查点
             existing = db.query(ResearchCheckpoint).filter(
                 ResearchCheckpoint.session_id == session_id
             ).first()
+            integrity = self._integrity_row(db, session_id)
+
+            if integrity and not existing:
+                raise CheckpointIntegrityError("检查点完整性记录没有对应检查点")
+
+            if existing and integrity:
+                # Do not overwrite a record whose previously persisted state
+                # has already failed validation.  This preserves fail-closed
+                # semantics across writes, not just restores.
+                self._verify_integrity_pair(existing, integrity, session_id, mode)
+                business_revision = integrity.business_revision + 1
+            else:
+                business_revision = 1
 
             if existing:
                 # 更新现有检查点
@@ -91,7 +180,32 @@ class CheckpointService:
                 )
                 db.add(checkpoint)
                 db.flush()
-                checkpoint_id = str(checkpoint.id)
+                existing = checkpoint
+                checkpoint_id = self._checkpoint_id(checkpoint)
+
+            # This MAC covers the state actually sent to JSONB, rather than
+            # the pre-cleaning graph object.  The graph seal remains separately
+            # verifiable inside that cleaned state.
+            business_seal = issue_business_state_seal(
+                clean_state, session_id, mode, business_revision
+            )
+            if integrity:
+                # checkpoint_id and mode are intentionally immutable after the
+                # first write.  _verify_integrity_pair above proved they match.
+                integrity.key_id = business_key_id(mode)
+                integrity.business_revision = business_revision
+                integrity.business_seal = business_seal
+                integrity.updated_at = datetime.utcnow()
+            else:
+                db.add(ResearchCheckpointIntegrity(
+                    session_id=session_id,
+                    checkpoint_id=checkpoint_id,
+                    mode=mode,
+                    integrity_version=INTEGRITY_VERSION,
+                    key_id=business_key_id(mode),
+                    business_revision=business_revision,
+                    business_seal=business_seal,
+                ))
 
             db.commit()
             # 详细日志
@@ -130,8 +244,19 @@ class CheckpointService:
             if not checkpoint:
                 return None
 
-            return checkpoint.state_json
+            integrity = self._integrity_row(db, session_id)
+            if not integrity:
+                # Legacy rows predate the paired metadata table and retain the
+                # old restore behavior by design.
+                return checkpoint.state_json
 
+            mode = self._verify_integrity_pair(checkpoint, integrity, session_id)
+            result = copy.deepcopy(checkpoint.state_json)
+            result["_checkpoint_integrity_mode"] = mode
+            return result
+
+        except CheckpointIntegrityError:
+            raise
         except Exception as e:
             logger.error(f"Failed to load checkpoint: {e}")
             return None
@@ -158,6 +283,12 @@ class CheckpointService:
                 logger.info(f"[CheckpointService] 未找到检查点: session={session_id}")
                 return None
 
+            integrity = self._integrity_row(db, session_id)
+            if integrity:
+                # Verify but do not add the private restore-only mode field to
+                # state_json: this method feeds the API response.
+                self._verify_integrity_pair(checkpoint, integrity, session_id)
+
             result = checkpoint.to_dict(include_state=True)
             # 详细日志
             ui_state = result.get("ui_state_json", {})
@@ -171,6 +302,8 @@ class CheckpointService:
                 logger.info(f"[CheckpointService] 加载成功但无ui_state: session={session_id}, phase={result.get('phase')}")
             return result
 
+        except CheckpointIntegrityError:
+            raise
         except Exception as e:
             logger.error(f"Failed to load full checkpoint: {e}")
             return None
@@ -295,6 +428,11 @@ class CheckpointService:
         """
         db = self._get_db()
         try:
+            # Kept in the same transaction as the checkpoint deletion.  There
+            # is deliberately no FK so old installations need no ALTER TABLE.
+            db.query(ResearchCheckpointIntegrity).filter(
+                ResearchCheckpointIntegrity.session_id == session_id
+            ).delete()
             deleted = db.query(ResearchCheckpoint).filter(
                 ResearchCheckpoint.session_id == session_id
             ).delete()
@@ -306,6 +444,32 @@ class CheckpointService:
             logger.error(f"Failed to delete checkpoint: {e}")
             db.rollback()
             return False
+        finally:
+            db.close()
+
+    def get_checkpoint_integrity_mode(self, session_id: str) -> Optional[str]:
+        """Return a verified checkpoint integrity mode, if the row is modern.
+
+        A missing integrity row is the explicit legacy case.  Any present row
+        is a security boundary and is therefore fully verified rather than
+        silently treated as legacy when malformed or tampered.
+        """
+        db = self._get_db()
+        try:
+            integrity = self._integrity_row(db, session_id)
+            if not integrity:
+                return None
+            checkpoint = db.query(ResearchCheckpoint).filter(
+                ResearchCheckpoint.session_id == session_id
+            ).order_by(ResearchCheckpoint.updated_at.desc()).first()
+            if not checkpoint:
+                raise CheckpointIntegrityError("检查点完整性记录没有对应检查点")
+            return self._verify_integrity_pair(checkpoint, integrity, session_id)
+        except CheckpointIntegrityError:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to get checkpoint integrity mode: {e}")
+            return None
         finally:
             db.close()
 

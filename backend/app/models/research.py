@@ -53,3 +53,22 @@ class ResearchCheckpoint(Base):
             result["state_json"] = self.state_json
             result["ui_state_json"] = self.ui_state_json
         return result
+
+
+class ResearchCheckpointIntegrity(Base):
+    """One-to-one integrity metadata for a persisted research checkpoint.
+
+    This has no foreign key on purpose: deployments can add this table through
+    ``create_all`` without altering the long-lived checkpoint table first.
+    """
+    __tablename__ = "research_checkpoint_integrities"
+
+    session_id = Column(String(64), primary_key=True)
+    checkpoint_id = Column(String(64), nullable=False)
+    mode = Column(String(32), nullable=False)
+    integrity_version = Column(Integer, nullable=False)
+    key_id = Column(String(64), nullable=False)
+    business_revision = Column(Integer, nullable=False)
+    business_seal = Column(String(64), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
