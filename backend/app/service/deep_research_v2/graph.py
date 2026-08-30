@@ -97,6 +97,39 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("DeepResearchGraph")
 
 
+def public_profile_ref(ref: Any) -> Optional[Dict[str, Any]]:
+    """Return the SSE-safe projection of a managed company-profile ref.
+
+    Runtime state and checkpoints can carry private metadata alongside the
+    persisted audit reference.  SSE is a public boundary, so it receives only
+    the four stable reference fields and never the state object itself.
+    """
+    if not isinstance(ref, dict):
+        return None
+    profile_id = ref.get("id")
+    revision = ref.get("revision")
+    digest = ref.get("content_sha256")
+    source = ref.get("source")
+    if not isinstance(profile_id, str) or not profile_id.strip():
+        return None
+    if isinstance(revision, bool) or not isinstance(revision, int) or revision < 1:
+        return None
+    if (
+        not isinstance(digest, str)
+        or len(digest) != 64
+        or any(ch not in "0123456789abcdef" for ch in digest)
+    ):
+        return None
+    if source != "admin_company_profile":
+        return None
+    return {
+        "id": profile_id,
+        "revision": revision,
+        "content_sha256": digest,
+        "source": source,
+    }
+
+
 def build_complete_event(state: Dict[str, Any], references: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     构造 research_complete 事件。
@@ -169,6 +202,7 @@ def build_complete_event(state: Dict[str, Any], references: List[Dict[str, Any]]
         # 调查层语料丢弃（BC-75）。与 extraction_window_drops 一样单独给出：
         # 覆盖率低时必须能回答"是材料里没有，还是材料没送进模型"。
         "investigation_corpus_drops": state.get("investigation_corpus_drops", []),
+        "profile_ref": public_profile_ref(state.get("admin_profile_ref")),
     }
 
 
@@ -1068,6 +1102,7 @@ class DeepResearchGraph:
             "type": "human_review_required",
             "session_id": state.get("session_id", ""),
             "company_name": state.get("company_name", ""),
+            "profile_ref": public_profile_ref(state.get("admin_profile_ref")),
             "level": assessment.get("level"),
             "composite_score": assessment.get("composite_score"),
             "credit_advice": assessment.get("credit_advice"),
@@ -1194,6 +1229,7 @@ class DeepResearchGraph:
                 "type": "research_resumed",
                 "phase": state.get("phase", ""),
                 "session_id": session_id,
+                "profile_ref": public_profile_ref(state.get("admin_profile_ref")),
                 "timestamp": datetime.now().isoformat()
             }
 
@@ -1235,7 +1271,7 @@ class DeepResearchGraph:
                 # 事后无法判断当时该不该看到某条信息
                 "as_of": as_of,
                 "company_name": state.get("company_name", ""),
-                "profile_ref": state.get("admin_profile_ref") or None,
+                "profile_ref": public_profile_ref(state.get("admin_profile_ref")),
                 "timestamp": datetime.now().isoformat()
             }
 
@@ -1244,7 +1280,7 @@ class DeepResearchGraph:
                     "type": "company_profile_loaded",
                     "company_name": state["company_name"],
                     "facts_count": len(state["facts"]),
-                    "profile_ref": state.get("admin_profile_ref") or None,
+                    "profile_ref": public_profile_ref(state.get("admin_profile_ref")),
                     "timestamp": datetime.now().isoformat()
                 }
                 # 核查清单状态：前端展示核实率，评测据此计算未核实识别率
@@ -1640,6 +1676,7 @@ class DeepResearchGraph:
             "type": "research_resumed",
             "session_id": session_id,
             "reason": "human_review",
+            "profile_ref": public_profile_ref(restored_state.get("admin_profile_ref")),
             "timestamp": datetime.now().isoformat(),
         }
         async for event in self._drive(Command(resume=decision), session_id,
@@ -1680,8 +1717,14 @@ class DeepResearchGraph:
                 # 暂停：写 paused 状态，推出复核请求，**不发终局事件**
                 if self.checkpoint_service and session_id:
                     self.checkpoint_service.update_status(session_id, "paused")
-                payload_out = dict(getattr(interrupted, "value", {}) or {})
-                payload_out.setdefault("type", "human_review_required")
+                # ``interrupt.value`` is serialized checkpointer data, not an
+                # event authority.  Rebuild the complete public request from
+                # the current graph state so neither a forged event type nor
+                # an extra private field can cross the SSE boundary.
+                payload_out = self._review_request(
+                    final_state,
+                    final_state.get("risk_assessment") or {},
+                )
                 payload_out["session_id"] = session_id
                 logger.info(f"[Graph] 已暂停等待人工复核: session={session_id}")
                 yield payload_out

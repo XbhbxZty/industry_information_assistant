@@ -8,6 +8,7 @@ import {
   type FieldCheck,
   type HumanReviewRequest,
   type Investigation,
+  type ProfileRef,
   type ReviewDecision,
   type RiskAssessment,
 } from '@/api/duediligence'
@@ -32,6 +33,8 @@ export interface DDState {
   completeness: Completeness | null
   risk: RiskAssessment | null
   reviewRequest: HumanReviewRequest | null
+  /** 本次运行冻结的管理端档案审计引用；仅新任务或显式重置时清空。 */
+  profileRef: ProfileRef | null
   report: string
   /** 调查层（B 层）。**与上面的 risk / completeness 语义完全隔离**：
    *  它不参与评级与额度，界面上也必须分区呈现，不得与清单混排 */
@@ -45,12 +48,13 @@ export interface DDState {
 const EMPTY: DDState = {
   phase: 'idle', sessionId: '', companyName: '', stage: '',
   steps: [], fieldChecks: [], completeness: null, risk: null,
-  reviewRequest: null, report: '', investigation: null,
+  reviewRequest: null, profileRef: null, report: '', investigation: null,
   errors: [], errorMessage: '',
 }
 
 interface DDStreamEvent {
   type?: string
+  session_id?: string
   name?: string
   message?: string
   content?: unknown
@@ -68,10 +72,51 @@ interface DDStreamEvent {
   final_report?: string
   risk_assessment?: RiskAssessment
   errors?: string[]
+  /** SSE 公开的冻结档案审计引用。 */
+  profile_ref?: unknown
 }
 
 function asEvent(value: unknown): DDStreamEvent {
   return value !== null && typeof value === 'object' ? value as DDStreamEvent : {}
+}
+
+type UnknownRecord = Record<string, unknown>
+
+function asRecord(value: unknown): UnknownRecord | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as UnknownRecord
+    : null
+}
+
+/**
+ * SSE 是不可信 JSON。只接受字段齐全的公开审计引用，
+ * 避免把半截对象写进恢复态后再由 UI 或复核请求继续传播。
+ */
+function asProfileRef(value: unknown): ProfileRef | null {
+  const record = asRecord(value)
+  if (
+    !record
+    || typeof record.id !== 'string'
+    || !record.id.trim()
+    || typeof record.revision !== 'number'
+    || !Number.isSafeInteger(record.revision)
+    || record.revision < 1
+    || typeof record.content_sha256 !== 'string'
+    || !/^[0-9a-f]{64}$/.test(record.content_sha256)
+    || record.source !== 'admin_company_profile'
+  ) return null
+
+  return {
+    id: record.id,
+    revision: record.revision,
+    content_sha256: record.content_sha256,
+    source: record.source,
+  }
+}
+
+function extractProfileRef(event: DDStreamEvent): ProfileRef | null {
+  const nested = asRecord(event.content)
+  return asProfileRef(event.profile_ref) ?? asProfileRef(nested?.profile_ref)
 }
 
 function eventPayload(event: DDStreamEvent): DDStreamEvent {
@@ -108,15 +153,41 @@ export function useDDStream() {
     const json = asEvent(value)
     const t = json?.type
     if (!t) return
+    const profileRef = extractProfileRef(json)
+    // profile_ref 是运行快照的一部分。事件没带该字段时只更新其它状态，
+    // 绝不能把此前已恢复的引用误写成 null；新任务和 reset 才负责清空它。
+    const patchWithProfileRef = (next: Partial<DDState>) => {
+      patch(profileRef ? { ...next, profileRef } : next)
+    }
 
     switch (t) {
+      case 'research_start': {
+        const c = eventPayload(json)
+        const sessionId = typeof json.session_id === 'string'
+          ? json.session_id
+          : typeof c.session_id === 'string' ? c.session_id : undefined
+        const companyName = typeof json.company_name === 'string'
+          ? json.company_name
+          : typeof c.company_name === 'string' ? c.company_name : undefined
+        patchWithProfileRef({
+          ...(sessionId ? { sessionId } : {}),
+          ...(companyName ? { companyName } : {}),
+        })
+        break
+      }
+
       case 'phase':
         patch({ stage: typeof json.content === 'string' ? json.content : json.phase || '' })
         break
 
-      case 'company_profile_loaded':
-        patch({ companyName: json.company_name || eventPayload(json).company_name || '' })
+      case 'company_profile_loaded': {
+        const c = eventPayload(json)
+        const companyName = typeof json.company_name === 'string'
+          ? json.company_name
+          : typeof c.company_name === 'string' ? c.company_name : undefined
+        patchWithProfileRef(companyName ? { companyName } : {})
         break
+      }
 
       case 'field_checks_updated':
         {
@@ -185,16 +256,35 @@ export function useDDStream() {
       }
 
       // —— 复核卡点。暂停 ≠ 完成，界面必须显式区分 ——
-      case 'human_review_required':
-        patch({
+      case 'human_review_required': {
+        const reviewPayload = eventPayload(json)
+        // `json` 来自不可信 SSE；先移除原始字段，再只回填经过结构校验的 ref，
+        // 防止半截 profile_ref 通过复核卡片继续扩散。
+        const reviewRequestPayload = Object.fromEntries(
+          Object.entries(reviewPayload).filter(([key]) => key !== 'profile_ref'),
+        )
+        patchWithProfileRef({
           phase: 'awaiting_review',
-          reviewRequest: json as unknown as HumanReviewRequest,
+          reviewRequest: {
+            ...(reviewRequestPayload as HumanReviewRequest),
+            ...(profileRef ? { profile_ref: profileRef } : {}),
+          },
         })
         break
+      }
 
-      case 'research_resumed':
-        patch({ phase: 'running', stage: '已提交复核结论，从断点继续…' })
+      case 'research_resumed': {
+        const c = eventPayload(json)
+        const sessionId = typeof json.session_id === 'string'
+          ? json.session_id
+          : typeof c.session_id === 'string' ? c.session_id : undefined
+        patchWithProfileRef({
+          phase: 'running',
+          stage: '已提交复核结论，从断点继续…',
+          ...(sessionId ? { sessionId } : {}),
+        })
         break
+      }
 
       // ⚠️ 事件里缺哪一项就保留原值，**不得写入 undefined**。
       //    等级、闸门、授信结论都是必填字段：写进 undefined 之后界面上
@@ -228,6 +318,7 @@ export function useDDStream() {
           // 流式过程中推来的告警不在其中，直接覆盖会让它们凭空消失。
           errors: Array.from(new Set([...prev.errors, ...(json.errors || [])])),
           reviewRequest: null,
+          ...(profileRef ? { profileRef } : {}),
         }))
         break
 

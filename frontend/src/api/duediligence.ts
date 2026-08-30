@@ -165,6 +165,14 @@ export interface Investigation {
   failures: InvestigationFailure[]
 }
 
+/** 管理端企业档案的不可变审计引用。运行期间只传递此公开标识，不传递档案内容。 */
+export interface ProfileRef {
+  id: string
+  revision: number
+  content_sha256: string
+  source: 'admin_company_profile'
+}
+
 /** 复核卡片的载荷，由后端 interrupt payload 推出 */
 export interface HumanReviewRequest {
   type: 'human_review_required'
@@ -179,6 +187,8 @@ export interface HumanReviewRequest {
   conflicting_fields: string[]
   critical_issues: { description?: string; issue_type?: string }[]
   errors: string[]
+  /** 本次尽调冻结的管理端档案版本；无管理端档案时后端可省略。 */
+  profile_ref?: ProfileRef | null
 }
 
 export interface ReviewDecision {

@@ -1,7 +1,7 @@
 // Copyright © 2026 XbhbxZty
 // 本文件为「尽调智核」迭代中新增，不含原课程项目代码。
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Card, Col, Empty, Input, Row, Select, Space, Spin, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Col, Empty, Input, Row, Select, Space, Spin, Tag, Tooltip, Typography } from 'antd'
 import Markdown from '@/components/markdown'
 import { getKnowledgeBases, type KnowledgeBase } from '@/api/knowledge'
 import { getCompanyProfiles, type CompanyProfileSummary } from '@/api/company-profiles'
@@ -170,6 +170,14 @@ export default function DueDiligencePage() {
                     </div>
                   )}
                 </Card>
+              )}
+              {state.profileRef && (
+                <Tooltip title={`来源：${state.profileRef.source}\n档案 ID：${state.profileRef.id}\n内容哈希：${state.profileRef.content_sha256}`}>
+                  <Tag color="blue">
+                    {state.profileRef.source === 'admin_company_profile' ? '管理员档案' : state.profileRef.source}
+                    {' · '}修订 r{state.profileRef.revision}
+                  </Tag>
+                </Tooltip>
               )}
               <CompletenessBar data={state.completeness} />
               <ChecklistTable checks={state.fieldChecks} />
