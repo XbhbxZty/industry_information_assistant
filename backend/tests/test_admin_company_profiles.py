@@ -16,6 +16,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from sqlalchemy import create_engine, update
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -32,7 +33,12 @@ from config.dd_checklist import CHECKLIST, SCENARIO_CHECKLISTS  # noqa: E402
 from models.company_profile import AdminCompanyProfile, AdminCompanyProfileAudit  # noqa: E402
 from router.auth_router import get_current_user_required, require_superuser  # noqa: E402
 from router.company_profile_router import router  # noqa: E402
-from schemas.company_profile import CompanyProfileCreate, CompanyProfileUpdate  # noqa: E402
+from schemas.company_profile import (  # noqa: E402
+    CompanyProfileCreate,
+    CompanyProfileUpdate,
+    FieldSourceResponse,
+    MaterialResponse,
+)
 from service.admin_company_profile_service import (  # noqa: E402
     AdminCompanyProfileConflict,
     AdminCompanyProfileNotFound,
@@ -90,6 +96,30 @@ def _trusted_registration_source(*field_ids: str) -> dict:
         "as_of_date": "2026-08-19",
         "reference": "https://example.test/registry/1",
     }
+
+
+def _router_client(db, user) -> TestClient:
+    """Build a client that exercises the real ``require_superuser`` chain."""
+    app = FastAPI()
+    app.include_router(router)
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user_required] = lambda: user
+    return TestClient(app)
+
+
+def _anonymous_router_client(db) -> TestClient:
+    app = FastAPI()
+    app.include_router(router)
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    return TestClient(app)
 
 
 def test_schema_requires_only_name_and_rejects_custom_required():
@@ -277,6 +307,176 @@ def test_snapshot_is_decorated_json_and_detects_persisted_tampering(db):
         get_active_profile_snapshot(db, created.id)
 
 
+def test_response_models_reject_unknown_nested_fields():
+    source = {
+        **_trusted_registration_source("accounts_receivable_gross"),
+        "sha256": None,
+    }
+    material = {
+        "material_id": "material-1",
+        "source_type": "company_submitted",
+        "title": "应收账款台账",
+        "content": "应收账款余额 1200 万元。",
+        "reference": "台账 2026-08",
+        "as_of_date": "2026-08-20",
+        "date_unknown_reason": None,
+        "eligible_for_structured_evidence": False,
+    }
+    assert FieldSourceResponse.model_validate(source).model_dump() == source
+    assert MaterialResponse.model_validate(material).model_dump() == material
+    with pytest.raises(ValidationError, match="internal_secret"):
+        FieldSourceResponse.model_validate({**source, "internal_secret": "leak"})
+    with pytest.raises(ValidationError, match="internal_secret"):
+        MaterialResponse.model_validate({**material, "internal_secret": "leak"})
+    with pytest.raises(ValidationError, match="eligible_for_structured_evidence"):
+        MaterialResponse.model_validate({
+            **material, "eligible_for_structured_evidence": True,
+        })
+
+
+def test_real_http_access_matrix_and_actor_redaction(db):
+    normal = SimpleNamespace(id="user-1", is_active=True, is_superuser=False)
+    admin = SimpleNamespace(id="admin-1", is_active=True, is_superuser=True)
+    normal_client = _router_client(db, normal)
+    admin_client = _router_client(db, admin)
+
+    source = _trusted_registration_source("accounts_receivable_gross")
+    material = {
+        "material_id": "matrix-material-1",
+        "source_type": "company_submitted",
+        "title": "保理应收账款台账",
+        "content": "截至报告日，应收账款账面余额为 1200 万元。",
+        "reference": "内部台账 2026-08-20",
+        "as_of_date": "2026-08-20",
+    }
+    draft = {
+        "profile": {"name": "权限矩阵测试企业"},
+        "scenario": "factoring",
+        "scenario_data": {"accounts_receivable_gross": 1200},
+        "field_sources": [source],
+        "materials": [material],
+        "change_reason": "权限矩阵创建",
+    }
+    valid_update = {
+        **draft,
+        "profile": {"name": "权限矩阵测试企业（更新）"},
+        "expected_revision": 1,
+        "change_reason": "权限矩阵更新",
+    }
+
+    created_response = admin_client.post("/company-profiles", json=draft)
+    assert created_response.status_code == 201
+    created = created_response.json()
+    profile_id = created["id"]
+    assert created["created_by"] == "admin-1"
+    assert created["updated_by"] == "admin-1"
+
+    anonymous_client = _anonymous_router_client(db)
+    anonymous_requests = [
+        anonymous_client.get("/company-profiles/templates"),
+        anonymous_client.get("/company-profiles"),
+        anonymous_client.get(f"/company-profiles/{profile_id}"),
+        anonymous_client.post(
+            f"/company-profiles/{profile_id}/materials/search",
+            json={"query": "应收账款"},
+        ),
+        anonymous_client.post("/company-profiles", json=draft),
+        anonymous_client.put(
+            f"/company-profiles/{profile_id}", json=valid_update,
+        ),
+        anonymous_client.post(
+            f"/company-profiles/{profile_id}/archive",
+            json={"expected_revision": 1, "change_reason": "匿名归档"},
+        ),
+        anonymous_client.get(f"/company-profiles/{profile_id}/history"),
+    ]
+    assert {response.status_code for response in anonymous_requests} == {401}
+
+    snapshot_before_reads = get_active_profile_snapshot(db, profile_id)
+    assert normal_client.get("/company-profiles/templates").status_code == 200
+    normal_list = normal_client.get("/company-profiles").json()
+    assert normal_list["total"] == 1
+    assert "updated_by" not in normal_list["items"][0]
+
+    normal_detail_response = normal_client.get(f"/company-profiles/{profile_id}")
+    assert normal_detail_response.status_code == 200
+    normal_detail = normal_detail_response.json()
+    assert {"created_by", "updated_by", "archived_by"}.isdisjoint(normal_detail)
+    assert set(normal_detail["field_sources"][0]) == {
+        "source_id", "name", "issuer", "source_type", "field_ids",
+        "retrieved_at", "as_of_date", "reference", "sha256",
+    }
+    assert set(normal_detail["materials"][0]) == {
+        "material_id", "source_type", "title", "content", "reference",
+        "as_of_date", "date_unknown_reason", "eligible_for_structured_evidence",
+    }
+    assert normal_detail["materials"][0]["content"] == material["content"]
+
+    material_search = normal_client.post(
+        f"/company-profiles/{profile_id}/materials/search",
+        json={"query": "应收账款 台账"},
+    )
+    assert material_search.status_code == 200
+    assert material_search.json()["items"] == normal_detail["materials"]
+    assert get_active_profile_snapshot(db, profile_id) == snapshot_before_reads
+
+    assert normal_client.post("/company-profiles", json=draft).status_code == 403
+    assert normal_client.put(
+        f"/company-profiles/{profile_id}", json=valid_update,
+    ).status_code == 403
+    assert normal_client.post(
+        f"/company-profiles/{profile_id}/archive",
+        json={"expected_revision": 1, "change_reason": "越权归档"},
+    ).status_code == 403
+    assert normal_client.get(
+        f"/company-profiles/{profile_id}/history",
+    ).status_code == 403
+    persisted = get_company_profile(db, profile_id)
+    assert persisted.revision == 1
+    assert db.query(AdminCompanyProfileAudit).count() == 1
+
+    updated_response = admin_client.put(
+        f"/company-profiles/{profile_id}", json=valid_update,
+    )
+    assert updated_response.status_code == 200
+    assert updated_response.json()["updated_by"] == "admin-1"
+    history_response = admin_client.get(f"/company-profiles/{profile_id}/history")
+    assert history_response.status_code == 200
+    assert history_response.json()["total"] == 2
+
+    archived_response = admin_client.post(
+        f"/company-profiles/{profile_id}/archive",
+        json={"expected_revision": 2, "change_reason": "权限矩阵归档"},
+    )
+    assert archived_response.status_code == 200
+    assert archived_response.json()["archived_by"] == "admin-1"
+
+    hidden_list = normal_client.get("/company-profiles?include_archived=true")
+    assert hidden_list.status_code == 200
+    assert hidden_list.json()["total"] == 0
+    assert normal_client.get(f"/company-profiles/{profile_id}").status_code == 404
+    assert normal_client.post(
+        f"/company-profiles/{profile_id}/materials/search",
+        json={"query": "应收账款"},
+    ).status_code == 404
+
+    admin_list = admin_client.get("/company-profiles?include_archived=true").json()
+    assert admin_list["total"] == 1
+    assert admin_list["items"][0]["updated_by"] == "admin-1"
+    archived_detail = admin_client.get(f"/company-profiles/{profile_id}")
+    assert archived_detail.status_code == 200
+    assert archived_detail.json()["archived_by"] == "admin-1"
+    archived_search = admin_client.post(
+        f"/company-profiles/{profile_id}/materials/search",
+        json={"query": "应收账款"},
+    )
+    assert archived_search.status_code == 200
+    assert archived_search.json()["items"] == archived_detail.json()["materials"]
+    assert admin_client.get(
+        f"/company-profiles/{profile_id}/history",
+    ).json()["total"] == 3
+
+
 def test_router_rbac_and_sqlite_crud_flow(db):
     app = FastAPI()
     app.include_router(router)
@@ -287,8 +487,7 @@ def test_router_rbac_and_sqlite_crud_flow(db):
         yield db
 
     app.dependency_overrides[get_db] = override_db
-    app.dependency_overrides[get_current_user_required] = lambda: normal
-    app.dependency_overrides[require_superuser] = lambda: admin
+    app.dependency_overrides[get_current_user_required] = lambda: admin
     client = TestClient(app)
 
     template_response = client.get("/company-profiles/templates")

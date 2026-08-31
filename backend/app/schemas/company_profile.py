@@ -85,7 +85,27 @@ class MaterialSearchRequest(BaseModel):
     limit: int = Field(default=10, ge=1, le=20)
 
 
+class FieldSourceResponse(FieldSourceInput):
+    """Strict public projection of a persisted structured-field source."""
+
+
+class MaterialResponse(MaterialInput):
+    """Strict public projection of weak profile-scoped retrieval material."""
+
+    material_id: str = Field(..., min_length=1, max_length=128)
+    eligible_for_structured_evidence: Literal[False] = False
+
+
+class MaterialSearchResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: List[MaterialResponse]
+    total: int = Field(..., ge=0)
+
+
 class CompanyProfileSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     id: str
     name: str
     credit_code: Optional[str] = None
@@ -100,8 +120,8 @@ class CompanyProfileSummary(BaseModel):
 class CompanyProfileResponse(CompanyProfileSummary):
     profile: Dict[str, Any]
     scenario_data: Dict[str, Any]
-    field_sources: List[Dict[str, Any]]
-    materials: List[Dict[str, Any]]
+    field_sources: List[FieldSourceResponse]
+    materials: List[MaterialResponse]
     created_at: datetime
     created_by: Optional[str] = None
     archived_at: Optional[datetime] = None
@@ -109,6 +129,8 @@ class CompanyProfileResponse(CompanyProfileSummary):
 
 
 class CompanyProfileListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     items: List[CompanyProfileSummary]
     total: int
     offset: int
@@ -116,6 +138,8 @@ class CompanyProfileListResponse(BaseModel):
 
 
 class CompanyProfileAuditResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     id: str
     profile_id: str
     revision: int
@@ -129,6 +153,7 @@ class CompanyProfileAuditResponse(BaseModel):
 
 
 class CompanyProfileHistoryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     items: List[CompanyProfileAuditResponse]
     total: int
-

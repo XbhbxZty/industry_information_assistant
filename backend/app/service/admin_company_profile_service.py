@@ -491,9 +491,10 @@ def _lexical_tokens(value: str) -> List[str]:
 
 def search_profile_materials(
     db: Session, profile_id: str, *, query: str, limit: int,
+    include_archived: bool = False,
 ) -> Dict[str, Any]:
     """Deterministic, scoreless lexical retrieval over only this profile's materials."""
-    row = get_company_profile(db, profile_id, include_archived=False)
+    row = get_company_profile(db, profile_id, include_archived=include_archived)
     tokens = _lexical_tokens(query)
     if not tokens:
         raise AdminCompanyProfileValidationError("检索词必须含有可检索字符")
