@@ -17,6 +17,7 @@ from core.security import (
     decode_token,
 )
 from models.user import User
+from config.reviewer_policy import REVIEWER_POLICY
 from schemas.user import (
     UserCreate,
     UserLogin,
@@ -116,6 +117,27 @@ async def require_superuser(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="仅超级用户可执行此操作",
+        )
+    return current_user
+
+
+async def require_human_reviewer(
+    current_user: User = Depends(get_current_user_required),
+) -> User:
+    """Authorize only the dedicated human-review capability.
+
+    This must not be reused for checkpoint read/write routes: an allowlisted
+    reviewer is not a checkpoint operator.  Superusers retain their existing
+    break-glass path, while an explicitly allowlisted ordinary user receives
+    only the route that depends on this function.
+    """
+    if not REVIEWER_POLICY.can_review(
+        current_user.id,
+        is_superuser=bool(current_user.is_superuser),
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="无权提交人工复核结论",
         )
     return current_user
 

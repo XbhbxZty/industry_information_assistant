@@ -12,6 +12,7 @@ from starlette.status import (
     HTTP_200_OK,
     HTTP_400_BAD_REQUEST,
     HTTP_403_FORBIDDEN,
+    HTTP_404_NOT_FOUND,
     HTTP_409_CONFLICT,
     HTTP_500_INTERNAL_SERVER_ERROR,
 )
@@ -25,7 +26,7 @@ from service.kb_scope import resolve_kb_scope
 from core.database import get_db
 from core.redis_client import cache  # 导入 Redis 缓存
 from models.user import User
-from router.auth_router import get_current_user_required
+from router.auth_router import get_current_user_required, require_human_reviewer
 
 # V2 导入
 from service.deep_research_v2.service import DeepResearchV2Service
@@ -166,6 +167,28 @@ def _assert_checkpoint_access(info: Dict[str, Any], current_user: User) -> None:
     if not owner_id or str(owner_id) != str(current_user.id):
         # 对历史遗留的无归属检查点同样失败关闭，不能把旧数据变成公共数据。
         raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="无权访问该研究会话")
+
+
+def _assert_review_target(info: Dict[str, Any], current_user: User) -> str:
+    """Require an owned checkpoint and separation between owner and reviewer.
+
+    A reviewer capability grants no generic checkpoint access.  It only permits
+    a non-owner to submit a decision for an existing, owned review target.
+    Legacy checkpoints without an owner cannot prove this separation, so they
+    are deliberately rejected rather than becoming reviewable by everyone.
+    """
+    owner_id = info.get("user_id")
+    if not owner_id:
+        raise HTTPException(
+            status_code=HTTP_403_FORBIDDEN,
+            detail="无归属研究会话不能提交人工复核",
+        )
+    if str(owner_id) == str(current_user.id):
+        raise HTTPException(
+            status_code=HTTP_403_FORBIDDEN,
+            detail="研究发起人不得审核自己的会话",
+        )
+    return str(owner_id)
 
 
 def _load_admin_company_profile_snapshot(db: Session, company_profile_id: str) -> Dict[str, Any]:
@@ -776,7 +799,7 @@ async def resume_research(
 async def submit_human_review(
     session_id: str,
     request: HumanReviewRequest,
-    current_user: User = Depends(get_current_user_required),
+    current_user: User = Depends(require_human_reviewer),
 ):
     """
     提交风控复核结论，从复核卡点继续执行（v0.6 人机协同）
@@ -801,10 +824,10 @@ async def submit_human_review(
         info = get_checkpoint_service().get_checkpoint_info(session_id)
         if not info:
             raise HTTPException(
-                status_code=HTTP_400_BAD_REQUEST,
+                status_code=HTTP_404_NOT_FOUND,
                 detail=f"会话 {session_id} 不存在"
             )
-        _assert_checkpoint_access(info, current_user)
+        owner_id = _assert_review_target(info, current_user)
         if info.get("status") != "paused":
             # 不在暂停态就提交复核，多半是前端状态过期或重复提交。
             # 直接放行会让一份没有中断点的会话收到复核结论却无处安放。
@@ -823,7 +846,9 @@ async def submit_human_review(
                 async for chunk in service_v2.submit_review(
                     session_id,
                     decision,
-                    user_id=str(current_user.id),
+                    # The resumed graph persists under the checkpoint owner;
+                    # reviewer identity is carried only in the signed decision.
+                    user_id=owner_id,
                 ):
                     yield chunk
             except Exception as e:

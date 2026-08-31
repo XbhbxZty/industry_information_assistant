@@ -298,11 +298,13 @@ function CreditBlock({ rec }: { rec: NonNullable<RiskAssessment['credit_recommen
 // ------------------------------------------------------------ 人工复核卡片
 
 export function ReviewCard({
-  req, onSubmit, submitting,
+  req, onSubmit, submitting, canSubmit = false,
 }: {
   req: HumanReviewRequest
   onSubmit: (d: ReviewDecision) => void
   submitting: boolean
+  /** Only a dedicated reviewer surface may enable submission. */
+  canSubmit?: boolean
 }) {
   const [form] = Form.useForm()
   const [approved, setApproved] = useState(true)
@@ -348,59 +350,75 @@ export function ReviewCard({
         </Space>
       )}
 
-      <Form
-        form={form} layout="vertical"
-        onFinish={(v) => onSubmit({
-          approved: v.approved,
-          comment: v.comment || '',
-          override_level: v.override_level || null,
-        })}
-        initialValues={{ approved: true }}
-      >
-        <Form.Item label="复核人">
-          <Text>{user?.username || '当前登录用户'}</Text>
-          <Text type="secondary">（由登录身份自动签名，不可手工修改）</Text>
-        </Form.Item>
-
-        <Form.Item name="approved" label="复核结论">
-          <Radio.Group onChange={e => setApproved(e.target.value)}>
-            <Radio.Button value={true}>通过</Radio.Button>
-            <Radio.Button value={false}>不通过</Radio.Button>
-          </Radio.Group>
-        </Form.Item>
-
-        {approved && (
-          <Form.Item
-            name="override_level" label="调整风险等级（可选）"
-            extra="规则引擎的原始结论会被完整保留并写入报告——改写必须留痕"
-          >
-            <Select allowClear placeholder="沿用规则引擎结论" style={{ maxWidth: 260 }}
-              options={['低风险', '中风险', '高风险', '拒绝'].map(v => ({ value: v, label: v }))} />
-          </Form.Item>
-        )}
-
-        <Form.Item
-          name="comment"
-          label="复核意见"
-          dependencies={['approved', 'override_level']}
-          rules={[({ getFieldValue }) => ({
-            validator(_, value) {
-              const changed = getFieldValue('override_level')
-              const rejected = getFieldValue('approved') === false
-              if ((changed || rejected) && !String(value || '').trim()) {
-                return Promise.reject(new Error('改判或不通过时必须填写理由'))
-              }
-              return Promise.resolve()
-            },
-          })]}
+      {!canSubmit ? (
+        <Alert
+          type="info"
+          showIcon
+          message="等待独立复核人员处理"
+          description={(
+            <Space direction="vertical" size={2}>
+              <Text>发起人不能审核自己的尽调。请将此任务交由具备复核权限且非本次发起人的人员处理。</Text>
+              <Text type="secondary" copyable={{ text: req.session_id }}>
+                会话标识：{req.session_id}
+              </Text>
+            </Space>
+          )}
+        />
+      ) : (
+        <Form
+          form={form} layout="vertical"
+          onFinish={(v) => onSubmit({
+            approved: v.approved,
+            comment: v.comment || '',
+            override_level: v.override_level || null,
+          })}
+          initialValues={{ approved: true }}
         >
-          <Input.TextArea rows={3} placeholder="调整等级时请写明理由，该意见会进入报告正文" />
-        </Form.Item>
+          <Form.Item label="复核人">
+            <Text>{user?.username || '当前登录用户'}</Text>
+            <Text type="secondary">（由登录身份自动签名，不可手工修改）</Text>
+          </Form.Item>
 
-        <Button type="primary" htmlType="submit" loading={submitting}>
-          提交复核并继续
-        </Button>
-      </Form>
+          <Form.Item name="approved" label="复核结论">
+            <Radio.Group onChange={e => setApproved(e.target.value)}>
+              <Radio.Button value={true}>通过</Radio.Button>
+              <Radio.Button value={false}>不通过</Radio.Button>
+            </Radio.Group>
+          </Form.Item>
+
+          {approved && (
+            <Form.Item
+              name="override_level" label="调整风险等级（可选）"
+              extra="规则引擎的原始结论会被完整保留并写入报告——改写必须留痕"
+            >
+              <Select allowClear placeholder="沿用规则引擎结论" style={{ maxWidth: 260 }}
+                options={['低风险', '中风险', '高风险', '拒绝'].map(v => ({ value: v, label: v }))} />
+            </Form.Item>
+          )}
+
+          <Form.Item
+            name="comment"
+            label="复核意见"
+            dependencies={['approved', 'override_level']}
+            rules={[({ getFieldValue }) => ({
+              validator(_, value) {
+                const changed = getFieldValue('override_level')
+                const rejected = getFieldValue('approved') === false
+                if ((changed || rejected) && !String(value || '').trim()) {
+                  return Promise.reject(new Error('改判或不通过时必须填写理由'))
+                }
+                return Promise.resolve()
+              },
+            })]}
+          >
+            <Input.TextArea rows={3} placeholder="调整等级时请写明理由，该意见会进入报告正文" />
+          </Form.Item>
+
+          <Button type="primary" htmlType="submit" loading={submitting}>
+            提交复核并继续
+          </Button>
+        </Form>
+      )}
     </Card>
   )
 }
