@@ -12,6 +12,7 @@ from starlette.status import (
     HTTP_200_OK,
     HTTP_400_BAD_REQUEST,
     HTTP_403_FORBIDDEN,
+    HTTP_409_CONFLICT,
     HTTP_500_INTERNAL_SERVER_ERROR,
 )
 import logging
@@ -181,12 +182,14 @@ def _load_admin_company_profile_snapshot(db: Session, company_profile_id: str) -
     try:
         try:
             from service.admin_company_profile_service import (
+                AdminCompanyProfileIntegrityError,
                 AdminCompanyProfileNotFound,
                 AdminCompanyProfileValidationError,
                 get_active_profile_snapshot,
             )
         except ImportError:
             from app.service.admin_company_profile_service import (  # type: ignore
+                AdminCompanyProfileIntegrityError,
                 AdminCompanyProfileNotFound,
                 AdminCompanyProfileValidationError,
                 get_active_profile_snapshot,
@@ -204,6 +207,11 @@ def _load_admin_company_profile_snapshot(db: Session, company_profile_id: str) -
         snapshot = get_active_profile_snapshot(db, requested_id)
     except AdminCompanyProfileNotFound as exc:
         raise HTTPException(status_code=404, detail="企业档案不存在或已归档") from exc
+    except AdminCompanyProfileIntegrityError as exc:
+        raise HTTPException(
+            status_code=HTTP_409_CONFLICT,
+            detail=f"企业档案审计连续性校验失败：{exc}",
+        ) from exc
     except AdminCompanyProfileValidationError as exc:
         raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=f"企业档案快照无效：{exc}") from exc
 

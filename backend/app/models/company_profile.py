@@ -11,7 +11,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Integer, String, Text
+from sqlalchemy import CheckConstraint, Column, DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.types import JSON
 
 from core.database import Base
@@ -25,6 +25,16 @@ class AdminCompanyProfile(Base):
     """当前生效版本；历史版本只写入审计表，不在本表保留可变副本。"""
 
     __tablename__ = "admin_company_profiles"
+    __table_args__ = (
+        CheckConstraint(
+            "length(trim(created_by)) BETWEEN 1 AND 64",
+            name="ck_company_profile_created_by_nonblank",
+        ),
+        CheckConstraint(
+            "length(trim(updated_by)) BETWEEN 1 AND 64",
+            name="ck_company_profile_updated_by_nonblank",
+        ),
+    )
 
     id = Column(String(36), primary_key=True, default=_uuid)
     name = Column(String(255), nullable=False, index=True)
@@ -43,8 +53,8 @@ class AdminCompanyProfile(Base):
 
     # Store actor ids as strings.  The existing User primary key is PostgreSQL-
     # specific UUID, whereas this table must be independently creatable in SQLite.
-    created_by = Column(String(64), nullable=True, index=True)
-    updated_by = Column(String(64), nullable=True, index=True)
+    created_by = Column(String(64), nullable=False, index=True)
+    updated_by = Column(String(64), nullable=False, index=True)
     archived_by = Column(String(64), nullable=True, index=True)
     archived_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
@@ -55,13 +65,25 @@ class AdminCompanyProfileAudit(Base):
     """Append-only full before/after snapshots for each profile revision."""
 
     __tablename__ = "admin_company_profile_audits"
+    __table_args__ = (
+        UniqueConstraint("profile_id", "revision", name="uq_company_profile_audit_revision"),
+        CheckConstraint("revision >= 1", name="ck_company_profile_audit_revision_positive"),
+        CheckConstraint(
+            "length(trim(actor_id)) BETWEEN 1 AND 64",
+            name="ck_company_profile_audit_actor_nonblank",
+        ),
+        CheckConstraint(
+            "length(trim(change_reason)) BETWEEN 1 AND 500",
+            name="ck_company_profile_audit_reason_nonblank",
+        ),
+    )
 
     id = Column(String(36), primary_key=True, default=_uuid)
     profile_id = Column(String(36), nullable=False, index=True)
     revision = Column(Integer, nullable=False, index=True)
     action = Column(String(16), nullable=False)  # created / updated / archived
-    actor_id = Column(String(64), nullable=True, index=True)
-    change_reason = Column(Text, nullable=False, default="")
+    actor_id = Column(String(64), nullable=False, index=True)
+    change_reason = Column(Text, nullable=False)
     before_snapshot = Column(JSON, nullable=True)
     after_snapshot = Column(JSON, nullable=False)
     content_sha256 = Column(String(64), nullable=False)

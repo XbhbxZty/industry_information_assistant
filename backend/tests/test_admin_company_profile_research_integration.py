@@ -111,8 +111,12 @@ def _install_profile_service(monkeypatch: pytest.MonkeyPatch, callback):
     class AdminCompanyProfileValidationError(Exception):
         pass
 
+    class AdminCompanyProfileIntegrityError(AdminCompanyProfileValidationError):
+        pass
+
     module.AdminCompanyProfileNotFound = AdminCompanyProfileNotFound
     module.AdminCompanyProfileValidationError = AdminCompanyProfileValidationError
+    module.AdminCompanyProfileIntegrityError = AdminCompanyProfileIntegrityError
     module.get_active_profile_snapshot = callback
     monkeypatch.setitem(sys.modules, "service.admin_company_profile_service", module)
     return AdminCompanyProfileNotFound, AdminCompanyProfileValidationError
@@ -148,7 +152,10 @@ def test_router_reads_and_detaches_authorized_snapshot_before_streaming(monkeypa
     assert frozen["profile"]["_scenario_data"]["accounts_receivable_gross"] == 1250
 
 
-@pytest.mark.parametrize("kind, expected_status", [("missing", 404), ("invalid", 400)])
+@pytest.mark.parametrize(
+    "kind, expected_status",
+    [("missing", 404), ("invalid", 400), ("integrity", 409)],
+)
 def test_router_fails_closed_for_missing_archived_or_invalid_snapshot(
     monkeypatch: pytest.MonkeyPatch, kind: str, expected_status: int
 ):
@@ -158,8 +165,18 @@ def test_router_fails_closed_for_missing_archived_or_invalid_snapshot(
     def raise_invalid(_db, _profile_id):
         raise invalid("bad active payload")
 
+    def raise_integrity(_db, _profile_id):
+        from service.admin_company_profile_service import AdminCompanyProfileIntegrityError
+
+        raise AdminCompanyProfileIntegrityError("broken audit chain")
+
+    callback = {
+        "missing": raise_not_found,
+        "invalid": raise_invalid,
+        "integrity": raise_integrity,
+    }[kind]
     not_found, invalid = _install_profile_service(
-        monkeypatch, raise_not_found if kind == "missing" else raise_invalid
+        monkeypatch, callback,
     )
 
     with pytest.raises(HTTPException) as exc_info:

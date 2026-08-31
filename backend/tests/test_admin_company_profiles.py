@@ -8,6 +8,9 @@ tests.
 from __future__ import annotations
 
 import asyncio
+import copy
+import hashlib
+import json
 import os
 import sys
 from pathlib import Path
@@ -18,6 +21,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy import create_engine, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -41,6 +45,7 @@ from schemas.company_profile import (  # noqa: E402
 )
 from service.admin_company_profile_service import (  # noqa: E402
     AdminCompanyProfileConflict,
+    AdminCompanyProfileIntegrityError,
     AdminCompanyProfileNotFound,
     AdminCompanyProfileValidationError,
     archive_company_profile,
@@ -48,9 +53,11 @@ from service.admin_company_profile_service import (  # noqa: E402
     create_company_profile,
     get_active_profile_snapshot,
     get_company_profile,
+    list_company_profile_history,
     prepare_company_profile_content,
     search_profile_materials,
     update_company_profile,
+    validate_company_profile_audit_history,
 )
 
 
@@ -303,8 +310,259 @@ def test_snapshot_is_decorated_json_and_detects_persisted_tampering(db):
         profile_json={"name": "数据库篡改"},
     ))
     db.commit()
-    with pytest.raises(AdminCompanyProfileValidationError, match="哈希"):
+    with pytest.raises(AdminCompanyProfileValidationError, match="当前版本|哈希"):
         get_active_profile_snapshot(db, created.id)
+
+
+def test_audit_writes_require_attributed_actor_and_reason(db):
+    for actor_id, reason in ((None, "有效原因"), ("  ", "有效原因"), ("admin", "  ")):
+        with pytest.raises(AdminCompanyProfileValidationError, match="审计"):
+            create_company_profile(
+                db, _write(), actor_id=actor_id, change_reason=reason,
+            )
+    assert db.query(AdminCompanyProfile).count() == 0
+    assert db.query(AdminCompanyProfileAudit).count() == 0
+
+    for invalid_actor in (True, 7, [], {}):
+        with pytest.raises(AdminCompanyProfileValidationError, match="actor_id.*字符串"):
+            create_company_profile(
+                db, _write(), actor_id=invalid_actor, change_reason="有效原因",
+            )
+    for invalid_reason in (True, 7, [], {}):
+        with pytest.raises(AdminCompanyProfileValidationError, match="change_reason.*字符串"):
+            create_company_profile(
+                db, _write(), actor_id="admin-1", change_reason=invalid_reason,
+            )
+
+    created = create_company_profile(
+        db, _write(), actor_id="admin-1", change_reason="有效创建",
+    )
+    changed = CompanyProfileUpdate(
+        profile={"name": "更新后企业"}, scenario="", scenario_data={},
+        field_sources=[], materials=[], expected_revision=1, change_reason="有效更新",
+    )
+    with pytest.raises(AdminCompanyProfileValidationError, match="actor_id"):
+        update_company_profile(
+            db, created.id, changed, expected_revision=1,
+            actor_id=None, change_reason="有效更新",
+        )
+    with pytest.raises(AdminCompanyProfileValidationError, match="change_reason"):
+        archive_company_profile(
+            db, created.id, expected_revision=1,
+            actor_id="admin-1", change_reason=" ",
+        )
+    db.expire_all()
+    assert get_company_profile(db, created.id).revision == 1
+    assert db.query(AdminCompanyProfileAudit).count() == 1
+
+
+def test_fresh_schema_enforces_one_attributed_audit_per_revision(db):
+    created = create_company_profile(
+        db, _write(), actor_id="admin-1", change_reason="唯一审计",
+    )
+    original = db.query(AdminCompanyProfileAudit).one()
+    db.add(AdminCompanyProfileAudit(
+        profile_id=str(created.id), revision=1, action="created",
+        actor_id="admin-2", change_reason="伪造重复修订",
+        before_snapshot=None, after_snapshot=original.after_snapshot,
+        content_sha256=original.content_sha256,
+    ))
+    with pytest.raises(IntegrityError):
+        db.commit()
+    db.rollback()
+
+    for actor_id, change_reason in ((" ", "有效原因"), ("admin-2", " ")):
+        db.add(AdminCompanyProfileAudit(
+            profile_id=f"invalid-{actor_id!r}-{change_reason!r}", revision=1,
+            action="created", actor_id=actor_id, change_reason=change_reason,
+            before_snapshot=None, after_snapshot=original.after_snapshot,
+            content_sha256=original.content_sha256,
+        ))
+        with pytest.raises(IntegrityError):
+            db.commit()
+        db.rollback()
+
+    assert AdminCompanyProfileAudit.__table__.c.actor_id.nullable is False
+    assert AdminCompanyProfile.__table__.c.created_by.nullable is False
+    assert AdminCompanyProfile.__table__.c.updated_by.nullable is False
+
+
+def test_audit_continuity_failure_blocks_history_and_research_snapshot(db):
+    created = create_company_profile(
+        db, _write(), actor_id="admin-1", change_reason="初始版本",
+    )
+    changed = CompanyProfileUpdate(
+        profile={"name": "连续性企业（二版）"}, scenario="", scenario_data={},
+        field_sources=[], materials=[], expected_revision=1, change_reason="第二版",
+    )
+    update_company_profile(
+        db, created.id, changed, expected_revision=1,
+        actor_id="admin-2", change_reason="第二版",
+    )
+    assert [row.revision for row in list_company_profile_history(db, created.id)] == [2, 1]
+
+    second = db.query(AdminCompanyProfileAudit).filter(
+        AdminCompanyProfileAudit.revision == 2,
+    ).one()
+    second.before_snapshot = {**second.before_snapshot, "name": "被篡改的前序名称"}
+    db.commit()
+    with pytest.raises(AdminCompanyProfileValidationError, match="前后快照不连续"):
+        validate_company_profile_audit_history(db, created.id)
+    with pytest.raises(AdminCompanyProfileValidationError, match="前后快照不连续"):
+        get_active_profile_snapshot(db, created.id)
+
+    rejected = CompanyProfileUpdate(
+        profile={"name": "损坏链上不应落盘的第三版"}, scenario="", scenario_data={},
+        field_sources=[], materials=[], expected_revision=2, change_reason="第三版",
+    )
+    with pytest.raises(AdminCompanyProfileIntegrityError, match="前后快照不连续"):
+        update_company_profile(
+            db, created.id, rejected, expected_revision=2,
+            actor_id="admin-3", change_reason="第三版",
+        )
+    db.expire_all()
+    assert get_company_profile(db, created.id).revision == 2
+    assert db.query(AdminCompanyProfileAudit).count() == 2
+
+    admin_client = _router_client(
+        db, SimpleNamespace(id="admin-1", is_active=True, is_superuser=True),
+    )
+    history = admin_client.get(f"/company-profiles/{created.id}/history")
+    assert history.status_code == 409
+
+
+@pytest.mark.parametrize("malformation", ["string_revision", "list_scenario", "dict_materials"])
+def test_historical_snapshot_domain_shape_cannot_be_resealed(db, malformation):
+    created = create_company_profile(
+        db, _write(), actor_id="admin-1", change_reason="第一版",
+    )
+    changed = CompanyProfileUpdate(
+        profile={"name": "严格历史快照企业（二版）"}, scenario="", scenario_data={},
+        field_sources=[], materials=[], expected_revision=1, change_reason="第二版",
+    )
+    update_company_profile(
+        db, created.id, changed, expected_revision=1,
+        actor_id="admin-2", change_reason="第二版",
+    )
+    first, second = db.query(AdminCompanyProfileAudit).order_by(
+        AdminCompanyProfileAudit.revision,
+    ).all()
+    damaged = copy.deepcopy(first.after_snapshot)
+    if malformation == "string_revision":
+        damaged["revision"] = "1"
+    elif malformation == "list_scenario":
+        damaged["scenario"] = []
+    else:
+        damaged["materials"] = {}
+    content = {
+        key: damaged[key]
+        for key in ("profile", "scenario", "scenario_data", "field_sources", "materials")
+    }
+    digest = hashlib.sha256(json.dumps(
+        content, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+    ).encode("utf-8")).hexdigest()
+    damaged["content_sha256"] = digest
+    first.after_snapshot = damaged
+    first.content_sha256 = digest
+    second.before_snapshot = copy.deepcopy(damaged)
+    db.commit()
+
+    with pytest.raises(AdminCompanyProfileIntegrityError, match="审计"):
+        validate_company_profile_audit_history(db, created.id)
+
+
+def test_duplicate_credit_code_update_is_409_and_rolls_back(db):
+    admin_client = _router_client(
+        db, SimpleNamespace(id="admin-1", is_active=True, is_superuser=True),
+    )
+    first = admin_client.post("/company-profiles", json={
+        "profile": {"name": "信用代码企业甲", "credit_code": "CREDIT-CODE-A"},
+        "change_reason": "创建甲",
+    })
+    second = admin_client.post("/company-profiles", json={
+        "profile": {"name": "信用代码企业乙", "credit_code": "CREDIT-CODE-B"},
+        "change_reason": "创建乙",
+    })
+    assert first.status_code == second.status_code == 201
+
+    rejected = admin_client.put(f"/company-profiles/{second.json()['id']}", json={
+        "profile": {"name": "信用代码企业乙", "credit_code": "CREDIT-CODE-A"},
+        "expected_revision": 1,
+        "change_reason": "错误占用甲代码",
+    })
+    assert rejected.status_code == 409
+    db.expire_all()
+    persisted = get_company_profile(db, second.json()["id"])
+    assert persisted.credit_code == "CREDIT-CODE-B"
+    assert persisted.revision == 1
+    assert db.query(AdminCompanyProfileAudit).count() == 2
+
+
+def test_missing_audit_or_current_row_drift_blocks_profile_snapshot(db):
+    missing = create_company_profile(
+        db, _write(name="审计缺失企业"), actor_id="admin-1", change_reason="创建",
+    )
+    db.query(AdminCompanyProfileAudit).filter(
+        AdminCompanyProfileAudit.profile_id == str(missing.id),
+    ).delete(synchronize_session=False)
+    db.commit()
+    with pytest.raises(AdminCompanyProfileValidationError, match="修订数量不连续"):
+        get_active_profile_snapshot(db, missing.id)
+
+    drifted = create_company_profile(
+        db, _write(name="关系列漂移企业"), actor_id="admin-1", change_reason="创建",
+    )
+    drifted.name = "被直接改写的关系列"
+    db.commit()
+    with pytest.raises(AdminCompanyProfileValidationError, match="当前版本"):
+        get_active_profile_snapshot(db, drifted.id)
+
+    unattributed = create_company_profile(
+        db, _write(name="归属漂移企业"), actor_id="admin-1", change_reason="创建",
+    )
+    unattributed.updated_by = "admin-forged"
+    db.commit()
+    with pytest.raises(AdminCompanyProfileIntegrityError, match="更新人"):
+        validate_company_profile_audit_history(db, unattributed.id)
+
+    archived = create_company_profile(
+        db, _write(name="归档元数据企业"), actor_id="admin-1", change_reason="创建",
+    )
+    archive_company_profile(
+        db, archived.id, expected_revision=1,
+        actor_id="admin-2", change_reason="归档",
+    )
+    archived.archived_at = None
+    db.commit()
+    with pytest.raises(AdminCompanyProfileIntegrityError, match="归档时间"):
+        validate_company_profile_audit_history(db, archived.id)
+
+
+def test_audit_failure_rolls_back_profile_update(db, monkeypatch):
+    import service.admin_company_profile_service as service_module
+
+    created = create_company_profile(
+        db, _write(), actor_id="admin-1", change_reason="初始版本",
+    )
+    changed = CompanyProfileUpdate(
+        profile={"name": "不应落盘的更新"}, scenario="", scenario_data={},
+        field_sources=[], materials=[], expected_revision=1, change_reason="模拟审计故障",
+    )
+
+    def fail_audit(*args, **kwargs):
+        raise RuntimeError("audit storage unavailable")
+
+    monkeypatch.setattr(service_module, "_append_audit", fail_audit)
+    with pytest.raises(RuntimeError, match="audit storage unavailable"):
+        update_company_profile(
+            db, created.id, changed, expected_revision=1,
+            actor_id="admin-2", change_reason="模拟审计故障",
+        )
+    db.expire_all()
+    persisted = get_company_profile(db, created.id)
+    assert persisted.name == "测试企业有限公司"
+    assert persisted.revision == 1
+    assert db.query(AdminCompanyProfileAudit).count() == 1
 
 
 def test_response_models_reject_unknown_nested_fields():

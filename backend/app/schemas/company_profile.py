@@ -144,7 +144,7 @@ class CompanyProfileAuditResponse(BaseModel):
     profile_id: str
     revision: int
     action: str
-    actor_id: Optional[str] = None
+    actor_id: str
     change_reason: str
     before_snapshot: Optional[Dict[str, Any]] = None
     after_snapshot: Dict[str, Any]

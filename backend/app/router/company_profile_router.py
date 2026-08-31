@@ -16,7 +16,7 @@ from schemas.company_profile import (
     MaterialSearchResponse,
 )
 from service.admin_company_profile_service import (
-    AdminCompanyProfileConflict, AdminCompanyProfileNotFound,
+    AdminCompanyProfileConflict, AdminCompanyProfileIntegrityError, AdminCompanyProfileNotFound,
     AdminCompanyProfileValidationError, archive_company_profile, company_profile_templates,
     create_company_profile, get_company_profile, list_company_profile_history,
     list_company_profiles, search_profile_materials, update_company_profile,
@@ -30,6 +30,8 @@ def _error(exc: Exception) -> HTTPException:
     if isinstance(exc, AdminCompanyProfileNotFound):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     if isinstance(exc, AdminCompanyProfileConflict):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    if isinstance(exc, AdminCompanyProfileIntegrityError):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     if isinstance(exc, AdminCompanyProfileValidationError):
         return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
@@ -119,7 +121,7 @@ async def get_profile(
             ),
             reveal_actor_ids=current_user.is_superuser,
         )
-    except AdminCompanyProfileNotFound as exc:
+    except (AdminCompanyProfileNotFound, AdminCompanyProfileValidationError) as exc:
         raise _error(exc) from exc
 
 
@@ -150,7 +152,8 @@ async def archive_profile(
             actor_id=str(current_user.id), change_reason=payload.change_reason,
         )
         return _detail(row, reveal_actor_ids=True)
-    except (AdminCompanyProfileNotFound, AdminCompanyProfileConflict) as exc:
+    except (AdminCompanyProfileNotFound, AdminCompanyProfileConflict,
+            AdminCompanyProfileValidationError) as exc:
         raise _error(exc) from exc
 
 
@@ -168,7 +171,7 @@ async def profile_history(
                 content_sha256=row.content_sha256, created_at=row.created_at,
             ) for row in rows], total=len(rows),
         )
-    except AdminCompanyProfileNotFound as exc:
+    except (AdminCompanyProfileNotFound, AdminCompanyProfileValidationError) as exc:
         raise _error(exc) from exc
 
 
