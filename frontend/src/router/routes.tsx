@@ -67,7 +67,15 @@ export const routes: IRouteObject[] = [
   },
   {
     path: '/database',
-    Component: DatabasePage,
+    element: (
+      <RoleGuard
+        subTitle="数据库探索包含受控的内部业务数据，仅限管理员使用。"
+        returnTo="/"
+        returnLabel="返回首页"
+      >
+        <DatabasePage />
+      </RoleGuard>
+    ),
   },
   {
     path: '/news',

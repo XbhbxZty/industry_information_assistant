@@ -3,13 +3,136 @@
 #
 # 本文件在原课程项目基础上二次开发（已获授权）。
 # 改造部分 © 2026 XbhbxZty
-"""数据库探索服务 - 仅支持 PostgreSQL"""
+"""数据库探索服务 - 仅支持 PostgreSQL。"""
+import re
 from typing import List, Dict, Any, Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+# 该页面是行业演示数据浏览器，不是通用数据库管理器。服务端必须独立维护
+# 允许范围，不能依赖前端隐藏敏感表。
+ALLOWED_DATABASE_TABLES = frozenset({
+    "industry_stats",
+    "company_data",
+    "policy_data",
+})
+
+_IDENTIFIER = r"[A-Za-z_][A-Za-z0-9_]*"
+_STRING_LITERAL = re.compile(r"'(?:''|[^'])*'")
+_FORBIDDEN_QUERY_KEYWORDS = (
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "DROP",
+    "ALTER",
+    "CREATE",
+    "TRUNCATE",
+    "GRANT",
+    "REVOKE",
+    "COPY",
+    "CALL",
+    "DO",
+    "EXECUTE",
+    "PREPARE",
+    "LOCK",
+    "TABLE",
+    "CURRENT_USER",
+    "SESSION_USER",
+    "CURRENT_ROLE",
+    "CURRENT_CATALOG",
+    "CURRENT_SCHEMA",
+)
+_ALLOWED_QUERY_FUNCTIONS = frozenset({
+    "COUNT",
+    "SUM",
+    "AVG",
+    "MAX",
+    "MIN",
+    "COALESCE",
+    "NULLIF",
+    "CAST",
+    "ROUND",
+    "DATE",
+    "YEAR",
+    "MONTH",
+    "IN",
+    "EXISTS",
+})
+
+
+def require_allowed_database_table(table_name: str) -> str:
+    """Return a trusted table name or reject it before any SQL is built."""
+    if table_name not in ALLOWED_DATABASE_TABLES:
+        raise ValueError("Table is not available in the database explorer")
+    return table_name
+
+
+def validate_allowed_select(sql: str) -> str:
+    """Validate the explorer's deliberately small, single-table SELECT subset.
+
+    This is intentionally not a general SQL sandbox. Complex forms (CTEs,
+    joins, unions and subqueries) fail closed so every accepted query has one
+    statically identifiable relation from ``ALLOWED_DATABASE_TABLES``.
+    """
+    statement = (sql or "").strip()
+    if not statement:
+        raise ValueError("SQL query is empty")
+    if statement.endswith(";"):
+        statement = statement[:-1].rstrip()
+
+    masked = _STRING_LITERAL.sub(lambda match: " " * len(match.group(0)), statement)
+    if "'" in masked:
+        raise ValueError("Unterminated SQL string literal")
+    if ";" in masked or "--" in masked or "/*" in masked or "*/" in masked:
+        raise ValueError("Multiple statements and SQL comments are not allowed")
+    if "$" in masked:
+        raise ValueError("Dollar-quoted SQL and dollar identifiers are not allowed")
+
+    upper = masked.upper()
+    if not re.match(r"^SELECT\b", upper):
+        raise ValueError("Only SELECT queries are allowed")
+    if len(re.findall(r"\bSELECT\b", upper)) != 1:
+        raise ValueError("Subqueries are not allowed")
+    if len(re.findall(r"\bFROM\b", upper)) != 1:
+        raise ValueError("A query must read from exactly one allowed table")
+
+    for keyword in _FORBIDDEN_QUERY_KEYWORDS:
+        if re.search(rf"\b{keyword}\b", upper):
+            raise ValueError(f"Query contains forbidden keyword: {keyword}")
+    if re.search(r"\b(?:WITH|UNION|INTERSECT|EXCEPT|JOIN)\b", upper):
+        raise ValueError("CTEs, set operations and joins are not allowed")
+    if re.search(r'"(?:""|[^"])+"\s*\(', masked):
+        raise ValueError("Quoted or dynamic SQL functions are not allowed")
+    for function_name in re.findall(r'(?<![\w"])([^\W\d]\w*)\s*\(', upper):
+        if function_name not in _ALLOWED_QUERY_FUNCTIONS:
+            raise ValueError(f"Query function is not allowed: {function_name}")
+
+    from_match = re.search(
+        r"\bFROM\s+(.*?)(?=\bWHERE\b|\bGROUP\s+BY\b|\bHAVING\b|"
+        r"\bORDER\s+BY\b|\bLIMIT\b|\bOFFSET\b|$)",
+        masked,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not from_match:
+        raise ValueError("A query must read from exactly one allowed table")
+
+    relation = from_match.group(1).strip()
+    relation_match = re.fullmatch(
+        rf'(?:"(?P<quoted>{_IDENTIFIER})"|(?P<plain>{_IDENTIFIER}))'
+        rf'(?:\s+(?:AS\s+)?{_IDENTIFIER})?',
+        relation,
+        flags=re.IGNORECASE,
+    )
+    if not relation_match:
+        raise ValueError("Only one unqualified database-explorer table is allowed")
+
+    table_name = relation_match.group("quoted") or relation_match.group("plain")
+    require_allowed_database_table(table_name.lower())
+    return statement
 
 
 class DatabaseExplorer:
@@ -19,7 +142,7 @@ class DatabaseExplorer:
         self.db = db
 
     def get_tables(self) -> List[Dict[str, Any]]:
-        """获取当前数据库的所有表"""
+        """只获取数据库探索页允许展示的业务表。"""
         query = text("""
             SELECT
                 table_name,
@@ -29,6 +152,7 @@ class DatabaseExplorer:
             FROM information_schema.tables t
             WHERE table_schema = 'public'
             AND table_type = 'BASE TABLE'
+            AND table_name IN ('industry_stats', 'company_data', 'policy_data')
             ORDER BY table_name
         """)
         result = self.db.execute(query)
@@ -53,9 +177,7 @@ class DatabaseExplorer:
 
     def get_table_schema(self, table_name: str) -> Dict[str, Any]:
         """获取表结构"""
-        # 验证表名安全性
-        if not self._is_valid_identifier(table_name):
-            raise ValueError("Invalid table name")
+        table_name = require_allowed_database_table(table_name)
 
         # 获取列信息
         columns_query = text("""
@@ -128,9 +250,7 @@ class DatabaseExplorer:
         order_dir: str = "asc"
     ) -> Dict[str, Any]:
         """获取表数据（分页）"""
-        # 验证表名安全性
-        if not self._is_valid_identifier(table_name):
-            raise ValueError("Invalid table name")
+        table_name = require_allowed_database_table(table_name)
 
         # 验证排序方向
         order_dir = order_dir.lower()
@@ -176,21 +296,12 @@ class DatabaseExplorer:
         }
 
     def execute_query(self, sql: str, limit: int = 100) -> Dict[str, Any]:
-        """执行只读 SQL 查询"""
-        # 安全检查：只允许 SELECT 语句
-        sql_clean = sql.strip().upper()
-        if not sql_clean.startswith("SELECT"):
-            raise ValueError("Only SELECT queries are allowed")
-
-        # 禁止危险关键字
-        dangerous_keywords = ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "TRUNCATE", "GRANT", "REVOKE"]
-        for keyword in dangerous_keywords:
-            if keyword in sql_clean:
-                raise ValueError(f"Query contains forbidden keyword: {keyword}")
+        """执行数据库探索页支持的有限只读查询。"""
+        sql = validate_allowed_select(sql)
 
         # 添加 LIMIT 如果没有
-        if "LIMIT" not in sql_clean:
-            sql = f"{sql.rstrip(';')} LIMIT {limit}"
+        if not re.search(r"\bLIMIT\b", sql, flags=re.IGNORECASE):
+            sql = f"{sql} LIMIT {limit}"
 
         try:
             result = self.db.execute(text(sql))

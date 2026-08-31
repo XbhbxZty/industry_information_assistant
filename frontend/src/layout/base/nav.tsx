@@ -163,14 +163,16 @@ export function Nav() {
       </div>
 
       <div className="base-layout-nav">
-        {items.map(({ key, onClick, ...item }) => (
-          <NavItem
-            key={key}
-            {...item}
-            active={pathname === item.href}
-            onClick={onClick}
-          />
-        ))}
+        {items
+          .filter(({ key }) => key !== 'database' || user?.is_superuser)
+          .map(({ key, onClick, ...item }) => (
+            <NavItem
+              key={key}
+              {...item}
+              active={pathname === item.href}
+              onClick={onClick}
+            />
+          ))}
       </div>
       <SessionDrawer
         open={sessionDrawerOpen}

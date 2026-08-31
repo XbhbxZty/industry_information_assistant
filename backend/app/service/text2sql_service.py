@@ -20,6 +20,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
 from openai import OpenAI
+from service.database_explorer import validate_allowed_select
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -54,28 +55,6 @@ class Text2SQLService:
     - 查询结果格式化
     - 可视化推荐
     """
-
-    # 安全配置
-    ALLOWED_KEYWORDS = [
-        'SELECT', 'FROM', 'WHERE', 'GROUP BY', 'ORDER BY', 'LIMIT',
-        'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'ON',
-        'AND', 'OR', 'NOT', 'IN', 'LIKE', 'BETWEEN',
-        'AS', 'DISTINCT', 'HAVING', 'UNION',
-        'COUNT', 'SUM', 'AVG', 'MAX', 'MIN',
-        'YEAR', 'MONTH', 'DATE', 'CAST', 'COALESCE',
-        'ASC', 'DESC', 'NULLS', 'FIRST', 'LAST',
-        'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
-        'IS', 'NULL', 'TRUE', 'FALSE'
-    ]
-
-    FORBIDDEN_KEYWORDS = [
-        'DROP', 'DELETE', 'UPDATE', 'INSERT', 'TRUNCATE',
-        'ALTER', 'CREATE', 'GRANT', 'REVOKE',
-        'EXEC', 'EXECUTE', 'XP_', 'SP_',
-        '--', '/*', '*/', ';--', 'UNION ALL SELECT',
-        'INFORMATION_SCHEMA', 'SYS.', 'SYSOBJECTS',
-        'WAITFOR', 'DELAY', 'BENCHMARK', 'SLEEP'
-    ]
 
     # 数据库 Schema 定义
     SCHEMA_DEFINITION = """
@@ -219,28 +198,10 @@ class Text2SQLService:
         Returns:
             (是否安全, 错误信息)
         """
-        if not sql or not sql.strip():
-            return False, "SQL 语句为空"
-
-        sql_upper = sql.upper().strip()
-
-        # 检查禁止关键词
-        for keyword in self.FORBIDDEN_KEYWORDS:
-            if keyword in sql_upper:
-                return False, f"SQL 包含禁止的关键词: {keyword}"
-
-        # 检查是否以 SELECT 开头
-        if not sql_upper.startswith('SELECT'):
-            return False, "SQL 必须以 SELECT 开头"
-
-        # 检查是否包含多条语句
-        if ';' in sql[:-1]:  # 允许末尾的分号
-            return False, "不允许多条 SQL 语句"
-
-        # 检查注释
-        if '--' in sql or '/*' in sql:
-            return False, "SQL 中不允许注释"
-
+        try:
+            validate_allowed_select(sql)
+        except ValueError as exc:
+            return False, str(exc)
         return True, ""
 
     def _extract_json_from_response(self, content: str) -> Dict[str, Any]:

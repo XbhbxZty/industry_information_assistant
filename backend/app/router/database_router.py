@@ -11,13 +11,16 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
 from core.database import get_db
-from models.user import User
-from router.auth_router import get_current_user_required
+from router.auth_router import require_superuser
 from service.database_explorer import DatabaseExplorer
 from service.text2sql_service import Text2SQLService
 from config.llm_config import get_config
 
-router = APIRouter(prefix="/database", tags=["数据库探索"])
+router = APIRouter(
+    prefix="/database",
+    tags=["数据库探索"],
+    dependencies=[Depends(require_superuser)],
+)
 
 
 # ========== Schemas ==========
@@ -65,7 +68,7 @@ class TableDataResponse(BaseModel):
 
 class QueryRequest(BaseModel):
     """查询请求"""
-    sql: str = Field(..., description="SQL 查询语句（仅支持 SELECT）")
+    sql: str = Field(..., description="单一演示业务表的有限 SELECT 查询")
     limit: int = Field(100, ge=1, le=1000, description="结果限制")
 
 
@@ -99,10 +102,9 @@ class Text2SQLResponse(BaseModel):
 
 @router.get("/tables", response_model=List[TableInfo])
 async def get_tables(
-    current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """获取当前数据库的所有表"""
+    """获取允许在探索页展示的业务表"""
     explorer = DatabaseExplorer(db)
     try:
         tables = explorer.get_tables()
@@ -118,7 +120,6 @@ async def get_tables(
 @router.get("/tables/{table_name}/schema", response_model=TableSchema)
 async def get_table_schema(
     table_name: str,
-    current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     """获取表结构"""
@@ -152,7 +153,6 @@ async def get_table_data(
     offset: int = 0,
     order_by: Optional[str] = None,
     order_dir: str = "asc",
-    current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     """获取表数据（分页）"""
@@ -180,10 +180,9 @@ async def get_table_data(
 @router.post("/query", response_model=QueryResponse)
 async def execute_query(
     request: QueryRequest,
-    current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """执行只读 SQL 查询（仅支持 SELECT）"""
+    """执行单一白名单业务表的有限只读查询"""
     explorer = DatabaseExplorer(db)
     try:
         result = explorer.execute_query(request.sql, request.limit)
@@ -205,7 +204,6 @@ async def execute_query(
 @router.post("/text2sql", response_model=Text2SQLResponse)
 async def text2sql_query(
     request: Text2SQLRequest,
-    current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     """
