@@ -71,6 +71,12 @@ export function Nav() {
         href: '/company-profiles',
       },
       {
+        key: 'risk-reviews',
+        label: '风控复核',
+        icon: IconHistory,
+        href: '/risk-reviews',
+      },
+      {
         key: 'newchat',
         label: '新的聊天',
         icon: IconNewChat,
@@ -164,7 +170,10 @@ export function Nav() {
 
       <div className="base-layout-nav">
         {items
-          .filter(({ key }) => key !== 'database' || user?.is_superuser)
+          .filter(({ key }) => (
+            (key !== 'database' || user?.is_superuser)
+            && (key !== 'risk-reviews' || user?.can_human_review)
+          ))
           .map(({ key, onClick, ...item }) => (
             <NavItem
               key={key}

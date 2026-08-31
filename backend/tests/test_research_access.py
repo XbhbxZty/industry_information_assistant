@@ -148,15 +148,46 @@ class _FailingReviewService:
         raise RuntimeError("review stream boom")
 
 
-def _review_client(monkeypatch, user, info, policy, review_service=None):
+def _review_client(
+    monkeypatch, user, info, policy, review_service=None, workspace_error=None,
+):
     """Exercise the actual nested FastAPI dependency chain for review routes."""
     import service.checkpoint_service as checkpoint_module
+
+    class _StrictWorkspaceService:
+        def __init__(self, _db):
+            pass
+
+        def authorize_submission(self, _session_id, reviewer_id):
+            if workspace_error is not None:
+                raise workspace_error
+            if info is None:
+                raise research_router_module.ReviewTaskNotFound("会话不存在")
+            owner_id = info.get("user_id")
+            if not owner_id:
+                raise research_router_module.ReviewTaskNotPending("无归属会话")
+            if str(owner_id) == str(reviewer_id):
+                raise research_router_module.ReviewTaskNotPending("不得自审")
+            if info.get("status") != "paused":
+                raise research_router_module.ReviewTaskNotPending("当前不在暂停复核状态")
+            return str(owner_id)
+
+        def list_pending(self, _reviewer_id):
+            if workspace_error is not None:
+                raise workspace_error
+            return []
 
     checkpoint_service = _CheckpointService(info)
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_current_user_required] = lambda: user
+    app.dependency_overrides[research_router_module.get_db] = lambda: object()
     monkeypatch.setattr(auth_router_module, "REVIEWER_POLICY", policy)
+    monkeypatch.setattr(
+        research_router_module,
+        "ReviewWorkspaceService",
+        _StrictWorkspaceService,
+    )
     monkeypatch.setattr(
         checkpoint_module,
         "get_checkpoint_service",
@@ -267,6 +298,53 @@ def test_non_reviewer_is_rejected_before_checkpoint_lookup(monkeypatch):
     assert checkpoint_service.info_calls == 0
 
 
+def test_review_workspace_reads_require_reviewer_capability(monkeypatch):
+    app = FastAPI()
+    app.include_router(router)
+    anonymous = TestClient(app)
+    assert anonymous.get("/research/reviews").status_code == 401
+    assert anonymous.get("/research/reviews/s").status_code == 401
+
+    client, checkpoint_service = _review_client(
+        monkeypatch,
+        _user(_OWNER_ID),
+        {"session_id": "s", "user_id": _OWNER_ID, "status": "paused"},
+        _policy(),
+    )
+    assert client.get("/research/reviews").status_code == 403
+    assert client.get("/research/reviews/s").status_code == 403
+    assert checkpoint_service.info_calls == 0
+
+
+def test_authorized_empty_review_queue_is_explicit(monkeypatch):
+    client, _checkpoint_service = _review_client(
+        monkeypatch,
+        _user(_REVIEWER_ID),
+        None,
+        _policy(_REVIEWER_ID),
+    )
+
+    response = client.get("/research/reviews")
+
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "total": 0}
+
+
+def test_review_queue_failure_is_not_disguised_as_empty(monkeypatch):
+    client, _checkpoint_service = _review_client(
+        monkeypatch,
+        _user(_REVIEWER_ID),
+        None,
+        _policy(_REVIEWER_ID),
+        workspace_error=research_router_module.ReviewWorkspaceUnavailable("数据库不可用"),
+    )
+
+    response = client.get("/research/reviews")
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "复核工作台暂不可用"
+
+
 @pytest.mark.parametrize(
     ("actor", "policy"),
     [
@@ -290,7 +368,7 @@ def test_authorized_nonowner_reviewer_submits_server_identity_and_owner_id(
 
     assert response.status_code == 200
     assert response.text == "data: [DONE]\n\n"
-    assert checkpoint_service.info_calls == 1
+    assert checkpoint_service.info_calls == 0
     assert len(review_service.calls) == 1
     session_id, decision, graph_user_id = review_service.calls[0]
     assert session_id == "s"
@@ -336,7 +414,7 @@ def test_any_authorized_role_is_forbidden_from_self_review(monkeypatch, actor, p
     response = client.post("/research/review/s", json=_review_payload())
 
     assert response.status_code == 403
-    assert checkpoint_service.info_calls == 1
+    assert checkpoint_service.info_calls == 0
 
 
 @pytest.mark.parametrize(
@@ -344,7 +422,7 @@ def test_any_authorized_role_is_forbidden_from_self_review(monkeypatch, actor, p
     [
         (None, 404),
         ({"session_id": "s", "user_id": None, "status": "paused"}, 403),
-        ({"session_id": "s", "user_id": _OWNER_ID, "status": "completed"}, 400),
+        ({"session_id": "s", "user_id": _OWNER_ID, "status": "completed"}, 403),
     ],
 )
 def test_reviewer_review_target_boundaries(monkeypatch, info, expected_status):
@@ -358,7 +436,27 @@ def test_reviewer_review_target_boundaries(monkeypatch, info, expected_status):
     response = client.post("/research/review/s", json=_review_payload())
 
     assert response.status_code == expected_status
-    assert checkpoint_service.info_calls == 1
+    assert checkpoint_service.info_calls == 0
+
+
+def test_direct_review_post_cannot_bypass_strict_integrity_reader(monkeypatch):
+    review_service = _ReviewService()
+    client, checkpoint_service = _review_client(
+        monkeypatch,
+        _user(_REVIEWER_ID),
+        {"session_id": "s", "user_id": _OWNER_ID, "status": "paused"},
+        _policy(_REVIEWER_ID),
+        review_service,
+        workspace_error=research_router_module.ReviewWorkspaceIntegrityError(
+            "待复核检查点缺少完整性证明"
+        ),
+    )
+
+    response = client.post("/research/review/s", json=_review_payload())
+
+    assert response.status_code == 409
+    assert checkpoint_service.info_calls == 0
+    assert review_service.calls == []
 
 
 def test_allowlisted_reviewer_has_no_cross_owner_checkpoint_operator_access(monkeypatch):

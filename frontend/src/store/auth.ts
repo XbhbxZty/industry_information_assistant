@@ -11,6 +11,8 @@ export interface UserInfo {
   email: string
   is_active: boolean
   is_superuser: boolean
+  /** 服务端下发的独立复核能力；旧会话缺失时必须按无权限处理。 */
+  can_human_review: boolean
   created_at: string
 }
 
@@ -30,7 +32,11 @@ function loadAuthState(): AuthState {
       const parsed = JSON.parse(saved) as Partial<AuthState>
       // 兼容第三阶段前存下来的会话：旧数据没有管理员字段时必须按普通用户处理。
       const user = parsed.user
-        ? { ...parsed.user, is_superuser: Boolean(parsed.user.is_superuser) }
+        ? {
+            ...parsed.user,
+            is_superuser: Boolean(parsed.user.is_superuser),
+            can_human_review: Boolean(parsed.user.can_human_review),
+          }
         : null
       return {
         token: parsed.token || null,

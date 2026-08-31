@@ -31,6 +31,16 @@ router = APIRouter(prefix="/auth", tags=["认证"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token", auto_error=False)
 
 
+def user_response_for(user: User) -> UserResponse:
+    """Serialize a user with the process-frozen reviewer capability."""
+    response = UserResponse.model_validate(user)
+    return response.model_copy(update={
+        "can_human_review": REVIEWER_POLICY.can_review(
+            user.id, is_superuser=bool(user.is_superuser),
+        ),
+    })
+
+
 def get_user_by_username(db: Session, username: str) -> Optional[User]:
     """根据用户名获取用户"""
     return db.query(User).filter(User.username == username).first()
@@ -179,7 +189,7 @@ async def register(
 
     return TokenResponse(
         access_token=access_token,
-        user=UserResponse.model_validate(user)
+        user=user_response_for(user)
     )
 
 
@@ -209,7 +219,7 @@ async def login(
 
     return TokenResponse(
         access_token=access_token,
-        user=UserResponse.model_validate(user)
+        user=user_response_for(user)
     )
 
 
@@ -227,20 +237,26 @@ async def login_for_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="用户已被禁用"
+        )
+
     access_token = create_access_token(
         data={"sub": str(user.id), "username": user.username}
     )
 
     return TokenResponse(
         access_token=access_token,
-        user=UserResponse.model_validate(user)
+        user=user_response_for(user)
     )
 
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: User = Depends(get_current_user_required)):
     """获取当前用户信息"""
-    return UserResponse.model_validate(current_user)
+    return user_response_for(current_user)
 
 
 @router.post("/change-password")

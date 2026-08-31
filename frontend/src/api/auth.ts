@@ -23,6 +23,8 @@ export interface UserInfo {
   is_active: boolean
   /** 服务端最终授权依据。前端只用它控制入口与呈现，写操作仍由服务端校验。 */
   is_superuser: boolean
+  /** 由服务端计算的复核能力；不能由前端角色推断或自行授予。 */
+  can_human_review: boolean
   created_at: string
 }
 

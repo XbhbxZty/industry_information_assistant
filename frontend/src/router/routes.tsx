@@ -20,6 +20,8 @@ import BiddingPage from '@/pages/bidding'
 import CompanyProfileListPage from '@/pages/company-profiles/list'
 import CompanyProfileDetailPage from '@/pages/company-profiles/detail'
 import CompanyProfileEditorPage from '@/pages/company-profiles/editor'
+import RiskReviewPage from '@/pages/risk-reviews'
+import { ReviewerGuard } from '@/components/auth-guard/reviewer-guard'
 import {
   Navigate,
   Outlet,
@@ -100,6 +102,10 @@ export const routes: IRouteObject[] = [
   {
     path: '/company-profiles/:id',
     Component: CompanyProfileDetailPage,
+  },
+  {
+    path: '/risk-reviews',
+    element: <ReviewerGuard><RiskReviewPage /></ReviewerGuard>,
   },
   {
     path: '/404',

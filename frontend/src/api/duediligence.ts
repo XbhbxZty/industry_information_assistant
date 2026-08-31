@@ -198,6 +198,75 @@ export interface ReviewDecision {
   override_level?: string | null
 }
 
+/** reviewer 包中的额度建议投影；不复用完整的风险引擎内部对象。 */
+export interface ReviewCreditRecommendation {
+  recommendable?: boolean | null
+  suggested_amount?: number | null
+  currency?: string | null
+  based_on_level?: string | null
+  advice_text?: string | null
+  conditions: string[]
+}
+
+/** 服务端显式构造的风险依据投影。 */
+export interface ReviewRiskAssessment {
+  level?: string | null
+  composite_score?: number | null
+  credit_advice?: string | null
+  credit_recommendation?: ReviewCreditRecommendation | null
+  gates_applied: string[]
+  triggered_rules: string[]
+}
+
+/** 服务端显式构造的完整度投影。 */
+export interface ReviewCompleteness {
+  required_total?: number | null
+  required_verified?: number | null
+  verified_rate?: number | null
+  unverified_fields: string[]
+  conflicting_fields: string[]
+}
+
+export interface ReviewEvidenceSummary {
+  evidence_id: string
+  field_id?: string | null
+  source_adapter?: string | null
+  retrieved_at?: string | null
+  as_of_date?: string | null
+  active?: boolean | null
+}
+
+/** 待复核任务列表的最小投影。它不是检查点，绝不包含 state_json 或 ui_state_json。 */
+export interface ReviewQueueItem {
+  session_id: string
+  company_name: string
+  created_at?: string
+  updated_at?: string
+  profile_ref?: ProfileRef | null
+  risk_assessment: ReviewRiskAssessment
+  completeness: ReviewCompleteness
+}
+
+/** reviewer 专用详情包；字段只覆盖服务端显式允许公开的尽调材料。 */
+export interface ReviewDetail extends ReviewQueueItem {
+  final_report: string
+  unverified_fields?: string[]
+  conflicting_fields?: string[]
+  critical_issues: { description?: string | null; issue_type?: string | null; severity?: string | null }[]
+  errors: string[]
+  evidence: ReviewEvidenceSummary[]
+}
+
+/** 仅具备 can_human_review 的独立复核人可以调用。 */
+export function getReviewQueue() {
+  return request.get<{ items: ReviewQueueItem[]; total: number }>('/research/reviews', { loading: false })
+}
+
+/** 返回单会话最小复核材料包，而不是完整检查点。 */
+export function getReviewDetail(sessionId: string) {
+  return request.get<ReviewDetail>(`/research/reviews/${sessionId}`, { loading: false })
+}
+
 /** 发起尽调（SSE 流） */
 export function startDueDiligence(
   params: {

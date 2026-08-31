@@ -32,6 +32,10 @@ class UserResponse(UserBase):
     id: UUID
     is_active: bool
     is_superuser: bool
+    # This is a server-computed capability, not a client-supplied role.  Keep a
+    # conservative default so an old serializer can never accidentally grant
+    # the reviewer UI entry point.
+    can_human_review: bool = False
     created_at: datetime
 
     class Config:

@@ -27,6 +27,14 @@ from core.database import get_db
 from core.redis_client import cache  # 导入 Redis 缓存
 from models.user import User
 from router.auth_router import get_current_user_required, require_human_reviewer
+from schemas.review_workspace import ReviewTaskListResponse, ReviewTaskPacket
+from service.review_workspace_service import (
+    ReviewTaskNotFound,
+    ReviewTaskNotPending,
+    ReviewWorkspaceIntegrityError,
+    ReviewWorkspaceService,
+    ReviewWorkspaceUnavailable,
+)
 
 # V2 导入
 from service.deep_research_v2.service import DeepResearchV2Service
@@ -189,6 +197,22 @@ def _assert_review_target(info: Dict[str, Any], current_user: User) -> str:
             detail="研究发起人不得审核自己的会话",
         )
     return str(owner_id)
+
+
+def _raise_review_workspace_error(exc: Exception) -> None:
+    """Map strict review reader errors without concealing damaged state."""
+    if isinstance(exc, ReviewTaskNotFound):
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if isinstance(exc, ReviewTaskNotPending):
+        raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    if isinstance(exc, ReviewWorkspaceIntegrityError):
+        raise HTTPException(status_code=HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if isinstance(exc, ReviewWorkspaceUnavailable):
+        raise HTTPException(
+            status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="复核工作台暂不可用",
+        ) from exc
+    raise exc
 
 
 def _load_admin_company_profile_snapshot(db: Session, company_profile_id: str) -> Dict[str, Any]:
@@ -605,6 +629,40 @@ def clear_cancel_flag(session_id: str):
     cache.delete(cancel_key)
 
 
+@router.get("/reviews", response_model=ReviewTaskListResponse, status_code=HTTP_200_OK)
+async def list_pending_reviews(
+    current_user: User = Depends(require_human_reviewer),
+    db: Session = Depends(get_db),
+):
+    """List only integrity-verified, non-self pending review work.
+
+    This deliberately does not reuse ``/checkpoints``.  The response is a
+    whitelist projection built from sealed business state, while the generic
+    endpoint remains owner-scoped and may expose checkpoint metadata needed by
+    its legacy UI.
+    """
+    try:
+        tasks = ReviewWorkspaceService(db).list_pending(current_user.id)
+        return ReviewTaskListResponse(items=tasks, total=len(tasks))
+    except (ReviewTaskNotFound, ReviewTaskNotPending,
+            ReviewWorkspaceIntegrityError, ReviewWorkspaceUnavailable) as exc:
+        _raise_review_workspace_error(exc)
+
+
+@router.get("/reviews/{session_id}", response_model=ReviewTaskPacket, status_code=HTTP_200_OK)
+async def get_pending_review(
+    session_id: str,
+    current_user: User = Depends(require_human_reviewer),
+    db: Session = Depends(get_db),
+):
+    """Return one explicit minimum review packet, never a raw checkpoint."""
+    try:
+        return ReviewWorkspaceService(db).get_pending(session_id, current_user.id)
+    except (ReviewTaskNotFound, ReviewTaskNotPending,
+            ReviewWorkspaceIntegrityError, ReviewWorkspaceUnavailable) as exc:
+        _raise_review_workspace_error(exc)
+
+
 # ============ 检查点 API ============
 
 @router.get("/checkpoint/{session_id}", status_code=HTTP_200_OK)
@@ -800,6 +858,7 @@ async def submit_human_review(
     session_id: str,
     request: HumanReviewRequest,
     current_user: User = Depends(require_human_reviewer),
+    db: Session = Depends(get_db),
 ):
     """
     提交风控复核结论，从复核卡点继续执行（v0.6 人机协同）
@@ -820,21 +879,13 @@ async def submit_human_review(
         流式响应：从断点继续直到 research_complete
     """
     try:
-        from service.checkpoint_service import get_checkpoint_service
-        info = get_checkpoint_service().get_checkpoint_info(session_id)
-        if not info:
-            raise HTTPException(
-                status_code=HTTP_404_NOT_FOUND,
-                detail=f"会话 {session_id} 不存在"
+        try:
+            owner_id = ReviewWorkspaceService(db).authorize_submission(
+                session_id, current_user.id,
             )
-        owner_id = _assert_review_target(info, current_user)
-        if info.get("status") != "paused":
-            # 不在暂停态就提交复核，多半是前端状态过期或重复提交。
-            # 直接放行会让一份没有中断点的会话收到复核结论却无处安放。
-            raise HTTPException(
-                status_code=HTTP_400_BAD_REQUEST,
-                detail=f"会话当前状态为 {info.get('status')}，没有待复核的卡点"
-            )
+        except (ReviewTaskNotFound, ReviewTaskNotPending,
+                ReviewWorkspaceIntegrityError, ReviewWorkspaceUnavailable) as exc:
+            _raise_review_workspace_error(exc)
 
         service_v2 = get_research_service_v2()
         decision = request.model_dump()
