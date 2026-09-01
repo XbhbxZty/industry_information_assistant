@@ -1,7 +1,7 @@
 # 管理员企业档案专项计划
 
 > **当前状态**：3.0～3.3、3.4A、3.4B、3.4C1、3.4C2a、3.4C2b 已完成；
-> 3.4D1 已完成，3.4D2a 已完成恢复审计，下一可开发单元为 3.4D2a1。工程 Bad Case 见
+> 3.4D1、3.4D2a1 已完成，下一可开发单元为 3.4D2a2。工程 Bad Case 见
 > [`DEVELOPMENT_TRACE.md`](DEVELOPMENT_TRACE.md)。
 
 ## 一、目标与边界
@@ -27,7 +27,7 @@
 | 3.4C2a | 独立 reviewer 授权、禁止自审、身份分离 | 已完成 | `7618d28` |
 | 3.4C2b | reviewer 队列与最小复核材料包 | 已完成 | `ae2f4ac` |
 | 3.4D1 | 无数据库副作用的审计链密码协议与固定向量 | 已完成 | `8460581` |
-| 3.4D2a1 | 统一数据库连接权威、Alembic 环境与空库 0001 | 待开始 | — |
+| 3.4D2a1 | 统一数据库连接权威、Alembic 环境与空库 0001 | 已完成 | `735e36e` |
 | 3.4D2a2 | 冻结旧 schema 指纹、准入/拒绝与维护窗口 adoption | 待开始 | — |
 | 3.4D2a3 | 移除运行时建表、切换 Docker/脚本并建立启动 guard | 待开始 | — |
 | 3.4D2b | 审计链持久化、旧历史锚定与生产失败关闭 | 待开始 | — |
@@ -164,6 +164,14 @@ LangGraph 把 ORM URL 交给 psycopg3。迁移工具在统一连接解析之前�
 5. 在真实 PostgreSQL 空库执行 upgrade、downgrade、再次 upgrade 和 `alembic check`；另用
    metadata 差异测试保证新增模型没有遗漏 revision。D2a1 期间暂不删除任何 `create_all`，
    以免在旧库准入工具完成前切断回退路径。
+
+完成证据：ORM、Text2SQL、LangGraph 与 Alembic 已复用同一启动连接权威；手工评审的
+`20260831_0001` 与 17 表 `Base.metadata` 在随机临时 PostgreSQL 数据库执行 upgrade、
+`alembic check`、downgrade、re-upgrade 全生命周期无漂移。连接和迁移定向 51 项通过，
+后端确定性全量 `1033 passed / 3 skipped`，真实 PostgreSQL 用例显式执行 `1 passed`；
+Terra High 复核无 P0，发现的空白 URL fallback、无端口兼容和请求期目标漂移 3 个 P1 均已关闭。
+本检查点没有修改三处 `create_all()`、Docker 初始化 SQL 或既有数据库；旧库不得 stamp，继续由
+3.4D2a2 处理。
 
 #### 4.4.2 3.4D2a2：旧库指纹与 adoption
 

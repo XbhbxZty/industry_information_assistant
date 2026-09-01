@@ -28,6 +28,7 @@
 | 2026-08-31 | 3.4C2a 独立人工复核授权 | 已完成 | DEV-BC-20260831-001 ～ 004 | `7618d28` | 定向 21 项、相关 122 项、后端全量 951 passed / 2 skipped；前端构建与变更文件 lint 通过 |
 | 2026-08-31 | 3.4C2b reviewer 工作台 | 已完成 | DEV-BC-20260831-005 ～ 013 | `ae2f4ac` | 定向 42 项、后端全量 962 passed / 2 skipped；前端构建、变更文件 lint 与 diff check 通过 |
 | 2026-08-31 | 3.4D1 审计链密码协议 | 已完成 | DEV-BC-20260831-014 ～ 020 | `8460581` | 协议 49 项、相关定向 111 项、后端全量 1011 passed / 2 skipped；Terra High 复验无 P0/P1 |
+| 2026-09-01 | 3.4D2a1 连接权威与空库基线 | 已完成 | DEV-BC-20260901-001 ～ 005 | `735e36e` | 真实 PostgreSQL upgrade/check/downgrade/re-upgrade 通过；后端全量 1033 passed / 3 skipped；Terra High 复核无 P0，3 个 P1 已关闭 |
 
 > 前两阶段是从已提交代码、测试和阶段验证结果做的基线回填；3.4C2b 起均在问题处理当期登记。
 
@@ -243,16 +244,16 @@
 
 ### DEV-BC-20260831-014：声明了 Alembic 依赖但没有任何正式迁移权威
 
-- **阶段 / 状态**：3.4D 恢复审计 / 延期至 3.4D2a
+- **阶段 / 状态**：3.4D 恢复审计 / 处理中（3.4D2a1 已完成，3.4D2a2～a3 承接余项）
 - **发现方式**：主代理与 Terra High 子代理对仓库启动、依赖和数据库初始化路径做只读审计
 - **现象**：`requirements.txt` 声明 Alembic，但仓库没有 `alembic.ini`、`env.py` 或 revision；应用导入时执行 `Base.metadata.create_all()`，Docker 初始化 SQL 又维护一份业务 schema。
 - **影响**：给 ORM 增加完整性字段不会修改既有数据库；新装、Docker 和现有环境可能拥有不同表结构，回填或约束也没有可审计执行路径。
 - **根因**：当前项目仍处于启动时建表和手写初始化 SQL 并存的阶段，没有建立 schema 的唯一变更权威。
-- **解决办法**：D1 禁止触碰模型和生产表；3.4D2a 建立手工全量 Alembic 基线、旧库只读指纹准入、空库/既有库真实 PostgreSQL 测试，并移除运行时 `create_all()` 的业务建表职责。
-- **回归保护**：D2a 必须增加 empty upgrade、legacy preflight、drift rejection、`alembic check` 和异常回滚测试；SQLite 不能替代。
-- **验证结果**：仓库现状已由文件与启动代码确认；D1 保持零数据库副作用，迁移问题尚未修复。
-- **提交**：发现基线 `bbc6e0e`；延期项，无完成提交
-- **遗留风险**：正式 schema 仍由三处事实来源竞争；开始 D2b 生产接线前必须先完成 D2a。
+- **解决办法**：D2a1 已建立手工评审的 17 表 `0001`、import-safe Alembic 环境和真实 PostgreSQL 空库生命周期测试；D2a2 再冻结旧库指纹与 adoption 准入，D2a3 最后移除三处运行时 `create_all()` 并切换 Docker/启动 guard。
+- **回归保护**：D2a1 已有 metadata 表集合、单一 head、禁止迁移导入 `app_main`/调用 `create_all`、empty upgrade、`alembic check`、downgrade/re-upgrade；D2a2 继续增加 legacy preflight、drift rejection 和异常回滚测试。
+- **验证结果**：D2a1 在随机临时 PostgreSQL 数据库完成 upgrade/check/downgrade/re-upgrade，`0001` 与当前 `Base.metadata` 无漂移；运行时建表和旧 Docker DDL 按阶段边界仍未切除。
+- **提交**：发现基线 `bbc6e0e`；D2a1 缓解提交 `735e36e`
+- **遗留风险**：旧库尚不能安全 stamp/adopt，三处 `create_all()` 与 Docker 旧 DDL 要到 D2a3 才退出；D2a 完成前不得宣称唯一 schema 权威已在所有启动路径生效。
 
 ### DEV-BC-20260831-015：普通 SHA 可以随被篡改历史一起重新计算
 
@@ -331,6 +332,71 @@
 - **验证结果**：当前单一 Python 后端固定向量通过；跨语言一致性未宣称已验证。
 - **提交**：`8460581`
 - **遗留风险**：引入非 Python 签发/验签端时需升级到 JCS 等明确规范，并为旧 v1 保留只读验证器。
+
+### DEV-BC-20260901-001：同一进程中的数据库消费者可能连接不同目标
+
+- **阶段 / 状态**：3.4D2a1 / 已关闭
+- **发现方式**：主代理与 Terra High 子代理对 ORM、Text2SQL、LangGraph 和迁移入口做连接审计
+- **现象**：ORM 忽略显式 `DATABASE_URL` 并手拼 `POSTGRES_*`，Text2SQL 优先读取 `DATABASE_URL`，LangGraph 又把 ORM URL 直接交给 psycopg3；请求期重新读取环境还可能偏离启动时已冻结的 ORM 目标。
+- **影响**：应用读写、数据库探索、检查点和迁移可能落到不同数据库；看似成功的迁移不能证明正在服务的库已升级。
+- **根因**：连接配置在多个调用点重复解释，并混淆 SQLAlchemy psycopg2 URL 与 psycopg3 conninfo。
+- **解决办法**：新增 import-safe 单一解析器，统一输出等价的 SQLAlchemy psycopg2 URL 和 psycopg3 conninfo；ORM 在启动时解析一次，Text2SQL 复用同一 `DATABASE_URL` 快照，LangGraph 使用对应 `PSYCOPG_CONNINFO`，Alembic 复用同一解析器。
+- **回归保护**：`test_database_url_takes_priority_and_normalizes_both_driver_forms`、`test_component_values_are_percent_encoded_for_both_consumers` 及数据库探索器权限回归。
+- **验证结果**：连接定向测试、真实 PostgreSQL 迁移测试与后端全量通过；对抗复核确认请求期环境漂移路径已关闭。
+- **提交**：`735e36e`
+- **遗留风险**：已经导入并创建的 engine 不支持进程内热切换数据库；配置改变必须重启进程，这是有意的单一启动快照语义。
+
+### DEV-BC-20260901-002：空白 DATABASE_URL 会静默回退到另一组连接变量
+
+- **阶段 / 状态**：3.4D2a1 / 已关闭
+- **发现方式**：Terra High 子代理对抗复核并以空白环境变量复现
+- **现象**：首版解析器在 `DATABASE_URL` 存在但值为空白时，静默改用 `POSTGRES_*`，可以成功生成一个指向其他主机的 URL。
+- **影响**：显式配置错误不报错，迁移或服务可能误连到操作者没有选择的数据库。
+- **根因**：把“变量缺失”和“变量存在但非法”合并成同一 fallback 分支。
+- **解决办法**：只有键完全缺失时才允许组件变量 fallback；只要 `DATABASE_URL` 存在就必须是非空合法 PostgreSQL URL，否则失败关闭。
+- **回归保护**：`test_present_but_blank_database_url_never_falls_back_to_components`，并参数化覆盖空字符串与纯空白。
+- **验证结果**：空白显式配置稳定抛出 `DatabaseUrlConfigurationError`，不会生成 fallback URL；全量回归通过。
+- **提交**：`735e36e`
+- **遗留风险**：无已知遗留。
+
+### DEV-BC-20260901-003：合法的无端口 PostgreSQL URL 被连接权威拒绝
+
+- **阶段 / 状态**：3.4D2a1 / 已关闭
+- **发现方式**：Terra High 子代理兼容性审计与最小 URL 复现
+- **现象**：首版要求显式 URL 必须包含端口，`postgresql://user:password@host/database` 虽符合 PostgreSQL 常规默认端口语义却被拒绝。
+- **影响**：现有标准部署配置升级后可能在启动阶段无故失败，形成兼容性退化。
+- **根因**：输入规范化把“未指定端口”错误地当成“非法端口”，没有应用 PostgreSQL 默认值 5432。
+- **解决办法**：未指定端口时规范化为 5432；端口 0、超界和语法错误仍失败关闭。
+- **回归保护**：`test_explicit_url_without_port_uses_postgresql_default` 及非法端口参数化测试。
+- **验证结果**：无端口 URL 同时生成带 5432 的 psycopg2/psycopg3 形式；非法端口仍全部拒绝。
+- **提交**：`735e36e`
+- **遗留风险**：无已知遗留。
+
+### DEV-BC-20260901-004：迁移静态测试会把注释误判成启动入口导入
+
+- **阶段 / 状态**：3.4D2a1 / 已关闭
+- **发现方式**：首次运行新增迁移契约测试
+- **现象**：测试用字符串包含关系寻找 `app_main`，因此 `env.py` 中解释“不得导入 app_main”的注释反而触发失败；另一个 import-safe 子进程因未加入 `backend/app` 路径而报模块不存在。
+- **影响**：测试失败反映的是装置缺陷而不是产品契约，可能诱导开发者删除有价值的安全说明，且无法真正证明导入边界。
+- **根因**：静态断言没有解析 Python 语法树，子进程也没有复现项目实际模块搜索路径。
+- **解决办法**：使用 AST 只检查真实 import 与 `create_all` 调用节点；子进程显式加入应用模块路径后验证只导入 URL resolver 不会构造 engine。
+- **回归保护**：`test_migration_runtime_never_imports_fastapi_startup_or_calls_create_all`、`test_importing_url_resolver_does_not_construct_the_application_engine`。
+- **验证结果**：修正后静态契约测试通过，并保留 `env.py` 的边界说明注释。
+- **提交**：`735e36e`
+- **遗留风险**：AST 测试只约束直接导入/调用；真实 PostgreSQL 生命周期和 `alembic check` 继续作为运行时互补证据。
+
+### DEV-BC-20260901-005：pytest 把需外部凭据的异步演示脚本当成确定性测试
+
+- **阶段 / 状态**：3.4D2a1 / 已关闭
+- **发现方式**：从 `backend/` 首次执行无路径参数的全量 `pytest -q`
+- **现象**：pytest 递归收集 `app/scripts/test_deep_research_v2.py` 中两个供 `asyncio.run()` 手工执行的异步函数，并因未使用 async 测试插件报 2 个失败；其余 1030 项当时已通过。
+- **影响**：默认全量命令无法作为稳定检查点，且容易把外部 API 演示脚本的装置问题误报为业务回归。
+- **根因**：仓库没有冻结确定性测试根，而手工脚本文件名和函数名符合 pytest 默认发现模式。
+- **解决办法**：新增 `backend/pytest.ini`，把确定性测试根固定为 `backend/tests`，并注册真实 PostgreSQL 集成标记；手工脚本仍按其文档通过 `python -m scripts.test_deep_research_v2` 显式执行。
+- **回归保护**：从 `backend/` 直接执行 `python -m pytest -q` 必须只收集确定性测试树。
+- **验证结果**：默认全量命令最终 `1033 passed / 3 skipped`；真实 PostgreSQL 用例另行显式执行 `1 passed`。
+- **提交**：`735e36e`
+- **遗留风险**：手工外部 API 脚本仍不是 CI 测试；若要自动化，需另行提供测试凭据、async 插件和隔离的网络验收环境。
 
 ## 新条目模板
 
