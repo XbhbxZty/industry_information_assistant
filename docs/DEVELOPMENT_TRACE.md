@@ -27,6 +27,7 @@
 | 2026-08-30 | 3.4C1 档案审计连续性 | 已完成 | DEV-BC-20260830-001 ～ 003 | `62ee937` | 档案审计、事务回滚与 HTTP 契约回归通过 |
 | 2026-08-31 | 3.4C2a 独立人工复核授权 | 已完成 | DEV-BC-20260831-001 ～ 004 | `7618d28` | 定向 21 项、相关 122 项、后端全量 951 passed / 2 skipped；前端构建与变更文件 lint 通过 |
 | 2026-08-31 | 3.4C2b reviewer 工作台 | 已完成 | DEV-BC-20260831-005 ～ 013 | `ae2f4ac` | 定向 42 项、后端全量 962 passed / 2 skipped；前端构建、变更文件 lint 与 diff check 通过 |
+| 2026-08-31 | 3.4D1 审计链密码协议 | 已完成 | DEV-BC-20260831-014 ～ 020 | `8460581` | 协议 49 项、相关定向 111 项、后端全量 1011 passed / 2 skipped；Terra High 复验无 P0/P1 |
 
 > 前两阶段是从已提交代码、测试和阶段验证结果做的基线回填；3.4C2b 起均在问题处理当期登记。
 
@@ -239,6 +240,97 @@
 - **验证结果**：当前非并发授权路径通过；原子并发与 owner 密码学绑定尚未实施。
 - **提交**：延期项，无完成提交；发现基线为 `ae2f4ac`
 - **遗留风险**：即本条全部风险；由 3.4D 承接，不得在 3.4C2b 完成声明中省略。
+
+### DEV-BC-20260831-014：声明了 Alembic 依赖但没有任何正式迁移权威
+
+- **阶段 / 状态**：3.4D 恢复审计 / 延期至 3.4D2a
+- **发现方式**：主代理与 Terra High 子代理对仓库启动、依赖和数据库初始化路径做只读审计
+- **现象**：`requirements.txt` 声明 Alembic，但仓库没有 `alembic.ini`、`env.py` 或 revision；应用导入时执行 `Base.metadata.create_all()`，Docker 初始化 SQL 又维护一份业务 schema。
+- **影响**：给 ORM 增加完整性字段不会修改既有数据库；新装、Docker 和现有环境可能拥有不同表结构，回填或约束也没有可审计执行路径。
+- **根因**：当前项目仍处于启动时建表和手写初始化 SQL 并存的阶段，没有建立 schema 的唯一变更权威。
+- **解决办法**：D1 禁止触碰模型和生产表；3.4D2a 建立手工全量 Alembic 基线、旧库只读指纹准入、空库/既有库真实 PostgreSQL 测试，并移除运行时 `create_all()` 的业务建表职责。
+- **回归保护**：D2a 必须增加 empty upgrade、legacy preflight、drift rejection、`alembic check` 和异常回滚测试；SQLite 不能替代。
+- **验证结果**：仓库现状已由文件与启动代码确认；D1 保持零数据库副作用，迁移问题尚未修复。
+- **提交**：发现基线 `bbc6e0e`；延期项，无完成提交
+- **遗留风险**：正式 schema 仍由三处事实来源竞争；开始 D2b 生产接线前必须先完成 D2a。
+
+### DEV-BC-20260831-015：普通 SHA 可以随被篡改历史一起重新计算
+
+- **阶段 / 状态**：3.4D1 / 已缓解
+- **发现方式**：现有 3.4C1 审计实现与篡改测试复核
+- **现象**：当前 `content_sha256` 和快照连续性不含秘密；拥有数据库写权限者可以改写领域快照、重算公开 SHA，并同步修改后继 before/current 行。
+- **影响**：3.4C1 可以发现意外损坏和未完整重算的篡改，但不能证明记录由持有独立审计密钥的应用签发。
+- **根因**：内容摘要用于一致性校验，不具备消息认证能力；模型尚无 key id、前序 MAC 或审计 MAC。
+- **解决办法**：D1 冻结版本化 HMAC 记录、完整快照摘要、显式 keyring、legacy anchor 和完整观测验证协议；D2b 再将其迁移和接入所有生产读写边界。
+- **回归保护**：`test_mutating_any_persisted_audit_field_fails_closed`、`test_native_chain_crosses_key_rotation_without_resigning_history`、`test_observed_chain_binds_actual_snapshots_domain_semantics_and_current_row`。
+- **验证结果**：纯协议 49 项测试和全量回归通过；协议可以拒绝无 key 的重算，但生产表尚未使用该协议。
+- **提交**：`8460581`
+- **遗留风险**：状态为“已缓解”而非“已关闭”；在 3.4D2b 完成前，线上档案仍只有 3.4C1 结构校验。
+
+### DEV-BC-20260831-016：检查点 key id 只能识别当前 secret，轮换会拒绝全部旧记录
+
+- **阶段 / 状态**：3.4D 恢复审计 / 延期至 3.4D3
+- **发现方式**：主代理与 Terra High 子代理审计 `checkpoint_integrity.py`
+- **现象**：检查点 key id 从当前环境 secret 派生，验签也只重算当前 key id；切换 secret 后没有按记录 key id 查找历史验证 key 的路径。
+- **影响**：正常密钥轮换会让所有旧检查点不可恢复；若为兼容而回退 active/JWT key，又会形成降级验证风险。
+- **根因**：现有检查点封签是单 key 配置，不是版本化 verifier keyring。
+- **解决办法**：D1 的档案审计 keyring 明确区分 active 签发与按记录 key id 验证，并禁止 JWT fallback；3.4D3 将同类机制迁移到检查点并增加退役预检。
+- **回归保护**：档案协议已有 `test_unknown_historical_key_never_falls_back_to_jwt_or_active_key`；检查点的旧/新 key 集成测试由 D3 新增。
+- **验证结果**：档案 D1 行为通过；检查点当前实现仍维持原状，因此延期项尚未关闭。
+- **提交**：发现基线 `bbc6e0e`；延期项，无完成提交
+- **遗留风险**：D3 前不能在生产环境无迁移地替换检查点 HMAC secret。
+
+### DEV-BC-20260831-017：数据库内 HMAC 链不能单独证明整个合法后缀曾经存在
+
+- **阶段 / 状态**：3.4D1 / 已缓解
+- **发现方式**：主代理对“拒绝截断”验收语句做密码学反证
+- **现象**：若攻击者同时把尾部审计、当前档案和数据库内预期 head 回滚到同一个旧的合法版本，剩余 HMAC 仍然有效，验证器无法仅从当前数据库证明更新版本曾经存在。
+- **影响**：把 HMAC 前序链表述成对高权限离线整库回滚也安全，会制造超过实际能力的审计承诺。
+- **根因**：前序链证明当前所见记录没有被中间改写；没有数据库外单调状态时，旧的合法前缀与“从未产生后缀”不可区分。
+- **解决办法**：D1 强制调用方提供 expected head，检测 head 未同步回滚时的截断；D2b 增加 append-only 数据库约束并修正文档威胁模型。抵抗高权限离线回滚需后续外部时间戳、透明日志或 KMS 单调锚点。
+- **回归保护**：`test_chain_rejects_truncation_reorder_insertion_and_cross_profile_copy` 验证可信 head 下的截断拒绝；代码和计划均显式写出整体回滚边界。
+- **验证结果**：普通缺记录、重排和复制测试通过；高权限同步回滚未被错误标记为已解决。
+- **提交**：协议缓解 `8460581`；边界文档由本阶段收尾提交记录
+- **遗留风险**：3.4D 不包含数据库外单调锚定；有该合规威胁时必须另立专项。
+
+### DEV-BC-20260831-018：只验 MAC 的低层函数会接受“归档动作 + 生效快照”
+
+- **阶段 / 状态**：3.4D1 / 已关闭
+- **发现方式**：Terra High 子代理对抗复核并运行最小反例
+- **现象**：首版 `verify_audit_chain()` 只检查摘要和 MAC 链；一条由合法 key 签发、`action=archived` 但实际 after snapshot 仍为 `status=active` 的记录可以通过低层链验证。
+- **影响**：若 D2 误把低层密码信封校验直接当作生产完整性校验，会比 3.4C1 现有领域约束更弱。
+- **根因**：MAC 只认证调用方给出的摘要和元数据，低层函数没有接收实际 before/after/current 快照，也无法运行领域重建。
+- **解决办法**：新增唯一持久化候选入口 `verify_observed_audit_chain()`，强制实际快照、当前行和领域 validator，逐条绑定 profile/revision/content/action/status；低层函数 docstring 明确不得单独用于持久化边界。
+- **回归保护**：`test_crypto_only_chain_cannot_replace_observed_action_and_status_validation` 保留低层反例，并证明完整观测入口拒绝它。
+- **验证结果**：子代理复验确认原反例在完整观测入口失败，未发现新增 P0/P1；49 项 D1 测试通过。
+- **提交**：`8460581`
+- **遗留风险**：D2b 必须接完整观测入口并继续复用 3.4C1 的严格领域重建器和 actor/current-row 关系校验。
+
+### DEV-BC-20260831-019：legacy anchor 验签不等于复验它所声明的旧历史
+
+- **阶段 / 状态**：3.4D1 / 已关闭
+- **发现方式**：Terra High 子代理对抗复核
+- **现象**：首版主链入口会验证 anchor MAC 和首条后缀链接，但不强制调用方提供实际 legacy rows 和 terminal snapshot；只调用该入口可能遗漏迁移后旧数据漂移。
+- **影响**：锚点本身有效会被误解成数据库中的旧历史仍与锚定时完全相同。
+- **根因**：密码锚点记录验证与被锚定对象的观测比对被设计为两个可选调用，存在漏调旁路。
+- **解决办法**：完整观测入口在 legacy 分支强制同时接收实际旧序列和终态快照，内部先执行 anchor observation，再验证领域语义、后继链和当前行；缺任一观测立即失败。
+- **回归保护**：`test_legacy_anchor_supports_anchor_only_state_and_new_key_continuation`、`test_legacy_anchor_observation_rejects_changed_history_and_terminal_snapshot` 及缺失观测断言。
+- **验证结果**：子代理复验确认 legacy 分支没有可选漏调路径，未发现新增 P0/P1。
+- **提交**：`8460581`
+- **遗留风险**：D2b 回填仍需在单事务中先运行现有旧结构连续性校验；D1 不会自行读取数据库。
+
+### DEV-BC-20260831-020：v1 canonical JSON 的浮点格式是 Python 运行时协议
+
+- **阶段 / 状态**：3.4D1 / 已缓解
+- **发现方式**：Terra High 子代理跨实现 canonicalization 审计
+- **现象**：标准库 `json.dumps` 对有限 float 有确定的 Python 输出，但它不是 RFC 8785；例如 `-0.0`、`1.0` 和指数格式需要非 Python 实现逐字节仿真。
+- **影响**：未来若由 JavaScript、Java 或数据库函数直接签发同一 v1 payload，数值文本差异可能造成同一业务数据验签失败。
+- **根因**：现有企业档案允许数值字段，不能简单禁用 float；本阶段也没有引入跨语言 JCS 依赖。
+- **解决办法**：v1 明确限定为 Python 签发/验签协议，并为负零、小数和指数增加固定字节向量；任何非 Python 消费端必须先定义共同实现的新版本，不能悄悄复用 v1 名称。
+- **回归保护**：`test_v1_float_rendering_is_explicitly_locked_for_python_consumers` 和 Unicode/null 固定向量。
+- **验证结果**：当前单一 Python 后端固定向量通过；跨语言一致性未宣称已验证。
+- **提交**：`8460581`
+- **遗留风险**：引入非 Python 签发/验签端时需升级到 JCS 等明确规范，并为旧 v1 保留只读验证器。
 
 ## 新条目模板
 
