@@ -1,0 +1,41 @@
+{
+  "captured_from": "PostgreSQL uuid-ossp extension installed by Docker init",
+  "catalog": {
+    "column_privileges": [],
+    "columns": [],
+    "constraints": [],
+    "default_privileges": [],
+    "dependency_edges": [],
+    "event_triggers": [],
+    "extensions": [
+      {
+        "extension_name": "uuid-ossp",
+        "extension_version": "1.1",
+        "owner_class": "database_owner",
+        "schema_name": "public"
+      }
+    ],
+    "format": "postgresql-legacy-schema-catalog/v1",
+    "indexes": [],
+    "policies": [],
+    "relation_privileges": [],
+    "relations": [],
+    "routine_privileges": [],
+    "routines": [],
+    "rules": [],
+    "schema_privileges": [],
+    "sequences": [],
+    "triggers": [],
+    "types": []
+  },
+  "catalog_format": "postgresql-legacy-schema-catalog/v1",
+  "catalog_sha256": "fc6d065a3e0b08b9685340fbb567a84d258cbf39c339f4a0b69b7a527c24495f",
+  "classification": "unmanaged_exact",
+  "extension_names": [
+    "uuid-ossp"
+  ],
+  "format": "postgresql-legacy-schema-manifest/v1",
+  "manifest_id": "extension_uuid_ossp_v1",
+  "relation_names": [],
+  "routine_identities": []
+}

@@ -1,0 +1,91 @@
+{
+  "captured_from": "Alembic 1.18.5 version table at 20260831_0001",
+  "catalog": {
+    "column_privileges": [],
+    "columns": [
+      {
+        "collation_name": "default",
+        "collation_schema": "pg_catalog",
+        "column_name": "version_num",
+        "default_sql": null,
+        "generated_kind": "",
+        "identity_kind": "",
+        "not_null": true,
+        "ordinal_position": 1,
+        "relation_name": "alembic_version",
+        "schema_name": "public",
+        "type_sql": "character varying(32)"
+      }
+    ],
+    "constraints": [
+      {
+        "constraint_name": "alembic_version_pkc",
+        "constraint_type": "p",
+        "deferrable": false,
+        "definition": "PRIMARY KEY (version_num)",
+        "initially_deferred": false,
+        "local_column_numbers": [
+          1
+        ],
+        "relation_name": "alembic_version",
+        "schema_name": "public",
+        "target_column_numbers": null,
+        "target_relation": null,
+        "target_schema": null,
+        "validated": true
+      }
+    ],
+    "default_privileges": [],
+    "dependency_edges": [],
+    "event_triggers": [],
+    "extensions": [],
+    "format": "postgresql-legacy-schema-catalog/v1",
+    "indexes": [
+      {
+        "access_method": "btree",
+        "definition": "CREATE UNIQUE INDEX alembic_version_pkc ON public.alembic_version USING btree (version_num)",
+        "index_name": "alembic_version_pkc",
+        "is_exclusion": false,
+        "is_live": true,
+        "is_primary": true,
+        "is_ready": true,
+        "is_unique": true,
+        "is_valid": true,
+        "owner_class": "database_owner",
+        "relation_name": "alembic_version",
+        "schema_name": "public"
+      }
+    ],
+    "policies": [],
+    "relation_privileges": [],
+    "relations": [
+      {
+        "force_row_security": false,
+        "is_partition": false,
+        "owner_class": "database_owner",
+        "persistence": "p",
+        "relation_kind": "r",
+        "relation_name": "alembic_version",
+        "row_security": false,
+        "schema_name": "public"
+      }
+    ],
+    "routine_privileges": [],
+    "routines": [],
+    "rules": [],
+    "schema_privileges": [],
+    "sequences": [],
+    "triggers": [],
+    "types": []
+  },
+  "catalog_format": "postgresql-legacy-schema-catalog/v1",
+  "catalog_sha256": "03bc2a00e9b18b92255e52f4cfa3f1c9a780ff7ad679707445f6706508c5cafa",
+  "classification": "version_metadata",
+  "extension_names": [],
+  "format": "postgresql-legacy-schema-manifest/v1",
+  "manifest_id": "alembic_version_v1",
+  "relation_names": [
+    "alembic_version"
+  ],
+  "routine_identities": []
+}
