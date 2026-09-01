@@ -1,7 +1,7 @@
 # 管理员企业档案专项计划
 
 > **当前状态**：3.0～3.3、3.4A、3.4B、3.4C1、3.4C2a、3.4C2b 已完成；
-> 3.4D1 已完成，下一可开发单元为 3.4D2a。工程 Bad Case 见
+> 3.4D1 已完成，3.4D2a 已完成恢复审计，下一可开发单元为 3.4D2a1。工程 Bad Case 见
 > [`DEVELOPMENT_TRACE.md`](DEVELOPMENT_TRACE.md)。
 
 ## 一、目标与边界
@@ -27,7 +27,9 @@
 | 3.4C2a | 独立 reviewer 授权、禁止自审、身份分离 | 已完成 | `7618d28` |
 | 3.4C2b | reviewer 队列与最小复核材料包 | 已完成 | `ae2f4ac` |
 | 3.4D1 | 无数据库副作用的审计链密码协议与固定向量 | 已完成 | `8460581` |
-| 3.4D2a | Alembic 迁移权威、全量基线与旧库准入 | 待开始 | — |
+| 3.4D2a1 | 统一数据库连接权威、Alembic 环境与空库 0001 | 待开始 | — |
+| 3.4D2a2 | 冻结旧 schema 指纹、准入/拒绝与维护窗口 adoption | 待开始 | — |
+| 3.4D2a3 | 移除运行时建表、切换 Docker/脚本并建立启动 guard | 待开始 | — |
 | 3.4D2b | 审计链持久化、旧历史锚定与生产失败关闭 | 待开始 | — |
 | 3.4D3 | 审计与检查点密钥轮换、保留和退役保护 | 待开始 | — |
 | 3.4D4a | 检查点 owner/status/version 可信绑定与 claim 模型 | 待开始 | — |
@@ -138,17 +140,56 @@ HMAC 的信任根是应用持有且数据库攻击者拿不到的独立密钥。
 
 ### 4.4 3.4D2a：迁移权威与旧库准入
 
-1. 建立手工评审的 Alembic 全量 `0001` 基线，负责新装的完整业务 schema；不能从当前
-   生产库自动生成，也不能在 migration 内调用运行时 `Base.metadata.create_all()`。
-2. 应用启动由 `alembic upgrade head` 管理 schema，移除导入时 `create_all()`；Docker SQL
-   不再创建业务表，示例数据与扩展初始化拆成显式步骤。
-3. 既有 PostgreSQL 库不得盲目 `stamp`。先只读比对表、列、类型、约束和索引的受支持
-   legacy 指纹；完全一致并备份后才允许 stamp 基线并升级，任何漂移都失败关闭并输出 diff。
-4. 增加真实 PostgreSQL 的空库 upgrade、受支持旧库准入、漂移拒绝、downgrade/恢复演练和
-   `alembic check`。SQLite 单测不能代替这组验证。
+恢复审计确认当前存在两种不等价历史：直接 `Base.metadata.create_all()` 产生 17 张 ORM 表；
+Docker 初始化先产生 6 张应用表、7 张演示表、server defaults、TIMESTAMPTZ、`idx_*` 索引和
+更新时间 trigger，应用启动后再由 `create_all()` 补齐其余 ORM 表。`IF NOT EXISTS` 会保留
+先创建的旧定义，因此两者不能共享一个“看起来差不多”的 stamp。
 
-验收：新装和受支持旧库走同一 head；ORM、Alembic 与 Docker 不再三处争夺 schema 权威；
-异常升级不留下半迁移状态。
+此外，数据库 URL 也有三种解释：ORM 手拼 URL、数据库探索器优先读取 `DATABASE_URL`、
+LangGraph 把 ORM URL 交给 psycopg3。迁移工具在统一连接解析之前上线，可能迁移与应用不同
+的数据库。因此 D2a 再拆成以下三个小检查点。
+
+#### 4.4.1 3.4D2a1：连接权威与空库基线
+
+1. 建立唯一连接解析器：显式 `DATABASE_URL` 优先，否则安全组合 `POSTGRES_*`；用户名、
+   密码必须 URL-escape，并分别输出明确的 SQLAlchemy psycopg2 URL 与 psycopg3 conninfo。
+   ORM、Alembic、数据库探索器、LangGraph 和维护脚本必须复用它。
+2. 建立 import-safe Alembic 环境，只导入 `models` 以注册同一个 `Base.metadata`，绝不导入
+   `app_main`；启用 type/default 差异检查。
+3. 手工评审的 `0001` 明确创建当前 17 张 ORM 表及全部 PostgreSQL UUID、JSON/JSONB、
+   TEXT[]、FK、unique、check 和 index。目标沿用 ORM 的客户端 UUID/时间默认值，不把旧
+   Docker 的 `uuid-ossp`、server defaults 或 trigger 偷渡进权威基线。
+4. Docker-only 的 7 张餐饮/股票/法律/运输演示表不属于应用 ORM schema。既有数据不删除；
+   新环境若仍需要它们，后续改为显式可选 seed，不再随 PostgreSQL volume 自动创建。
+5. 在真实 PostgreSQL 空库执行 upgrade、downgrade、再次 upgrade 和 `alembic check`；另用
+   metadata 差异测试保证新增模型没有遗漏 revision。D2a1 期间暂不删除任何 `create_all`，
+   以免在旧库准入工具完成前切断回退路径。
+
+#### 4.4.2 3.4D2a2：旧库指纹与 adoption
+
+1. 从隔离的真实 PostgreSQL 捕获并冻结受支持 legacy 指纹，至少覆盖直接 create-all 和当前
+   主快速开始可能产生的 Docker+create-all；指纹包含列、类型、时区、nullable/default、PK、
+   FK、unique、check、index 和受管理 trigger，不能随未来 ORM 自动漂移。
+2. 只读 preflight 显示逐项 diff。已版本化库、缺表、重复/额外约束、未知业务表或不受支持
+   变体全部拒绝；7 张已知演示表和 LangGraph 自有表按明确的 unmanaged allowlist 处理。
+3. 完全一致且无需修复的变体可在备份、维护窗口和指纹确认后，通过同一连接事务 stamp；
+   TIMESTAMPTZ/default/trigger 等语义不同的变体必须走显式兼容 revision 或拒绝重建，不能
+   在 adoption 脚本内静默 ALTER。
+4. 真实 PostgreSQL 覆盖合法准入、单字段漂移、错误目标库、竞态/回滚和幂等检查。
+
+#### 4.4.3 3.4D2a3：切换唯一 schema 权威
+
+1. 最后移除 `app_main.py`、`init_industry_data.py`、`seed_industry_data.py` 三个 `create_all`；
+   seed/init 只允许在数据库已处于 Alembic head 后运行。
+2. 应用启动只做只读 head guard，生产/本地启动命令先显式 `alembic upgrade head`；不在
+   FastAPI import 或普通请求中自动迁移。
+3. Docker 不再挂载旧业务 DDL；演示 DDL/DML 移到不自动执行的显式 seed 路径。已有 volume
+   绝不自动删除或重建，preflight 拒绝时由操作者选择备份迁移或新建数据库。
+4. 更新快速开始、Dockerfile/脚本和运维恢复说明，并验证未迁移、落后 revision、迁移失败、
+   正常 head 四种启动行为。
+
+D2a 总验收：新装和受支持旧库走同一 head；ORM、Alembic 与 Docker 不再三处争夺 schema
+权威；任何异常都不删除既有数据、不盲 stamp，也不留下半迁移状态。
 
 ### 4.5 3.4D2b：生产审计链接线与历史锚定
 
