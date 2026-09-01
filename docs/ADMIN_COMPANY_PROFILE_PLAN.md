@@ -1,7 +1,8 @@
 # 管理员企业档案专项计划
 
 > **当前状态**：3.0～3.3、3.4A、3.4B、3.4C1、3.4C2a、3.4C2b 已完成；
-> 下一阶段为 3.4D。工程 Bad Case 见 [`DEVELOPMENT_TRACE.md`](DEVELOPMENT_TRACE.md)。
+> 3.4D 已完成只读恢复审计，下一可开发单元为 3.4D1。工程 Bad Case 见
+> [`DEVELOPMENT_TRACE.md`](DEVELOPMENT_TRACE.md)。
 
 ## 一、目标与边界
 
@@ -25,7 +26,12 @@
 | 3.4C1 | 档案审计结构连续性与失败关闭 | 已完成 | `62ee937` |
 | 3.4C2a | 独立 reviewer 授权、禁止自审、身份分离 | 已完成 | `7618d28` |
 | 3.4C2b | reviewer 队列与最小复核材料包 | 已完成 | `ae2f4ac` |
-| 3.4D | 密码学审计链、正式迁移、密钥轮换与并发裁决 | 待开始 | — |
+| 3.4D1 | 无数据库副作用的审计链密码协议与固定向量 | 待开始 | — |
+| 3.4D2a | Alembic 迁移权威、全量基线与旧库准入 | 待开始 | — |
+| 3.4D2b | 审计链持久化、旧历史锚定与生产失败关闭 | 待开始 | — |
+| 3.4D3 | 审计与检查点密钥轮换、保留和退役保护 | 待开始 | — |
+| 3.4D4a | 检查点 owner/status/version 可信绑定与 claim 模型 | 待开始 | — |
+| 3.4D4b | reviewer 原子领取、幂等裁决与断流恢复 | 待开始 | — |
 | 3.5 | PostgreSQL、独立进程和浏览器端到端封板 | 待开始 | — |
 
 ## 三、3.4C2b 契约
@@ -72,12 +78,136 @@
 并发 reviewer 的原子抢占与密码学审计决定属于 3.4D；3.4C2b 不得把当前非原子提交
 错误表述为已经解决。
 
-## 四、后续阶段摘要
+## 四、3.4D 密码学与原子裁决计划
 
-### 3.4D
+### 4.1 为什么必须拆分
 
-为档案审计记录建立版本化 HMAC 前序链与 key id；提供正式数据库迁移、历史记录迁移
-证明、密钥轮换和 PostgreSQL 并发验证；对复核提交建立原子状态转换，防止双重决定。
+3.4C1 的 `content_sha256` 只能发现普通损坏，拥有数据库写权限者可以修改快照并重算全部
+摘要；它不是密码学审计链。另一方面，仓库虽声明 Alembic 依赖，却没有正式 revision，
+应用仍在导入时执行 `create_all()`，Docker 初始化 SQL 又维护一份独立业务 schema。
+`create_all()` 不会为既有库补列、约束或回填，因此不能把新完整性字段直接加进 ORM 后
+宣称迁移完成。
+
+reviewer 提交也不是一次短事务：资格读取、LangGraph 恢复、SSE 输出和最终状态写入跨越
+不同连接。数据库行锁不能持有整个流生命周期，必须另有 claim/lease/CAS 协议。因此
+3.4D 按“先冻结协议，再建立迁移权威，再接入生产，最后解决并发工作流”的依赖顺序推进；
+每个子阶段单独提交、验证和复核，可以独立回退。
+
+### 4.2 威胁模型与能力边界
+
+本阶段要防御：数据库内容被离线改写、审计记录被插入/删除/重排/跨档案复制、旧密钥轮换
+后历史无法验签、owner/status/version 被单独改写，以及两个 reviewer 对同一 paused 任务产生
+双重决定。
+
+HMAC 的信任根是应用持有且数据库攻击者拿不到的独立密钥。它不能证明迁移前的历史从未被
+篡改，也不能抵御同时取得数据库写权限和签名密钥的攻击者；旧记录只能被表述为“在迁移
+时刻经过结构校验并锚定”。外部时间戳、KMS 权限隔离、不可否认签名和透明日志不在 3.4D
+最小闭环内，后续如有合规要求再单列专项。
+
+### 4.3 3.4D1：纯密码协议与固定向量
+
+本阶段只新增不依赖 SQLAlchemy、数据库或 Web 路由的密码学原语及单元测试，不改变生产
+读写行为，也不得宣称生产审计链已启用。
+
+1. 固定 `admin-company-profile-audit-hmac/v1`、`hmac-sha256`、严格 canonical JSON、
+   UTC 微秒时间、完整审计快照摘要和允许的动作集合。
+2. 每条 MAC 必须覆盖 format、algorithm、key id、profile/audit id、revision、动作、actor、
+   修改原因、时间、业务摘要、前后完整快照摘要、前序 MAC 和链起点。
+3. 建立显式 key-id 到 key-material 的独立 keyring：active key 只负责签发，历史记录按自身
+   key id 验证；不得回退 JWT 密钥，不得用 active key 猜测未知记录。
+4. 新档案从 genesis 开链；旧档案定义独立 legacy anchor 契约，锚定整个旧序列摘要、迁移
+   截止 revision、终态快照、迁移批次和时间。D1 只定义和验证该格式，不读取或回填数据库。
+5. 链验证必须拒绝字段篡改、未知版本/算法/key、断链、截断、插入、重排、跨档案复制、
+   revision 跳跃、非法归档后续写入和错误 legacy anchor 连接。
+6. 使用稳定固定向量证明 Unicode、null、键顺序和换 key 后仍可复验；所有 MAC 比较使用
+   constant-time compare。
+
+验收：纯单测覆盖上述正常与对抗矩阵；原有企业档案、检查点和 reviewer 定向回归不退化；
+主代理逐字段复核 canonical payload 和失败关闭分支；实际 Bad Case 写入台账。
+
+### 4.4 3.4D2a：迁移权威与旧库准入
+
+1. 建立手工评审的 Alembic 全量 `0001` 基线，负责新装的完整业务 schema；不能从当前
+   生产库自动生成，也不能在 migration 内调用运行时 `Base.metadata.create_all()`。
+2. 应用启动由 `alembic upgrade head` 管理 schema，移除导入时 `create_all()`；Docker SQL
+   不再创建业务表，示例数据与扩展初始化拆成显式步骤。
+3. 既有 PostgreSQL 库不得盲目 `stamp`。先只读比对表、列、类型、约束和索引的受支持
+   legacy 指纹；完全一致并备份后才允许 stamp 基线并升级，任何漂移都失败关闭并输出 diff。
+4. 增加真实 PostgreSQL 的空库 upgrade、受支持旧库准入、漂移拒绝、downgrade/恢复演练和
+   `alembic check`。SQLite 单测不能代替这组验证。
+
+验收：新装和受支持旧库走同一 head；ORM、Alembic 与 Docker 不再三处争夺 schema 权威；
+异常升级不留下半迁移状态。
+
+### 4.5 3.4D2b：生产审计链接线与历史锚定
+
+1. migration 新增完整性版本、算法、key id、前序 MAC、当前 MAC、前后完整快照摘要，及
+   每个 legacy profile 唯一的迁移锚点；模型字段只在 revision 可执行后同步。
+2. 回填先在事务内复验旧结构连续性，再生成 legacy anchor；损坏历史隔离并阻断升级，
+   绝不自动替其签名。新建档案直接生成 genesis。
+3. 写路径在一个事务中执行“验旧链、更新当前行、追加审计、签名、复验”；密钥不可用、
+   key 未知、快照/MAC/前序/anchor 不符全部回滚。
+4. 研究快照、管理员详情/历史、修改和归档统一走密码学验证。完整性冲突返回 409，签名
+   服务或配置不可用返回 503，且不返回受损档案正文。
+5. PostgreSQL 追加只读/不可变约束或 trigger，应用权限不得更新或删除既有审计行；运维
+   修复必须经过显式、留痕的离线流程。
+
+验收：证明“重算普通 SHA”仍不能伪造；新链、锚定旧链、事务回滚、接口 409/503 和真实
+PostgreSQL migration 全部通过。此时才能宣称生产档案审计链启用。
+
+### 4.6 3.4D3：密钥轮换与退役
+
+1. 先部署包含旧/新验证 key 的 keyring，再切换 active key；新记录使用新 key，前序 MAC
+   可以跨 key 边界连接，历史记录不重签、不覆写。
+2. 轮换前统计每个 key id 的历史引用；仍被保留审计或检查点引用的 key 不得删除。未知、
+   缺失或被错误退役的 key 必须失败关闭。
+3. 将现有检查点“只认当前 secret”的机制升级为显式历史 keyring；为 v1 记录定义兼容或
+   锚定迁移，不借轮换伪造历史认证能力。
+4. 记录 active key 切换、配置预检和恢复手册；日志只记录 key id，绝不记录 key material。
+
+验收：旧 key→新 key 的连续链、只留新 key 的失败、未知 key、回滚 active key 和退役预检
+均有自动化测试。
+
+### 4.7 3.4D4a：检查点可信绑定与 claim 模型
+
+1. 迁移前审计重复 `session_id`，修复后建立唯一约束；status 设为非空受限枚举，并引入
+   单调 business version。
+2. 完整性上下文绑定 checkpoint id、session id、owner id、paused/status、business version
+   和 business seal，owner 或状态不能再脱离封签被单独改写。
+3. 新建以 checkpoint 为唯一外键的 review claim/decision 记录，至少保存 owner、reviewer、
+   opaque token、basis version/seal、状态、lease、decision digest 和 accepted/finalized 时间。
+4. claim 状态与研究 workflow status 分离；LangGraph checkpoint 只负责恢复，不作为谁有权
+   作出最终裁决的权威源。
+
+验收：重复 session、缺失完整性、owner/status/version 篡改、非法状态转换和 FK/唯一约束
+在真实 PostgreSQL 中失败关闭。
+
+### 4.8 3.4D4b：原子 reviewer 裁决与断流恢复
+
+1. 领取使用短 PostgreSQL 事务锁定 checkpoint、integrity 和 claim，验证 sealed pending、
+   paused、禁止自审及 basis version/seal 后写入 claim 并立即提交；不能跨 SSE 持锁。
+2. 指定 session 的提交冲突使用 NOWAIT/条件更新返回 409；SKIP LOCKED 只留给未来“领取
+   下一条”队列。claim lease 负责进程重启和长流期间的占有语义。
+3. 最终写入另起短事务，用 token、reviewer、owner、未过期 lease、basis version/seal 做
+   CAS；同一事务保存封签后的最终状态、completed 状态和不可变 decision，并 finalize claim。
+4. 决定接受前断流可释放或等待 lease；接受后断流不得被第二 reviewer 接管，同一 reviewer
+   依靠 idempotency key/token 重试。过期旧 token 的图输出必须在 finalization 被拒绝。
+5. 只有 finalization 成功才发送 `human_review_completed`/`research_complete`；客户端断流不
+   自动等同业务失败。
+
+验收：两个真实独立数据库会话并发领取恰好一个成功；lease 接管、旧 token 拒绝、重复
+POST 幂等、SSE 各断点取消、双 LangGraph 实例恢复和唯一最终决定均通过。
+
+### 4.9 3.4D 开发与提交纪律
+
+- 顺序固定为 D1 → D2a → D2b → D3 → D4a → D4b；后序发现若推翻前序协议，先回到最近
+  检查点修订计划，不在未记录的情况下兼容错误格式。
+- 每个子阶段遵循：恢复/只读审计 → 计划提交 → 小粒度实现 → 定向测试 → Terra High 对抗
+  复核 → 主代理逐文件复核 → 全量测试 → Bad Case 台账 → 完成提交。
+- 尚未接入持久化、迁移、真实 PostgreSQL 或浏览器的能力必须明确标注，不以 mock/SQLite
+  测试替代生产结论。
+
+## 五、后续阶段摘要
 
 ### 3.5
 
@@ -85,7 +215,7 @@
 独立复核、改判留痕、归档、篡改拒绝、权限矩阵与个人知识库隔离。只有这一阶段通过，
 管理员企业档案专项才可标记完成。
 
-## 五、RAG 后续方向
+## 六、RAG 后续方向
 
 专项封板后再建立组织级企业材料库：材料按 `company_profile_id + material_revision`
 隔离，向量索引是派生缓存；RAG 只产候选证据，继续经过主体、原文、字段、日期和来源
