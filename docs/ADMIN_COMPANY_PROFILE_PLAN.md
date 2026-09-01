@@ -1,7 +1,8 @@
 # 管理员企业档案专项计划
 
 > **当前状态**：3.0～3.3、3.4A、3.4B、3.4C1、3.4C2a、3.4C2b 已完成；
-> 3.4D1、3.4D2a1 已完成，下一可开发单元为 3.4D2a2。工程 Bad Case 见
+> 3.4D1、3.4D2a1 已完成，3.4D2a2 已完成恢复审计并拆分；下一可开发单元为
+> 3.4D2a2.1。工程 Bad Case 见
 > [`DEVELOPMENT_TRACE.md`](DEVELOPMENT_TRACE.md)。
 
 ## 一、目标与边界
@@ -28,7 +29,8 @@
 | 3.4C2b | reviewer 队列与最小复核材料包 | 已完成 | `ae2f4ac` |
 | 3.4D1 | 无数据库副作用的审计链密码协议与固定向量 | 已完成 | `8460581` |
 | 3.4D2a1 | 统一数据库连接权威、Alembic 环境与空库 0001 | 已完成 | `735e36e` |
-| 3.4D2a2 | 冻结旧 schema 指纹、准入/拒绝与维护窗口 adoption | 待开始 | — |
+| 3.4D2a2.1 | 冻结旧 schema catalog manifest 与只读 preflight | 待开始 | — |
+| 3.4D2a2.2 | 维护窗口内的目标绑定、二次指纹与事务化 adoption | 待开始 | — |
 | 3.4D2a3 | 移除运行时建表、切换 Docker/脚本并建立启动 guard | 待开始 | — |
 | 3.4D2b | 审计链持久化、旧历史锚定与生产失败关闭 | 待开始 | — |
 | 3.4D3 | 审计与检查点密钥轮换、保留和退役保护 | 待开始 | — |
@@ -175,15 +177,52 @@ Terra High 复核无 P0，发现的空白 URL fallback、无端口兼容和请�
 
 #### 4.4.2 3.4D2a2：旧库指纹与 adoption
 
-1. 从隔离的真实 PostgreSQL 捕获并冻结受支持 legacy 指纹，至少覆盖直接 create-all 和当前
-   主快速开始可能产生的 Docker+create-all；指纹包含列、类型、时区、nullable/default、PK、
-   FK、unique、check、index 和受管理 trigger，不能随未来 ORM 自动漂移。
-2. 只读 preflight 显示逐项 diff。已版本化库、缺表、重复/额外约束、未知业务表或不受支持
-   变体全部拒绝；7 张已知演示表和 LangGraph 自有表按明确的 unmanaged allowlist 处理。
-3. 完全一致且无需修复的变体可在备份、维护窗口和指纹确认后，通过同一连接事务 stamp；
-   TIMESTAMPTZ/default/trigger 等语义不同的变体必须走显式兼容 revision 或拒绝重建，不能
-   在 adoption 脚本内静默 ALTER。
-4. 真实 PostgreSQL 覆盖合法准入、单字段漂移、错误目标库、竞态/回滚和幂等检查。
+恢复审计和真实 PostgreSQL 重建确认必须再拆两个检查点。直接由 `app_main`、
+`init_industry_data` 或 `seed_industry_data` 触发的 `create_all` 都会先执行
+`models/__init__.py`，实际注册同一组 17 表；“seed 只产生三张行业表”经独立进程和临时库
+验证为误判，不进入 legacy 支持矩阵。当前真实变体为：
+
+- **base-full**：17 张应用表精确等于当前 `Base.metadata`/`0001`，无 server default，
+  `DateTime` 为 `TIMESTAMP WITHOUT TIME ZONE`。这是唯一可能直接 adoption 的变体。
+- **docker-hybrid**：Docker 先建 6 张带 UUID/时间 server default、TIMESTAMPTZ、旧索引和
+  4 个更新 trigger 的应用表，再由 `create_all` 补足其余 11 张，同时保留 7 张演示表和
+  `uuid-ossp`。它与 `0001` 语义不等价，只能识别并拒绝；未来若要保留必须另写兼容迁移，
+  不能在 adoption 中静默 ALTER 或 stamp。
+
+##### 4.4.2.1 3.4D2a2.1：冻结 manifest 与只读 preflight
+
+1. 在隔离的真实 PostgreSQL 捕获并提交静态 catalog manifest，不得在运行时从未来 ORM 或
+   Docker SQL 动态推导。至少冻结 base-full 与 docker-hybrid 两个已知 profile；profile
+   明确标记 `adoptable` 或 `known_incompatible`。
+2. catalog 格式覆盖数据库/服务器身份、public relation、按序列、类型/typmod/时区、nullable、
+   default、identity/generated/collation、PK/FK/UQ/CHECK、索引定义与有效性、非内部 trigger、
+   extension 及非 extension-owned routine。输出 canonical digest 和逐项 diff，不输出 URL/密码。
+3. preflight 在 `REPEATABLE READ READ ONLY` 事务中运行。空库分类为 `upgrade_required`；精确
+   base-full 为 `exact_adoptable`；精确 docker-hybrid 为 `known_incompatible`；已有
+   `alembic_version`、缺表、单字段漂移、未知对象或权限不足分别明确分类并失败关闭。
+4. unmanaged 对象只能使用精确 manifest：Docker 7 张演示表和锁定 provider 版本的 LangGraph
+   4 表/3 索引；禁止表名前缀放行，禁止跨 managed/unmanaged 的 FK、trigger 或 routine 依赖。
+   `uuid-ossp` 可单独报告，但只要 managed 列仍引用其 server default 或 managed trigger 仍存在，
+   就属于不兼容 drift。
+5. 本检查点绝不创建/修改 `alembic_version`，不执行 stamp、ALTER、DROP 或数据读取；真实
+   PostgreSQL 覆盖 base-full、docker-hybrid、空库、已版本化、单字段漂移和未知表。
+
+##### 4.4.2.2 3.4D2a2.2：受控事务化 adoption
+
+1. 操作者必须独立提供 expected database/server identity、旧 profile、preflight digest、备份
+   引用、维护窗口引用、确认时间与固定确认短语。工具只能校验和记录声明，不能伪称自动证明
+   备份可恢复或所有外部写者已停止。
+2. adoption 使用一个短 PostgreSQL 事务：取得项目固定的 transaction advisory lock，对现有
+   managed 表加 DDL 冲突锁，在同一连接重新读取 catalog，并逐项匹配目标身份、profile 与已
+   审批 digest；任何变化立即回滚。
+3. 只有 exact base-full 才能用 caller-owned connection 在同一事务 stamp `20260831_0001`；
+   随后验证 `alembic_version` 精确一行且等于 head 后提交。禁止 `stamp --purge`，失败只回滚，
+   不运行补偿 DROP/downgrade。
+4. 已在 head 的库幂等返回 `already_managed`；落后/未知/多 revision、锁竞争、目标替换、审批
+   过期和 commit 结果未知均拒绝盲重试。commit 结果未知时只能重新做只读 preflight。
+5. 真实 PostgreSQL 覆盖预检后漂移、错误目标库、两个 adoption 竞争、stamp 前后异常回滚、
+   幂等和临时库清理身份保护。当前 D2a3 前仍有不使用共同锁的 `create_all`，因此技术锁不能
+   取代真实排他维护窗口。
 
 #### 4.4.3 3.4D2a3：切换唯一 schema 权威
 
