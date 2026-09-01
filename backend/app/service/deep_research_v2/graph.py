@@ -270,12 +270,12 @@ def _get_graph_checkpointer():
     try:
         from psycopg_pool import ConnectionPool
         try:
-            from core.database import DATABASE_URL
+            from core.database import PSYCOPG_CONNINFO
         except ImportError:
-            from app.core.database import DATABASE_URL
+            from app.core.database import PSYCOPG_CONNINFO
 
         _CHECKPOINTER_POOL = ConnectionPool(
-            DATABASE_URL, min_size=1, max_size=5, open=True, timeout=10,
+            PSYCOPG_CONNINFO, min_size=1, max_size=5, open=True, timeout=10,
             # autocommit + 关闭 prepare 是 PostgresSaver 的要求
             kwargs={"autocommit": True, "prepare_threshold": 0},
         )

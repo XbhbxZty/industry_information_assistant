@@ -1,0 +1,100 @@
+"""Static contracts for the Alembic application-schema authority."""
+from __future__ import annotations
+
+import ast
+import subprocess
+import sys
+from pathlib import Path
+
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+
+
+BACKEND = Path(__file__).resolve().parents[1]
+APP = BACKEND / "app"
+for path in (str(BACKEND), str(APP)):
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
+import models  # noqa: E402,F401
+from core.database import Base  # noqa: E402
+
+
+EXPECTED_APPLICATION_TABLES = {
+    "admin_company_profile_audits",
+    "admin_company_profiles",
+    "bidding_info",
+    "chat_attachments",
+    "chat_messages",
+    "chat_sessions",
+    "company_data",
+    "documents",
+    "industry_news",
+    "industry_stats",
+    "knowledge_bases",
+    "long_term_memories",
+    "news_collection_tasks",
+    "policy_data",
+    "research_checkpoint_integrities",
+    "research_checkpoints",
+    "users",
+}
+
+
+def _config() -> Config:
+    return Config(str(BACKEND / "alembic.ini"))
+
+
+def test_migration_history_has_one_reviewed_baseline_and_one_head():
+    script = ScriptDirectory.from_config(_config())
+    assert script.get_bases() == ["20260831_0001"]
+    assert script.get_heads() == ["20260831_0001"]
+    revision = script.get_revision("20260831_0001")
+    assert revision is not None
+    assert revision.down_revision is None
+
+
+def test_metadata_registers_the_frozen_seventeen_table_application_schema():
+    assert set(Base.metadata.tables) == EXPECTED_APPLICATION_TABLES
+
+
+def test_migration_runtime_never_imports_fastapi_startup_or_calls_create_all():
+    migration_files = [
+        BACKEND / "migrations" / "env.py",
+        *sorted((BACKEND / "migrations" / "versions").glob("*.py")),
+    ]
+    for migration_file in migration_files:
+        tree = ast.parse(migration_file.read_text(encoding="utf-8"))
+        imported_modules = {
+            alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Import)
+            for alias in node.names
+        } | {
+            node.module or ""
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom)
+        }
+        assert "app_main" not in imported_modules
+        assert "app.app_main" not in imported_modules
+        assert not any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "create_all"
+            for node in ast.walk(tree)
+        )
+
+
+def test_importing_url_resolver_does_not_construct_the_application_engine():
+    code = (
+        f"import sys; sys.path.insert(0, {str(APP)!r}); import core.database_url; "
+        "assert 'core.database' not in sys.modules"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=BACKEND,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
