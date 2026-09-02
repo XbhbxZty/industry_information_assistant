@@ -32,6 +32,7 @@
 | 2026-09-01 | 3.4D2a2.1 冻结指纹与只读预检 | 已完成 | DEV-BC-20260901-006 ～ 010 | `dc0f788` | 最终纯测+真实 PostgreSQL 定向 34 passed；阶段全量基线 1050 passed / 15 skipped；Terra High 最终无 P0/P1 |
 | 2026-09-02 | 3.4D4a 检查点上下文与领取模型 | 已完成（开发版） | DEV-BC-20260902-009 ～ 015 | `e33652c` | 主定向组合 252 passed，补充档案审计迁移 6 passed；含真实 PG 与图恢复，无跳过 |
 | 2026-09-02 | 3.4D4b1 领取与接受决定短事务 | 已完成（开发版，未接 HTTP） | DEV-BC-20260902-016 ～ 018 | `fc707fb` | 关联组合 163 passed，无跳过；含新增服务 54 项，其中 43 项真实 PG；临时库已清理 |
+| 2026-09-02 | 3.4D4b2a 原子终稿与写入保护 | 已完成（开发版，未接 HTTP/SSE） | DEV-BC-20260902-019 ～ 022 | `42a00fe` | 关联组合 253 passed，无跳过；含新增 55 项真实 PG；迁移往返及临时库清理通过 |
 
 > 前两阶段是从已提交代码、测试和阶段验证结果做的基线回填；3.4C2b 起均在问题处理当期登记。
 
@@ -685,6 +686,46 @@
 - **回归保护 / 验证**：`test_malformed_persisted_claim_cannot_be_returned_or_auto_repaired` 四种路径和 `test_non_ascii_decision_digest_is_integrity_failure_not_database_outage` 从失败转为通过；损坏值保持原样，不自动修复。
 - **提交**：`fc707fb`
 - **遗留风险**：decision_digest 是内容摘要，不是 HMAC；不能凭该测试宣称抵御具有任意数据库改写权限的攻击者。数据库决定不可变保护与最终落盘由 D4b2 承接。
+
+### DEV-BC-20260902-019：普通检查点写入可绕过已领取材料，终局状态缺少提交联动
+
+- **阶段 / 状态**：D4b2a / 已关闭
+- **发现方式**：主代理恢复旧保存/图收尾路径，子代理独立复核新增数据库触发器。
+- **现象 / 根因 / 影响**：D4b1 尚未接线时，普通保存可在 live/accepted claim 期间改动 basis；旧图把保存终稿与 completed 分成两次提交。本轮触发器首版虽冻结决定，却仍允许单独 SQL 将 accepted 标成 finalized，留下 paused checkpoint 与终局 claim 不一致。
+- **解决办法**：普通写入按 CP→integrity→claim 检查有效占有；新增 finalizer 同事务保存终稿/封签/状态/领取终局。数据库另用延迟至提交的约束触发器核对 completed 与 basis+1，不依赖 flush 顺序，不增加反向行锁；禁止删除和 TRUNCATE 已保留的决定。
+- **回归保护 / 验证**：`test_normal_writes_cannot_bypass_effective_review_claim`、保存与首次领取竞争、`test_two_finalizers_only_commit_once_and_loser_can_retry`、提交异常回滚/恢复与 `test_raw_finalization_without_completed_checkpoint_is_rejected_at_commit` 均通过，纳入最终 253 项组合。
+- **提交**：`42a00fe`
+- **遗留风险**：HTTP/SSE 仍未接入新服务，由 D4b2b 承接；触发器不等同整个数据库防篡改，数据库所有者仍可禁用保护或伪造其他表。
+
+### DEV-BC-20260902-020：终局重试漏掉自审语义与独立报告列一致性
+
+- **阶段 / 状态**：D4b2a / 已关闭
+- **发现方式**：主代理对 finalizer 首版进行代码复核，补 PostgreSQL 回归；未将审查发现误记为已执行失败。
+- **现象 / 根因 / 影响**：首版先核 claim identity，所有者重试被当成 token 冲突；完成态只验 state_json，不核独立 final_report 列，后者被改后可能随幂等结果返回。finalized_at 顺序与批准改判后的等级关系也缺少显式核对。
+- **解决办法**：先验检查点再显式禁止自审；完成态回读必须核对原决定、复核时间、完成时间、版本和报告列与封签报告的一致性，忽略新传入候选。
+- **回归保护 / 验证**：`test_finalization_rechecks_reviewer_and_token_even_for_retry`、`test_finalized_retry_never_returns_tampered_report_column`、批准/拒绝/改判及完成态重试路径均通过，纳入最终 253 项组合。
+- **提交**：`42a00fe`
+- **遗留风险**：本轮只核新 finalizer 回执；最终界面与 SSE 还须使用回执中的已提交结果，不能继续发送未经落盘的候选报告。
+
+### DEV-BC-20260902-021：新增保护使旧测试造数失效，JSON SQL 字面量又被识别为绑定参数
+
+- **阶段 / 状态**：D4b2a / 已关闭（测试夹具）
+- **发现方式**：第一轮真实 PostgreSQL 组合实际出现 `2 failed, 76 passed`。
+- **现象 / 根因 / 影响**：旧 D4b1 测试借普通 update_status 构造 live claim 的非 pending 目标，新增 guard 正确拒绝使夹具先失败；新测试的 JSON 字面量 `:false` 被 SQLAlchemy text 解析为未提供的绑定参数，尚未进入数据库触发器。
+- **解决办法**：非 pending 夹具先让未接受领取过期；合法但越界重签测试显式在测试事务中注入，损坏已接受摘要的测试仅在随机临时库内临时禁用具名触发器并同事务恢复。JSON 变异改用 `jsonb_build_object`，实际触发数据库约束。
+- **回归保护 / 验证**：保留 D4b1 原拒绝断言，新增 guard/immutable 测试与原 context PG 测试一起通过最终 253 项组合；没有弱化生产保护以迁就旧夹具。
+- **提交**：`42a00fe`
+- **遗留风险**：特权破坏夹具只适用于已验证身份的随机临时库，不能复制到业务维护流程。
+
+### DEV-BC-20260902-022：整份深拷贝把不应持久化的运行时锁也当成业务状态
+
+- **阶段 / 状态**：D4b2a / 已关闭
+- **发现方式**：主代理补不可复制锁用例，实际出现 `1 failed, 1 passed`；子代理独立复核也指出同一边界。
+- **现象 / 根因 / 影响**：finalizer 先 deepcopy 整份 final_state，`_message_queue` 等私有运行时字段若含锁/Future，会在清理前抛 TypeError；原先 object() 测试可复制，未暴露问题，正常图输出可能被拒。
+- **解决办法**：先对原始图状态验签，再剔除签名/存储契约之外的顶层私有字段并深拷贝业务字段；清理后再次验签，既不复制运行时资源，也不把损坏业务内容“洗成”有效内容。
+- **回归保护 / 验证**：`test_runtime_fields_are_not_persisted_and_omitted_ui_preserves_previous_ui` 同时覆盖普通 object 和不可复制 Lock，修复后纳入 158 项初回归和 253 项最终关联组合通过；原无签名/错误材料/严格 JSON 类型反例继续保留。
+- **提交**：`42a00fe`
+- **遗留风险**：未声称真实活跃 LangGraph/SSE 恢复已验收，该接线仍在 D4b2b。
 
 ## 新条目模板
 
