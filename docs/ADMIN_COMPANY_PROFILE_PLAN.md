@@ -1,7 +1,8 @@
 # 管理员企业档案专项计划
 
 > **当前状态**：3.0～3.3、3.4A、3.4B、3.4C1、3.4C2a、3.4C2b 已完成；
-> 3.4D1、3.4D2a1、3.4D2a2.1 已完成；下一可开发单元为 3.4D2a2.2。
+> 3.4D1、3.4D2a1、3.4D2a2.1 已完成；3.4D2a2 已进一步拆分，下一可开发单元为
+> 3.4D2a2a。
 > 工程 Bad Case 见
 > [`DEVELOPMENT_TRACE.md`](DEVELOPMENT_TRACE.md)。
 
@@ -30,7 +31,8 @@
 | 3.4D1 | 无数据库副作用的审计链密码协议与固定向量 | 已完成 | `8460581` |
 | 3.4D2a1 | 统一数据库连接权威、Alembic 环境与空库 0001 | 已完成 | `735e36e` |
 | 3.4D2a2.1 | 冻结旧 schema catalog manifest 与只读 preflight | 已完成 | `dc0f788` |
-| 3.4D2a2.2 | 维护窗口内的目标绑定、二次指纹与事务化 adoption | 待开始 | — |
+| 3.4D2a2a | 审批声明、受保护目标策略与纯验证协议 | 待开始 | — |
+| 3.4D2a2b | 锁内二次指纹、事务化 adoption 与并发封板 | 待开始 | — |
 | 3.4D2a3 | 移除运行时建表、切换 Docker/脚本并建立启动 guard | 待开始 | — |
 | 3.4D2b | 审计链持久化、旧历史锚定与生产失败关闭 | 待开始 | — |
 | 3.4D3 | 审计与检查点密钥轮换、保留和退役保护 | 待开始 | — |
@@ -217,6 +219,18 @@ stamp/DDL 参数。最终纯测与真实 PostgreSQL 定向矩阵合计 `34 passe
 没有进入目标二次绑定、锁、审批或事务化 stamp；这些仍只属于 3.4D2a2.2。
 
 ##### 4.4.2.2 3.4D2a2.2：受控事务化 adoption
+
+为缩小可回退粒度，本阶段拆为两个连续检查点：
+
+- **3.4D2a2a** 只冻结 control-plane 契约：不可变 operator attestation、独立的受保护
+  target policy、固定确认短语、服务端时钟有效期、备份/维护窗口外部引用和稳定错误码。该检查点
+  不导入 Alembic command，不连接数据库，也没有 stamp/DDL 能力。
+- **3.4D2a2b** 才实现 caller-owned 短事务、固定 advisory lock、表锁、锁内二次指纹、
+  Alembic stamp、postverify、回滚/commit outcome unknown 和真实 PostgreSQL 并发测试。
+
+`AdoptionApproval` 只是操作者声明，不能被描述成工具已经验证备份可恢复或外部写者全部停止。
+目标信任根必须来自独立的部署配置/运维控制面；approval 只能引用 policy ID，不能在同一请求中
+自填目标身份并让工具宣称目标已经可信。
 
 1. 操作者必须独立提供 expected database/server identity、旧 profile、preflight digest、备份
    引用、维护窗口引用、确认时间与固定确认短语。工具只能校验和记录声明，不能伪称自动证明
