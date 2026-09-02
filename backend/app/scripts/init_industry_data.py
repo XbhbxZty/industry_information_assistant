@@ -16,8 +16,9 @@ from datetime import date
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy.orm import Session
-from core.database import engine, Base
-# 导入所有模型以确保表被创建
+from core.database import engine
+from core.schema_head_guard import assert_database_schema_at_head
+# 导入模型供示例数据写入使用。
 from models import (
     User, ChatSession, ChatMessage, ChatAttachment, LongTermMemory,
     KnowledgeBase, Document, IndustryStats, CompanyData, PolicyData
@@ -25,10 +26,10 @@ from models import (
 
 
 def create_tables():
-    """创建数据表"""
-    print("Creating industry data tables...")
-    Base.metadata.create_all(bind=engine)
-    print("Tables created successfully!")
+    """Require the Alembic-managed schema before writing sample data."""
+    print("Checking Alembic schema head...")
+    assert_database_schema_at_head(engine)
+    print("Schema is at Alembic head.")
 
 
 def insert_sample_data():

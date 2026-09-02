@@ -540,9 +540,11 @@ def legacy_schema_read_transaction(connection: CatalogConnection) -> Iterator[No
 
 def capture_legacy_schema_catalog_in_transaction(
     connection: CatalogConnection,
+    *,
+    read_only: bool = True,
 ) -> LegacySchemaCatalog:
     """Capture inside a caller-owned guarded transaction without nesting one."""
-    _verify_transaction_guards(connection)
+    _verify_transaction_guards(connection, read_only=read_only)
     target_identity = {
         **_one_row(connection.exec_driver_sql(_TARGET_IDENTITY_SQL)),
         "server_version": _scalar(connection.exec_driver_sql("SHOW server_version")),
@@ -597,11 +599,15 @@ def capture_legacy_schema_catalog_in_transaction(
     )
 
 
-def _verify_transaction_guards(connection: CatalogConnection) -> None:
+def _verify_transaction_guards(connection: CatalogConnection, *, read_only: bool = True) -> None:
+    if type(read_only) is not bool:
+        raise LegacySchemaCatalogError("read_only must be a boolean")
     if _scalar(connection.exec_driver_sql("SHOW transaction_isolation")) != "repeatable read":
         raise LegacySchemaCatalogError("catalog capture requires REPEATABLE READ")
-    if _scalar(connection.exec_driver_sql("SHOW transaction_read_only")) != "on":
-        raise LegacySchemaCatalogError("catalog capture requires a read-only transaction")
+    expected = "on" if read_only else "off"
+    if _scalar(connection.exec_driver_sql("SHOW transaction_read_only")) != expected:
+        mode = "read-only" if read_only else "read-write"
+        raise LegacySchemaCatalogError(f"catalog capture requires a {mode} transaction")
 
 
 def _scalar(result: Any) -> str:

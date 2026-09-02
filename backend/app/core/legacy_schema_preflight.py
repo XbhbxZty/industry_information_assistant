@@ -367,28 +367,36 @@ def preflight_legacy_schema(
     manifest_dir: Path | None = None,
 ) -> LegacyPreflightReport:
     """Observe and classify one target in a single read-only transaction."""
-    manifests = load_frozen_manifests(manifest_dir)
     with legacy_schema_read_transaction(connection):
-        observation = capture_legacy_schema_catalog_in_transaction(connection)
-        relation_names = _observed_relation_names(observation.snapshot)
-        alembic_versions: tuple[str, ...] | None = None
-        langgraph_migrations: tuple[int, ...] | None = None
-        if ALEMBIC_RELATIONS <= relation_names and _component_matches(
-            observation.snapshot, manifests[ALEMBIC_MANIFEST_ID]
-        ):
-            alembic_versions = tuple(_scalar_rows(
-                connection.exec_driver_sql(
-                    "SELECT version_num FROM public.alembic_version ORDER BY version_num"
-                )
-            ))
-        if LANGGRAPH_RELATIONS <= relation_names and _component_matches(
-            observation.snapshot, manifests[LANGGRAPH_MANIFEST_ID]
-        ):
-            values = _scalar_rows(connection.exec_driver_sql(
-                "SELECT v FROM public.checkpoint_migrations ORDER BY v"
-            ))
-            if all(isinstance(value, int) and not isinstance(value, bool) for value in values):
-                langgraph_migrations = tuple(values)
+        return preflight_legacy_schema_in_transaction(connection, manifest_dir=manifest_dir)
+
+
+def preflight_legacy_schema_in_transaction(
+    connection: Any,
+    *,
+    read_only: bool = True,
+    manifest_dir: Path | None = None,
+) -> LegacyPreflightReport:
+    """Reuse the classifier on the locked adoption connection; never commit."""
+    manifests = load_frozen_manifests(manifest_dir)
+    observation = capture_legacy_schema_catalog_in_transaction(connection, read_only=read_only)
+    relation_names = _observed_relation_names(observation.snapshot)
+    alembic_versions: tuple[str, ...] | None = None
+    langgraph_migrations: tuple[int, ...] | None = None
+    if ALEMBIC_RELATIONS <= relation_names and _component_matches(
+        observation.snapshot, manifests[ALEMBIC_MANIFEST_ID]
+    ):
+        alembic_versions = tuple(_scalar_rows(connection.exec_driver_sql(
+            "SELECT version_num FROM public.alembic_version ORDER BY version_num"
+        )))
+    if LANGGRAPH_RELATIONS <= relation_names and _component_matches(
+        observation.snapshot, manifests[LANGGRAPH_MANIFEST_ID]
+    ):
+        values = _scalar_rows(connection.exec_driver_sql(
+            "SELECT v FROM public.checkpoint_migrations ORDER BY v"
+        ))
+        if all(isinstance(value, int) and not isinstance(value, bool) for value in values):
+            langgraph_migrations = tuple(values)
     return classify_legacy_schema(
         observation,
         manifests,

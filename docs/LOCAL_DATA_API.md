@@ -36,9 +36,11 @@ LOCAL_DATA_API_KEY，请求必须携带 X-Local-Data-Key；未设置时不额外
 因此建议只监听回环地址或 Docker 内网。
 
 当前根目录 docker-compose.yml 只启动 PostgreSQL、Redis、Milvus 等基础设施，
-不包含后端 API 容器。本地 API 可用 start-app.ps1 启动，或进入 backend/app 后执行：
+不包含后端 API 容器。本地 API 可用 start-app.ps1 启动，或先将应用数据库升级到
+Alembic head 后进入 backend/app 执行：
 
-    uvicorn app_main:app --host 127.0.0.1 --port 8000
+    cd backend && python -m alembic upgrade head
+    cd app && uvicorn app_main:app --host 127.0.0.1 --port 8000
 
 该数据 API 本身不依赖 PostgreSQL 或 Milvus；若以后放入容器，请将宿主机
 data/public_dd 只读挂载进容器，并把 LOCAL_DATA_ROOT 指向容器内挂载路径。

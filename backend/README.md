@@ -37,7 +37,19 @@ DOCMIND_ACCESS_KEY_SECRET=your_access_key_secret
 export DASHSCOPE_API_KEY="YOUR_DASHSCOPE_API_KEY"
 
 ## 启动后端服务
+先显式升级应用 schema；启动时只会只读校验当前数据库是否已经处于本仓库的
+Alembic head，不会自动建表、迁移或 stamp：
+
+```sh
+python -m alembic upgrade head
+```
+
+对于旧库，不能用 `alembic stamp` 跳过迁移；应先走经过评审的 legacy adoption
+流程。然后启动服务：
+
+```sh
 python app/app_main.py
+```
 
 
 # 接口测试

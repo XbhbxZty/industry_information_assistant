@@ -13,7 +13,8 @@ from datetime import date
 # 添加项目路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.database import SessionLocal, engine, Base
+from core.database import SessionLocal, engine
+from core.schema_head_guard import assert_database_schema_at_head
 from models.industry_data import IndustryStats, CompanyData, PolicyData
 
 
@@ -260,8 +261,8 @@ def main():
     """主函数"""
     print("开始初始化行业数据库...")
 
-    # 创建表（如果不存在）
-    Base.metadata.create_all(bind=engine)
+    # 业务写入只能针对已经由 Alembic 升级到 head 的数据库执行。
+    assert_database_schema_at_head(engine)
 
     db = SessionLocal()
 

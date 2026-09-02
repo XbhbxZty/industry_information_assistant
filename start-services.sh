@@ -61,8 +61,8 @@ start_services() {
     echo "  - Elasticsearch: localhost:1200"
     echo "  - MinIO Console: localhost:29001 (admin/minioadmin)"
     echo ""
-    log_info "现在可以启动前后端服务了"
-    echo "  - 后端: cd backend && python app/app_main.py"
+    log_info "现在可以升级 schema 并启动前后端服务了"
+    echo "  - 后端: cd backend && python -m alembic upgrade head && python app/app_main.py"
     echo "  - 前端: cd frontend && npm run dev"
 }
 

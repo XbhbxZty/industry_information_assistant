@@ -23,16 +23,24 @@ for import_path in (str(BACKEND_DIR), str(APP_DIR)):
     if import_path not in sys.path:
         sys.path.insert(0, import_path)
 
-# Match application startup without importing app_main, whose module-level
-# create_all() remains intentionally untouched until phase 3.4D2a3.
+# Match application configuration without importing FastAPI startup.
 load_dotenv(BACKEND_DIR / ".env")
 
 import models  # noqa: E402,F401  # register every mapped table on Base.metadata
 from core.database import Base  # noqa: E402
 from core.database_url import resolve_database_urls  # noqa: E402
+from core.legacy_schema_preflight import DOCKER_DEMO_RELATIONS, LANGGRAPH_RELATIONS  # noqa: E402
 
 
 target_metadata = Base.metadata
+
+
+def _include_name(name: str | None, type_: str, parent_names: dict) -> bool:
+    # With include_schemas=False PostgreSQL reflects public as schema=None,
+    # while the explicitly qualified version table uses schema='public'.
+    # Exclude that exact name plus the known non-ORM packages, never prefixes.
+    external = DOCKER_DEMO_RELATIONS | LANGGRAPH_RELATIONS | {"alembic_version"}
+    return type_ != "table" or name not in external
 
 
 def _database_url() -> str:
@@ -52,6 +60,8 @@ def _configure(connection: Connection, **extra: Any) -> None:
         compare_type=True,
         compare_server_default=True,
         include_schemas=False,
+        version_table_schema="public",
+        include_name=_include_name,
         **extra,
     )
 
@@ -66,6 +76,7 @@ def run_migrations_offline() -> None:
         compare_type=True,
         compare_server_default=True,
         include_schemas=False,
+        version_table_schema="public",
     )
     with context.begin_transaction():
         context.run_migrations()

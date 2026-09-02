@@ -25,17 +25,8 @@ from router.memory_router import router as memory_router
 from router.database_router import router as database_router
 from router.news_router import router as news_router
 from router.company_profile_router import router as company_profile_router
-from core.database import engine, Base
-# 导入所有模型以确保它们被注册
-from models import (
-    User, ChatSession, ChatMessage, ChatAttachment, LongTermMemory,
-    KnowledgeBase, Document, IndustryStats, CompanyData, PolicyData,
-    ResearchCheckpoint, IndustryNews, BiddingInfo, NewsCollectionTask,
-    AdminCompanyProfile, AdminCompanyProfileAudit,
-)
-
-# 创建所有数据表（如果不存在）
-Base.metadata.create_all(bind=engine)
+from core.database import engine
+from core.schema_head_guard import assert_database_schema_at_head
 
 
 @asynccontextmanager
@@ -43,6 +34,8 @@ async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时执行
     logger.info("应用启动中...")
+    assert_database_schema_at_head(engine)
+    logger.info("Alembic schema head guard passed")
 
     # 初始化定时任务调度器并检查数据
     try:

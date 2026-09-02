@@ -334,7 +334,7 @@ v1.0-alpha 交付形态（进行中）
 docker compose up -d
 ```
 ```bash
-cd backend && pip install -r requirements-dev.txt && python app/app_main.py
+cd backend && pip install -r requirements-dev.txt && python -m alembic upgrade head && python app/app_main.py
 ```
 ```bash
 cd frontend && npm install && npm run dev

@@ -114,14 +114,25 @@ function Start-App {
     $feOut = Join-Path $logDir "frontend.log"
     $feErr = Join-Path $logDir "frontend.err.log"
 
+    Write-Host "`n升级数据库 schema 到 Alembic head..." -ForegroundColor Cyan
+    Push-Location "$Root\backend"
+    try {
+        & python -m alembic upgrade head
+        if ($LASTEXITCODE -ne 0) {
+            throw "Alembic upgrade head 失败（ExitCode=$LASTEXITCODE）；后端未启动。"
+        }
+    } finally {
+        Pop-Location
+    }
+
     Write-Host "`n启动后端 (localhost:8000)..." -ForegroundColor Cyan
-    $backend = Start-Process -PassThru -WindowStyle Minimized -FilePath "python" `
+    $backend = Start-Process -PassThru -WindowStyle Hidden -FilePath "python" `
         -ArgumentList "-X", "utf8", "app/app_main.py" -WorkingDirectory "$Root\backend" `
         -RedirectStandardOutput $beOut -RedirectStandardError $beErr
     Write-Host "  PID $($backend.Id)   日志 logs/backend.err.log"
 
     Write-Host "启动前端 (localhost:5183)..." -ForegroundColor Cyan
-    $frontend = Start-Process -PassThru -WindowStyle Minimized -FilePath "cmd.exe" `
+    $frontend = Start-Process -PassThru -WindowStyle Hidden -FilePath "cmd.exe" `
         -ArgumentList "/c", "npm run dev" -WorkingDirectory "$Root\frontend" `
         -RedirectStandardOutput $feOut -RedirectStandardError $feErr
     Write-Host "  PID $($frontend.Id)   日志 logs/frontend.log"
