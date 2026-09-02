@@ -39,12 +39,28 @@ def _graph_source() -> str:
     return open(GRAPH, encoding="utf-8").read()
 
 
+def _completion_span():
+    """Select the driver's terminal block, not the nested claimed-path yield.
+
+    The production claimed branch now finalizes atomically and returns early.
+    Legacy/offline completion still needs all the original persistence guards.
+    """
+    tree = ast.parse(_graph_source())
+    driver = next(node for node in ast.walk(tree)
+                  if isinstance(node, ast.AsyncFunctionDef) and node.name == "_drive")
+    body = next(node for node in driver.body if isinstance(node, ast.Try)).body
+    start = next(node for node in body if isinstance(node, ast.Assign)
+                 and ast.unparse(node.targets[0]) == "final_state['phase']")
+    end = next(node for node in body if isinstance(node, ast.Expr)
+               and isinstance(node.value, ast.Yield)
+               and isinstance(node.value.value, ast.Call)
+               and getattr(node.value.value.func, "id", None) == "build_complete_event")
+    return start.lineno, end.end_lineno
+
+
 def _completion_block() -> str:
-    """终局分支的源码：从 phase=COMPLETED 到 yield build_complete_event。"""
-    text = _graph_source()
-    start = text.index('final_state["phase"] = ResearchPhase.COMPLETED.value')
-    end = text.index("yield build_complete_event", start)
-    return text[start:end]
+    start, end = _completion_span()
+    return "\n".join(_graph_source().splitlines()[start - 1:end])
 
 
 # ------------------------------------------------- 一、终局必须落完整状态
@@ -75,11 +91,7 @@ def test_full_state_is_saved_before_status_flips():
     # 本轮这已是第四次守卫误伤注释/文档（见 BADCASES 复盘表同名条目），
     # 修法永远是改判据，不是改被判的代码。
     source = _graph_source()
-    lines = source.splitlines()
-    start = next(i for i, l in enumerate(lines, 1)
-                 if 'final_state["phase"] = ResearchPhase.COMPLETED.value' in l)
-    end = next(i for i, l in enumerate(lines, 1)
-               if i > start and "yield build_complete_event" in l)
+    start, end = _completion_span()
 
     calls = []
     for node in ast.walk(ast.parse(source)):

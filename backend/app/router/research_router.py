@@ -7,7 +7,8 @@ from typing import Dict, Any, Optional, Literal
 import json
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictBool
+from starlette.concurrency import run_in_threadpool
 from starlette.status import (
     HTTP_200_OK,
     HTTP_400_BAD_REQUEST,
@@ -34,6 +35,10 @@ from service.review_workspace_service import (
     ReviewWorkspaceIntegrityError,
     ReviewWorkspaceService,
     ReviewWorkspaceUnavailable,
+)
+from service.review_claim_service import (
+    ReviewClaimService, ReviewClaimError, ReviewClaimForbidden, ReviewClaimNotFound,
+    ReviewClaimInvalidDecision, ReviewClaimConflict, ReviewClaimIntegrityError,
 )
 
 # V2 导入
@@ -108,7 +113,7 @@ class HumanReviewRequest(BaseModel):
     复核人身份不接受客户端传入，而是由服务端从登录 Token 中取得。
     这样既能留痕，也不能通过篡改请求体冒充其他复核人。
     """
-    approved: bool                                  # 是否通过
+    approved: StrictBool                            # 是否通过；不强制转换字符串或数字
     comment: Optional[str] = ""                     # 复核意见
     override_level: Optional[str] = None            # 人工调整后的风险等级
 
@@ -139,6 +144,31 @@ def get_research_service_v2():
     """获取 V2 研究服务实例（使用配置文件中的模型设置）"""
     # 直接创建服务，配置从 llm_config.py 读取
     return DeepResearchV2Service()
+
+
+def get_review_claim_service():
+    return ReviewClaimService()
+
+
+def _raise_review_claim_error(exc: ReviewClaimError) -> None:
+    """Stable public errors; never expose tokens, decisions or DB diagnostics."""
+    if isinstance(exc, ReviewClaimForbidden):
+        status, detail = 403, "无权复核该任务，研究发起人不能审核自己的会话"
+    elif isinstance(exc, ReviewClaimNotFound):
+        status, detail = 404, "复核任务不存在"
+    elif isinstance(exc, ReviewClaimInvalidDecision):
+        status, detail = 422, "复核决定无效，请检查批准、改判等级与理由"
+    elif isinstance(exc, ReviewClaimIntegrityError):
+        status, detail = 409, "复核材料完整性校验失败，无法继续"
+    elif isinstance(exc, ReviewClaimConflict):
+        status, detail = 409, {
+            "decision": "该任务已接受另一份决定，不能覆盖；请使用原决定重试",
+            "notpending": "该任务当前不处于待复核状态",
+            "locked": "复核任务正在处理，请稍后重试",
+        }.get(exc.code, "复核任务状态冲突，可能已由其他复核人领取或材料已变化")
+    else:
+        status, detail = 503, "复核服务暂不可用，请稍后使用原决定重试"
+    raise HTTPException(status_code=status, detail=detail) from exc
 
 
 def _resolve_scope(
@@ -863,6 +893,7 @@ async def submit_human_review(
     request: HumanReviewRequest,
     current_user: User = Depends(require_human_reviewer),
     db: Session = Depends(get_db),
+    claim_service: ReviewClaimService = Depends(get_review_claim_service),
 ):
     """
     提交风控复核结论，从复核卡点继续执行（v0.6 人机协同）
@@ -883,37 +914,37 @@ async def submit_human_review(
         流式响应：从断点继续直到 research_complete
     """
     try:
+        reviewer_id = str(current_user.id)
+        # Authentication has finished. Do not retain its read transaction or
+        # connection for the duration of the SSE response. The claim service
+        # rechecks the actual database role in its own short transaction.
+        db.close()
         try:
-            owner_id = ReviewWorkspaceService(db).authorize_submission(
-                session_id, current_user.id,
+            submission = await run_in_threadpool(
+                claim_service.prepare_submission, session_id, reviewer_id, request.model_dump(),
             )
-        except (ReviewTaskNotFound, ReviewTaskNotPending,
-                ReviewWorkspaceIntegrityError, ReviewWorkspaceUnavailable) as exc:
-            _raise_review_workspace_error(exc)
+        except ReviewClaimError as exc:
+            _raise_review_claim_error(exc)
 
         service_v2 = get_research_service_v2()
-        decision = request.model_dump()
-        decision["reviewer"] = current_user.username
-        decision["reviewer_id"] = str(current_user.id)
 
         async def generate_sse():
             try:
                 async for chunk in service_v2.submit_review(
-                    session_id,
-                    decision,
-                    # The resumed graph persists under the checkpoint owner;
-                    # reviewer identity is carried only in the signed decision.
-                    user_id=owner_id,
+                    session_id, submission, claim_service=claim_service,
                 ):
                     yield chunk
-            except Exception as e:
-                logger.error(f"Submit review error: {e}")
-                yield f"data: {serialize_event({'type': 'error', 'content': str(e)})}\n\n"
+            except Exception:
+                logger.error("Review stream failed; accepted decision remains recoverable")
+                yield f"data: {serialize_event({'type': 'error', 'content': '复核结果暂未返回，请使用原决定重试'})}\n\n"
 
-        return StreamingResponse(generate_sse(), media_type="text/event-stream")
+        return StreamingResponse(
+            generate_sse(), media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Failed to submit human review: {e}")
-        raise HTTPException(status_code=HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    except Exception:
+        logger.error("Review submission failed")
+        raise HTTPException(status_code=503, detail="复核服务暂不可用，请使用原决定重试")

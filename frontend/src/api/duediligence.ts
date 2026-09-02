@@ -1,7 +1,7 @@
 // Copyright © 2026 XbhbxZty
 // 本文件为「尽调智核」迭代中新增，不含原课程项目代码。
 import { request } from './request'
-import type { AxiosRequestConfig } from 'axios'
+import { isAxiosError, type AxiosRequestConfig } from 'axios'
 
 /** 核查项四态。含义严格互斥，前端呈现必须区分——尤其后两者不可混淆：
  *  verified + "经查询，无相关记录" = 已核实的正面结论，可支持授信
@@ -302,16 +302,31 @@ export function startDueDiligence(
 }
 
 /** 提交风控复核结论，从断点继续（SSE 流） */
-export function submitReview(
+export async function submitReview(
   sessionId: string,
   decision: ReviewDecision,
   options?: AxiosRequestConfig,
 ) {
-  return request.post<ReadableStream<Uint8Array>>(`/research/review/${sessionId}`, decision, {
-    headers: { Accept: 'text/event-stream' },
-    responseType: 'stream',
-    adapter: 'fetch',
-    loading: false,
-    ...options,
-  })
+  try {
+    return await request.post<ReadableStream<Uint8Array>>(`/research/review/${sessionId}`, decision, {
+      headers: { Accept: 'text/event-stream' },
+      responseType: 'stream',
+      adapter: 'fetch',
+      loading: false,
+      errorToast: false,
+      ...options,
+    })
+  } catch (error) {
+    // fetch + responseType: stream also wraps pre-SSE JSON errors in a stream.
+    // Decode only the failed response; leave the successful event stream intact.
+    if (isAxiosError(error) && error.response?.data instanceof ReadableStream) {
+      try {
+        const data: unknown = await new Response(error.response.data).json()
+        if (data && typeof data === 'object') error.response.data = data
+      } catch {
+        // A proxy may return non-JSON errors; retain the original HTTP status.
+      }
+    }
+    throw error
+  }
 }

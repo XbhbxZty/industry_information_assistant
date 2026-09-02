@@ -178,8 +178,9 @@ class DeepResearchV2Service:
     async def submit_review(
         self,
         session_id: str,
-        decision: Dict[str, Any],
-        user_id: str = None,
+        submission,
+        *,
+        claim_service,
     ):
         """
         提交风控复核结论并从断点继续（v0.6 人机协同）。
@@ -188,14 +189,15 @@ class DeepResearchV2Service:
         调用方需要拿到最终的 `research_complete`——复核结论只有走到终局
         才算真正生效。
         """
-        logger.info(f"Submitting human review for session {session_id}: "
-                    f"approved={decision.get('approved')}, reviewer={decision.get('reviewer')}")
+        logger.info("Resuming a durably accepted human review")
         try:
-            async for event in self.graph.resume_review(session_id, decision, user_id=user_id):
+            async for event in self.graph.resume_claimed_review(
+                session_id, submission.claim.reviewer_id, submission.claim.token, claim_service,
+            ):
                 yield self._format_sse(event)
-        except Exception as e:
-            logger.error(f"Submit review error: {e}", exc_info=True)
-            yield self._format_sse({"type": "error", "content": str(e)})
+        except Exception:
+            logger.error("Review recovery failed; no completion event emitted")
+            yield self._format_sse({"type": "error", "content": "复核结果暂未返回，请使用原决定重试"})
         yield "data: [DONE]\n\n"
 
     def _format_sse(self, event: Dict[str, Any]) -> str:

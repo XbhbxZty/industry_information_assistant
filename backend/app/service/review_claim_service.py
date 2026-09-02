@@ -119,6 +119,15 @@ class FinalizedReview:
     final_report: str = field(repr=False)
 
 
+@dataclass(frozen=True)
+class ReviewSubmission:
+    """Server-only accepted/finalized execution context, never an API payload."""
+
+    claim: ReviewClaimReceipt
+    state_json: Dict[str, Any] = field(repr=False)
+    ui_state_json: Optional[Dict[str, Any]] = field(repr=False)
+
+
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{43}$")
 _DIGEST_RE = re.compile(r"[0-9a-f]{64}\Z")
 _USER_DECISION_KEYS = frozenset({"approved", "comment", "override_level"})
@@ -158,50 +167,8 @@ class ReviewClaimService:
             checkpoint, integrity, claim, now = self._locked_context(db, requested_session)
             owner_id = self._eligible_pending(checkpoint, integrity, requested_session)
             self._forbid_self_review(owner_id, reviewer.id)
-
-            if claim is None:
-                if supplied_token is not None:
-                    raise ReviewClaimConflict("staletoken")
-                claim = ResearchReviewClaim(
-                    checkpoint_id=checkpoint.id,
-                    owner_id=owner_id,
-                    reviewer_id=reviewer.id,
-                    token=secrets.token_urlsafe(32),
-                    basis_version=integrity.business_revision,
-                    basis_seal=integrity.business_seal,
-                    state="claimed",
-                    lease_expires_at=now + timedelta(seconds=self._lease_seconds),
-                )
-                db.add(claim)
-                db.flush()
-                return self._receipt(claim, checkpoint)
-
-            if claim.state == "claimed":
-                if self._is_live(claim.lease_expires_at, now):
-                    self._verify_claim_basis(claim, checkpoint, integrity)
-                    self._require_claim_identity(claim, reviewer.id, supplied_token)
-                    return self._receipt(claim, checkpoint)
-                if supplied_token is not None:
-                    raise ReviewClaimConflict("expired")
-                self._verify_claim_owner(claim, checkpoint)
-                self._reclaim(claim, integrity, reviewer.id, now)
-                db.flush()
-                return self._receipt(claim, checkpoint)
-            if claim.state == "released":
-                if supplied_token is not None:
-                    raise ReviewClaimConflict("staletoken")
-                self._verify_claim_owner(claim, checkpoint)
-                self._reclaim(claim, integrity, reviewer.id, now)
-                db.flush()
-                return self._receipt(claim, checkpoint)
-            if claim.state == "accepted":
-                self._verify_claim_basis(claim, checkpoint, integrity)
-                self._verify_saved_decision(claim)
-                self._require_claim_identity(claim, reviewer.id, supplied_token)
-                return self._receipt(claim, checkpoint)
-            if claim.state == "finalized":
-                raise ReviewClaimConflict("finalized")
-            raise ReviewClaimIntegrityError()
+            claim = self._claim_pending(db, checkpoint, integrity, claim, reviewer, now, supplied_token)
+            return self._receipt(claim, checkpoint)
 
         return self._execute(operation)
 
@@ -222,47 +189,139 @@ class ReviewClaimService:
                 raise ReviewClaimConflict("staletoken")
             self._verify_claim_basis(claim, checkpoint, integrity)
             self._require_claim_identity(claim, reviewer.id, supplied_token)
-
-            if claim.state == "accepted":
-                saved = self._verify_saved_decision(claim)
-                if self._user_fields(saved) != normalized:
-                    raise ReviewClaimConflict("decision")
-                return self._receipt(claim, checkpoint)
-            if claim.state != "claimed":
-                raise ReviewClaimConflict("finalized" if claim.state == "finalized" else "conflict")
-            if not self._is_live(claim.lease_expires_at, now):
-                raise ReviewClaimConflict("expired")
-
-            attributed_decision = {
-                **normalized,
-                "reviewer": reviewer.username,
-                "reviewer_id": str(reviewer.id),
-            }
-            if not isinstance(reviewer.username, str) or not reviewer.username.strip():
-                raise ReviewClaimForbidden("reviewer identity unavailable")
-            assessment = checkpoint.state_json.get("risk_assessment")
-            if not isinstance(assessment, dict):
-                raise ReviewClaimIntegrityError()
-            try:
-                # This is validation only.  Persisting the revised graph state is
-                # intentionally outside this ownership service.
-                apply_human_review(
-                    assessment,
-                    attributed_decision,
-                    scoring_view=checkpoint.state_json.get("scoring_view"),
-                    field_checks=checkpoint.state_json.get("field_checks"),
-                )
-            except ValueError as exc:
-                raise ReviewClaimInvalidDecision("invalid review decision") from exc
-
-            claim.state = "accepted"
-            claim.decision_json = copy.deepcopy(attributed_decision)
-            claim.decision_digest = self._decision_digest(attributed_decision)
-            claim.accepted_at = now
-            db.flush()
+            self._accept_pending(db, checkpoint, claim, reviewer, normalized, now)
             return self._receipt(claim, checkpoint)
 
         return self._execute(operation)
+
+    def _claim_pending(self, db, checkpoint, integrity, claim, reviewer, now, supplied_token=None):
+        """Shared locked claim operation for explicit claims and HTTP preparation."""
+        if claim is None:
+            if supplied_token is not None:
+                raise ReviewClaimConflict("staletoken")
+            claim = ResearchReviewClaim(
+                checkpoint_id=checkpoint.id, owner_id=checkpoint.user_id, reviewer_id=reviewer.id,
+                token=secrets.token_urlsafe(32), basis_version=integrity.business_revision,
+                basis_seal=integrity.business_seal, state="claimed",
+                lease_expires_at=now + timedelta(seconds=self._lease_seconds),
+            )
+            db.add(claim)
+        elif claim.state == "claimed" and self._is_live(claim.lease_expires_at, now):
+            self._verify_claim_basis(claim, checkpoint, integrity)
+            self._require_claim_identity(claim, reviewer.id, supplied_token)
+            return claim
+        elif claim.state in {"claimed", "released"}:
+            if supplied_token is not None:
+                raise ReviewClaimConflict("expired" if claim.state == "claimed" else "staletoken")
+            self._verify_claim_owner(claim, checkpoint)
+            self._reclaim(claim, integrity, reviewer.id, now)
+        elif claim.state == "accepted":
+            self._verify_claim_basis(claim, checkpoint, integrity)
+            self._verify_saved_decision(claim)
+            self._require_claim_identity(claim, reviewer.id, supplied_token)
+            return claim
+        elif claim.state == "finalized":
+            raise ReviewClaimConflict("finalized")
+        else:
+            raise ReviewClaimIntegrityError()
+        db.flush()
+        return claim
+
+    def _accept_pending(self, db, checkpoint, claim, reviewer, normalized, now):
+        """Shared decision validation; caller owns the entire transaction."""
+        if claim.state == "accepted":
+            if self._user_fields(self._verify_saved_decision(claim)) != normalized:
+                raise ReviewClaimConflict("decision")
+            return
+        if claim.state != "claimed":
+            raise ReviewClaimConflict("finalized" if claim.state == "finalized" else "conflict")
+        if not self._is_live(claim.lease_expires_at, now):
+            raise ReviewClaimConflict("expired")
+        attributed = {**normalized, "reviewer": reviewer.username, "reviewer_id": str(reviewer.id)}
+        if not isinstance(reviewer.username, str) or not reviewer.username.strip():
+            raise ReviewClaimForbidden("reviewer identity unavailable")
+        assessment = checkpoint.state_json.get("risk_assessment")
+        if not isinstance(assessment, dict):
+            raise ReviewClaimIntegrityError()
+        try:
+            apply_human_review(
+                assessment, attributed, scoring_view=checkpoint.state_json.get("scoring_view"),
+                field_checks=checkpoint.state_json.get("field_checks"),
+            )
+        except ValueError as exc:
+            raise ReviewClaimInvalidDecision("invalid review decision") from exc
+        claim.state = "accepted"
+        claim.decision_json = copy.deepcopy(attributed)
+        claim.decision_digest = self._decision_digest(attributed)
+        claim.accepted_at = now
+        db.flush()
+
+    def prepare_submission(self, session_id: object, reviewer_id: object, decision: object) -> ReviewSubmission:
+        """Claim and accept before opening SSE; invalid decisions leave no claim.
+
+        The existing session + authenticated reviewer + normalized decision is
+        the retry identity. Tokens stay server-side; a retry cannot change an
+        already accepted decision or take over another reviewer's accepted work.
+        """
+        requested = self._session_id(session_id)
+        reviewer_uuid = self._reviewer_uuid(reviewer_id)
+        normalized = self._normalize_user_decision(decision)
+
+        def operation(db):
+            reviewer = self._authorized_reviewer(db, reviewer_uuid)
+            checkpoint, integrity, claim, now = self._locked_context(db, requested)
+            if claim is not None and claim.state == "finalized":
+                self._authorize_finalized(checkpoint, integrity, claim, reviewer.id, requested)
+                if self._user_fields(self._verify_saved_decision(claim)) != normalized:
+                    raise ReviewClaimConflict("decision")
+            else:
+                owner = self._eligible_pending(checkpoint, integrity, requested)
+                self._forbid_self_review(owner, reviewer.id)
+                claim = self._claim_pending(db, checkpoint, integrity, claim, reviewer, now)
+                self._accept_pending(db, checkpoint, claim, reviewer, normalized, now)
+            return self._submission(checkpoint, claim)
+
+        return self._execute(operation)
+
+    def read_submission(
+        self, session_id: object, reviewer_id: object, token: object, *, renew: bool = False,
+    ) -> ReviewSubmission:
+        """Recheck durable authority when the stream actually starts/resumes."""
+        requested = self._session_id(session_id)
+        reviewer_uuid = self._reviewer_uuid(reviewer_id)
+        supplied_token = self._required_token(token)
+
+        def operation(db):
+            reviewer = self._authorized_reviewer(db, reviewer_uuid)
+            checkpoint, integrity, claim, now = self._locked_context(db, requested)
+            if claim is not None and claim.state == "finalized":
+                self._authorize_finalized(checkpoint, integrity, claim, reviewer.id, requested, supplied_token)
+            else:
+                owner = self._eligible_pending(checkpoint, integrity, requested)
+                self._forbid_self_review(owner, reviewer.id)
+                if claim is None or claim.state != "accepted":
+                    raise ReviewClaimConflict("notaccepted")
+                self._verify_claim_basis(claim, checkpoint, integrity)
+                self._require_claim_identity(claim, reviewer.id, supplied_token)
+                self._verify_saved_decision(claim)
+                if renew:
+                    claim.lease_expires_at = now + timedelta(seconds=self._lease_seconds)
+                    db.flush()
+            return self._submission(checkpoint, claim)
+
+        return self._execute(operation)
+
+    def _authorize_finalized(self, checkpoint, integrity, claim, reviewer_id, session_id, token=None):
+        self._verify_finalized_retry(checkpoint, integrity, claim, session_id)
+        self._forbid_self_review(checkpoint.user_id, reviewer_id)
+        self._verify_claim_owner(claim, checkpoint)
+        self._require_claim_identity(claim, reviewer_id, token)
+
+    def _submission(self, checkpoint, claim) -> ReviewSubmission:
+        return ReviewSubmission(
+            claim=self._receipt(claim, checkpoint), state_json=copy.deepcopy(checkpoint.state_json),
+            ui_state_json=copy.deepcopy(checkpoint.ui_state_json),
+        )
 
     def finalize(
         self,

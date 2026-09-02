@@ -135,14 +135,13 @@ class _ReviewService:
     def __init__(self):
         self.calls = []
 
-    async def submit_review(self, session_id, decision, user_id):
-        self.calls.append((session_id, decision, user_id))
+    async def submit_review(self, session_id, submission, *, claim_service):
+        self.calls.append((session_id, submission.claim.decision_json, submission.claim.owner_id))
         yield "data: [DONE]\n\n"
 
 
 class _FailingReviewService:
-    async def submit_review(self, _session_id, _decision, user_id):
-        del user_id
+    async def submit_review(self, _session_id, _submission, *, claim_service):
         if False:  # keep this an async generator so failure occurs in the SSE stream
             yield ""
         raise RuntimeError("review stream boom")
@@ -178,10 +177,31 @@ def _review_client(
             return []
 
     checkpoint_service = _CheckpointService(info)
+
+    class _ClaimService:
+        def prepare_submission(self, session_id, reviewer_id, decision):
+            # HTTP dependency/error contract only. Actual atomic DB authority
+            # and server attribution are covered by test_review_submission_postgres.
+            try:
+                owner_id = _StrictWorkspaceService(None).authorize_submission(session_id, reviewer_id)
+            except research_router_module.ReviewTaskNotFound as exc:
+                raise research_router_module.ReviewClaimNotFound() from exc
+            except research_router_module.ReviewWorkspaceIntegrityError as exc:
+                raise research_router_module.ReviewClaimIntegrityError() from exc
+            except research_router_module.ReviewTaskNotPending as exc:
+                if info and info.get("user_id") and str(info["user_id"]) != str(reviewer_id):
+                    raise research_router_module.ReviewClaimConflict("notpending") from exc
+                raise research_router_module.ReviewClaimForbidden() from exc
+            return SimpleNamespace(claim=SimpleNamespace(
+                owner_id=owner_id, reviewer_id=reviewer_id, token="server-only",
+                decision_json={**decision, "reviewer": user.username, "reviewer_id": reviewer_id},
+            ))
+
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_current_user_required] = lambda: user
-    app.dependency_overrides[research_router_module.get_db] = lambda: object()
+    app.dependency_overrides[research_router_module.get_db] = lambda: SimpleNamespace(close=lambda: None)
+    app.dependency_overrides[research_router_module.get_review_claim_service] = lambda: _ClaimService()
     monkeypatch.setattr(auth_router_module, "REVIEWER_POLICY", policy)
     monkeypatch.setattr(
         research_router_module,
@@ -392,7 +412,8 @@ def test_review_stream_failure_remains_a_framed_sse_error(monkeypatch):
     assert response.text.startswith("data: ")
     assert response.text.endswith("\n\n")
     assert '"type": "error"' in response.text
-    assert "review stream boom" in response.text
+    assert "review stream boom" not in response.text
+    assert "原决定重试" in response.text
 
 
 @pytest.mark.parametrize(
@@ -422,7 +443,7 @@ def test_any_authorized_role_is_forbidden_from_self_review(monkeypatch, actor, p
     [
         (None, 404),
         ({"session_id": "s", "user_id": None, "status": "paused"}, 403),
-        ({"session_id": "s", "user_id": _OWNER_ID, "status": "completed"}, 403),
+        ({"session_id": "s", "user_id": _OWNER_ID, "status": "completed"}, 409),
     ],
 )
 def test_reviewer_review_target_boundaries(monkeypatch, info, expected_status):

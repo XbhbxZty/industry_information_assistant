@@ -24,7 +24,8 @@ type StreamEvent = {
 function requestErrorMessage(error: unknown, action: 'load' | 'detail' | 'submit') {
   if (isAxiosError(error)) {
     const status = error.response?.status
-    const detail = error.response?.data?.detail || error.response?.data?.message || error.message
+    const rawDetail = error.response?.data?.detail || error.response?.data?.message
+    const detail = typeof rawDetail === 'string' ? rawDetail : ''
     if (status === 403) {
       const text = String(detail || '')
       if (text.includes('暂停') || text.includes('待人工复核') || text.includes('有效的待')) {
@@ -36,8 +37,9 @@ function requestErrorMessage(error: unknown, action: 'load' | 'detail' | 'submit
     if (status === 400) return action === 'submit'
       ? `任务状态已变化，无法提交复核：${detail || '当前不在待复核暂停状态。'}`
       : String(detail || '请求状态不正确。')
-    if (status === 409) return '该待复核任务的完整性校验未通过，系统已拒绝展示或提交该任务。'
-    return String(detail || '请求失败，请稍后重试。')
+    if (status === 409) return detail || '复核任务状态发生冲突。请刷新核对；已接受的决定请使用原决定重试。'
+    if (status === 422) return detail || '复核决定格式不正确，请检查批准状态、理由和改判等级。'
+    return detail || error.message || '请求失败，请稍后重试。'
   }
   return error instanceof Error ? error.message : '请求失败，请稍后重试。'
 }
@@ -67,7 +69,7 @@ async function consumeReviewStream(body: ReadableStream<Uint8Array>) {
       } catch (error) {
         // JSON 不完整的单帧不能伪装成已完成；后端明确 error 同样必须上抛。
         if (error instanceof SyntaxError) {
-          throw new Error('复核流包含无法解析的事件，未确认复核结论是否生效。请刷新待办后核对。')
+          throw new Error('复核流包含无法解析的事件，尚未确认完成。请使用原决定重试，或刷新待办核对。')
         }
         throw error
       }
@@ -85,7 +87,7 @@ async function consumeReviewStream(body: ReadableStream<Uint8Array>) {
   buffer += decoder.decode()
   if (buffer.trim()) processPart(buffer)
   if (!reachedTerminalState) {
-    throw new Error('复核流在终局确认前结束，未确认复核结论是否生效。请刷新待办后核对。')
+    throw new Error('复核流在终局确认前结束，尚未确认完成。请使用原决定重试，或刷新待办核对。')
   }
 }
 
@@ -103,7 +105,10 @@ function reviewRequest(detail: ReviewDetail): HumanReviewRequest {
     verified_rate: completeness.verified_rate || 0,
     unverified_fields: completeness.unverified_fields,
     conflicting_fields: completeness.conflicting_fields,
-    critical_issues: detail.critical_issues || [],
+    critical_issues: (detail.critical_issues || []).map(issue => ({
+      description: issue.description ?? undefined,
+      issue_type: issue.issue_type ?? undefined,
+    })),
     errors: detail.errors || [],
     profile_ref: detail.profile_ref,
   }

@@ -14,6 +14,8 @@ Plan -> Research -> Analyze -> Write -> Review -> (Revise) -> Complete
 
 import logging
 import asyncio
+import copy
+import json
 from typing import Dict, Any, List, Literal, Optional, AsyncGenerator
 from datetime import datetime
 
@@ -50,12 +52,14 @@ from .state import (
 try:
     from service.checkpoint_integrity import (
         GRAPH_SEAL_FIELD, MODE_MANAGED, MODE_STANDARD,
-        issue_graph_state_seal, mode_from_state, verify_graph_state_seal,
+        _state_projection, issue_graph_state_seal, mode_from_state,
+        verify_graph_state_seal,
     )
 except ImportError:
     from app.service.checkpoint_integrity import (
         GRAPH_SEAL_FIELD, MODE_MANAGED, MODE_STANDARD,
-        issue_graph_state_seal, mode_from_state, verify_graph_state_seal,
+        _state_projection, issue_graph_state_seal, mode_from_state,
+        verify_graph_state_seal,
     )
 from .agents import ChiefArchitect, DeepScout, CodeWizard, CriticMaster, LeadWriter, DataAnalyst
 from .agents.writer import _canonicalize_risk_block
@@ -734,6 +738,105 @@ class DeepResearchGraph:
         state["company_profile"] = canonical_company
         return state
 
+    @staticmethod
+    def _strict_json_equal(left: Any, right: Any) -> bool:
+        """Compare JSON-shaped values without Python's bool/int coercion."""
+        try:
+            return json.dumps(
+                left, ensure_ascii=False, sort_keys=True,
+                separators=(",", ":"), allow_nan=False,
+            ) == json.dumps(
+                right, ensure_ascii=False, sort_keys=True,
+                separators=(",", ":"), allow_nan=False,
+            )
+        except (TypeError, ValueError):
+            return False
+
+    def _require_review_basis_match(
+        self,
+        graph_state: Dict[str, Any],
+        basis_state: Dict[str, Any],
+    ) -> None:
+        """Require the paused graph to be exactly the claim's sealed basis.
+
+        The graph checkpoint is a second persistence system.  It is useful for
+        locating LangGraph's interrupt, but it is never allowed to replace the
+        short-transaction basis captured by ``ReviewClaimService``.
+        """
+        try:
+            graph_projection = _state_projection(graph_state)
+            basis_projection = _state_projection(basis_state)
+        except ValueError as exc:
+            raise ValueError("人工复核材料完整性校验失败") from exc
+        if not self._strict_json_equal(graph_projection, basis_projection):
+            raise ValueError("人工复核材料与已冻结检查点不一致")
+
+    @staticmethod
+    def _human_review_completed_event(
+        state: Dict[str, Any], session_id: str,
+    ) -> Dict[str, Any]:
+        """Build the public post-finalization event from verified state only."""
+        assessment = state.get("risk_assessment") or {}
+        review = assessment.get("human_review") or {}
+        return {
+            "type": "human_review_completed",
+            "session_id": session_id,
+            "human_review": review,
+            "level": assessment.get("level"),
+            "gates_applied": assessment.get("gates_applied") or [],
+            "credit_advice": assessment.get("credit_advice"),
+        }
+
+    def _claimed_review_candidate(
+        self,
+        basis_state: Dict[str, Any],
+        decision: Dict[str, Any],
+        accepted_at: str,
+        integrity_mode: Optional[str],
+        *,
+        phase: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Apply the accepted decision without invoking any research agent."""
+        state = copy.deepcopy(basis_state)
+        assessment = state.get("risk_assessment") or {}
+        state["risk_assessment"] = apply_human_review(
+            assessment, decision,
+            scoring_view=state.get("scoring_view"),
+            field_checks=state.get("field_checks"),
+            reviewed_at=accepted_at,
+        )
+        self._sync_risk_block(state)
+        state["phase"] = ResearchPhase.COMPLETED.value if phase is None else phase
+        self._seal_graph_state(state, integrity_mode)
+        return state
+
+    def _require_finished_review_match(
+        self,
+        graph_state: Dict[str, Any],
+        basis_state: Dict[str, Any],
+        decision: Dict[str, Any],
+        accepted_at: str,
+        integrity_mode: Optional[str],
+    ) -> None:
+        """Verify the only legal no-next graph output after human review.
+
+        A completed LangGraph snapshot can legitimately differ from the
+        pending DB basis: the human-review node has already applied the frozen
+        accepted decision and rewritten the canonical risk block, while the
+        finalizer transaction may still have failed.  It may *not* change any
+        other business field.  In particular that node has no phase mutation,
+        so its output phase must remain the pending basis phase; `_drive` sets
+        ``completed`` only on the terminal candidate it gives the finalizer.
+        """
+        basis_phase = basis_state.get("phase")
+        if not isinstance(basis_phase, str) or graph_state.get("phase") != basis_phase:
+            raise ValueError("finished human review phase mismatch")
+        expected = self._claimed_review_candidate(
+            basis_state, decision, accepted_at, integrity_mode,
+            phase=basis_phase,
+        )
+        self._require_review_basis_match(graph_state, expected)
+
     def get_checkpoint_info(self, session_id: str) -> Dict[str, Any]:
         """获取检查点信息"""
         if not self.checkpoint_service:
@@ -1057,16 +1160,33 @@ class DeepResearchGraph:
             logger.info("[Graph] 评级未要求人工复核，直接完成")
             return state
 
-        decision = interrupt(self._review_request(state, assessment))
+        resumed = interrupt(self._review_request(state, assessment))
+
+        # The production HTTP path has already accepted the decision in its
+        # own transaction.  Keep that authority outside graph state: the
+        # resume envelope carries no claim token and exists only for this
+        # invocation.  Legacy/offline callers keep passing a bare decision.
+        claimed_resume = bool(
+            isinstance(resumed, dict) and resumed.get("_claimed_review") is True
+        )
+        if claimed_resume:
+            decision = resumed.get("decision")
+            reviewed_at = resumed.get("accepted_at")
+            if not isinstance(decision, dict) or not isinstance(reviewed_at, str):
+                raise ValueError("人工复核恢复上下文非法")
+        else:
+            decision = resumed
+            reviewed_at = None
 
         # —— 以下只在恢复后执行 ——
-        logger.info(f"[Graph] 收到复核结论: {decision}")
+        logger.info("[Graph] 收到人工复核恢复: session=%s", state.get("session_id", ""))
         try:
             state["risk_assessment"] = apply_human_review(
                 assessment, decision or {},
                 # 与初次评级同源的数据，供覆盖等级后重算额度（BC-70）
                 scoring_view=state.get("scoring_view"),
                 field_checks=state.get("field_checks"),
+                reviewed_at=reviewed_at,
             )
         except ValueError as e:
             # 正常入口会在 resume_review 中预校验并保持 paused。这里是最后一道
@@ -1075,14 +1195,13 @@ class DeepResearchGraph:
             raise ValueError(f"人工复核结论非法，未采纳: {e}") from e
 
         self._sync_risk_block(state)
-        self._emit({
-            "type": "human_review_completed",
-            "session_id": state.get("session_id", ""),
-            "human_review": state["risk_assessment"]["human_review"],
-            "level": state["risk_assessment"]["level"],
-            "gates_applied": state["risk_assessment"]["gates_applied"],
-            "credit_advice": state["risk_assessment"]["credit_advice"],
-        })
+        # Claimed HTTP work is not complete until the finalizer's transaction
+        # commits.  Emitting this here would let a dropped stream claim success
+        # for an accepted-but-not-finalized decision.
+        if not claimed_resume:
+            self._emit(self._human_review_completed_event(
+                state, state.get("session_id", ""),
+            ))
         return state
 
     @staticmethod
@@ -1122,8 +1241,6 @@ class DeepResearchGraph:
         只存在事件载荷里，导出的 Word 交到评审会时就看不到谁批的。
         """
         report = state.get("final_report") or ""
-        if not report:
-            return
         try:
             state["final_report"] = _canonicalize_risk_block(
                 report, render_markdown(state["risk_assessment"])
@@ -1683,11 +1800,233 @@ class DeepResearchGraph:
                                        user_id=user_id):
             yield event
 
+    async def resume_claimed_review(
+        self,
+        session_id: str,
+        reviewer_id: str,
+        token: str,
+        claim_service: Any,
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """Resume one server-accepted review and finalize it atomically.
+
+        ``ReviewClaimService`` is the authority here.  In particular, this
+        method deliberately re-reads the submission after SSE has started:
+        the caller's earlier receipt/snapshot can be stale, and must never be
+        used to choose the decision, its timestamp, or the frozen materials.
+        """
+        try:
+            submission = claim_service.read_submission(
+                session_id, reviewer_id, token, renew=True,
+            )
+            claim = submission.claim
+            basis_state = copy.deepcopy(submission.state_json)
+        except Exception as exc:
+            logger.warning(
+                "[Graph] claimed review authority recheck failed: session=%s, type=%s",
+                session_id, type(exc).__name__,
+            )
+            yield {"type": "error", "content": "人工复核恢复失败，请刷新后重试"}
+            return
+
+        if not isinstance(basis_state, dict):
+            logger.warning("[Graph] claimed review has malformed basis: session=%s", session_id)
+            yield {"type": "error", "content": "人工复核恢复失败，请刷新后重试"}
+            return
+
+        # A lost SSE/finalizer response is a read-only replay.  The service has
+        # already verified the terminal claim, checkpoint integrity, decision,
+        # and final review attribution before returning this object.
+        if claim.state == "finalized":
+            yield self._human_review_completed_event(basis_state, session_id)
+            yield build_complete_event(basis_state, self._ui_references(basis_state))
+            return
+
+        decision = claim.decision_json
+        accepted_at = claim.accepted_at
+        if (
+            claim.state != "accepted"
+            or not isinstance(decision, dict)
+            or accepted_at is None
+        ):
+            logger.warning("[Graph] claimed review is not accepted: session=%s", session_id)
+            yield {"type": "error", "content": "人工复核恢复失败，请刷新后重试"}
+            return
+
+        try:
+            # The submitted DB state is the sole material basis.  Restoring it
+            # also validates its graph seal and reissues the managed-profile
+            # capability in memory only.
+            integrity_mode = mode_from_state(basis_state)
+            restored_basis = self._restore_managed_profile_snapshot(
+                basis_state, session_id, integrity_mode,
+            )
+            accepted_at_text = accepted_at.isoformat()
+        except Exception as exc:
+            logger.warning(
+                "[Graph] claimed review basis rejected: session=%s, type=%s",
+                session_id, type(exc).__name__,
+            )
+            yield {"type": "error", "content": "人工复核材料校验失败，请刷新后重试"}
+            return
+
+        context = {
+            "claim_service": claim_service,
+            "reviewer_id": reviewer_id,
+            # Token is deliberately request-local.  It is neither a state
+            # field nor part of the Command resume envelope.
+            "token": token,
+        }
+        config = {"configurable": {"thread_id": session_id}}
+        snapshot = None
+        try:
+            graph_state_getter = getattr(getattr(self, "graph", None), "aget_state", None)
+            if callable(graph_state_getter):
+                snapshot = await graph_state_getter(config)
+        except Exception as exc:
+            logger.warning(
+                "[Graph] claimed review graph snapshot read failed: session=%s, type=%s",
+                session_id, type(exc).__name__,
+            )
+            yield {"type": "error", "content": "人工复核恢复失败，请刷新后重试"}
+            return
+
+        next_nodes = tuple(getattr(snapshot, "next", ()) or ()) if snapshot else ()
+        if next_nodes:
+            if next_nodes != ("human_review",):
+                logger.warning(
+                    "[Graph] claimed review has unexpected pending nodes: session=%s, nodes=%s",
+                    session_id, next_nodes,
+                )
+                yield {"type": "error", "content": "人工复核恢复失败，请刷新后重试"}
+                return
+            try:
+                graph_state = dict(getattr(snapshot, "values", {}) or {})
+                graph_mode = mode_from_state(graph_state) or integrity_mode
+                if graph_mode != integrity_mode:
+                    raise ValueError("review graph mode mismatch")
+                restored_graph = self._restore_managed_profile_snapshot(
+                    graph_state, session_id, graph_mode,
+                )
+                self._require_review_basis_match(restored_graph, restored_basis)
+                self._seal_graph_state(restored_graph, integrity_mode)
+                # Restore only the in-process managed-profile capability and
+                # its corresponding seal.  The accepted decision is supplied
+                # via Command and the claim token is never persisted in graph.
+                await self.graph.aupdate_state(config, {
+                    "company_profile": restored_graph.get("company_profile"),
+                    "scoring_view": restored_graph.get("scoring_view"),
+                    GRAPH_SEAL_FIELD: restored_graph.get(GRAPH_SEAL_FIELD),
+                    "_checkpoint_integrity_mode": integrity_mode,
+                })
+            except Exception as exc:
+                logger.warning(
+                    "[Graph] claimed review graph/basis mismatch: session=%s, type=%s",
+                    session_id, type(exc).__name__,
+                )
+                yield {"type": "error", "content": "人工复核材料校验失败，请刷新后重试"}
+                return
+
+            yield {
+                "type": "research_resumed",
+                "session_id": session_id,
+                "reason": "human_review",
+                "profile_ref": public_profile_ref(restored_basis.get("admin_profile_ref")),
+                "timestamp": datetime.now().isoformat(),
+            }
+            resume_payload = {
+                "_claimed_review": True,
+                "decision": decision,
+                "accepted_at": accepted_at_text,
+            }
+            async for event in self._drive(
+                Command(resume=resume_payload), session_id,
+                review_context=context,
+            ):
+                yield event
+            return
+
+        # A finished LangGraph record is still evidence, not an excuse to
+        # ignore corruption.  Verify its original seal and its complete
+        # business projection before treating the no-next state as the safe
+        # deterministic-finalization fallback.  Only an actually absent graph
+        # checkpoint can skip this second-store verification.
+        if snapshot is not None:
+            try:
+                graph_state = dict(getattr(snapshot, "values", {}) or {})
+                if not graph_state:
+                    # LangGraph represents an absent thread as an empty
+                    # StateSnapshot.  A checkpoint-id/metadata-bearing empty
+                    # snapshot, however, is a damaged persisted record and
+                    # must never be silently treated as missing.
+                    snapshot_config = getattr(snapshot, "config", {}) or {}
+                    snapshot_meta = getattr(snapshot, "metadata", None)
+                    snapshot_id = (
+                        snapshot_config.get("configurable", {}).get("checkpoint_id")
+                        if isinstance(snapshot_config, dict) else None
+                    )
+                    if snapshot_id or snapshot_meta is not None:
+                        raise ValueError("empty persisted graph snapshot")
+                    snapshot = None
+                if snapshot is None:
+                    # Genuine no-thread result: use the frozen DB basis below.
+                    pass
+                else:
+                    graph_mode = mode_from_state(graph_state) or integrity_mode
+                    if graph_mode != integrity_mode:
+                        raise ValueError("review graph mode mismatch")
+                    restored_graph = self._restore_managed_profile_snapshot(
+                        graph_state, session_id, graph_mode,
+                    )
+                    self._require_finished_review_match(
+                        restored_graph, restored_basis, decision,
+                        accepted_at_text, integrity_mode,
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "[Graph] claimed finished graph/basis mismatch: session=%s, type=%s",
+                    session_id, type(exc).__name__,
+                )
+                yield {"type": "error", "content": "人工复核材料校验失败，请刷新后重试"}
+                return
+
+        # The human-review node has no downstream model work.  A completed or
+        # missing LangGraph interrupt therefore must not strand an already
+        # accepted decision; deterministically derive the terminal candidate
+        # from the sealed database basis and let the finalizer validate it.
+        try:
+            candidate = self._claimed_review_candidate(
+                restored_basis, decision, accepted_at_text, integrity_mode,
+            )
+            yield {
+                "type": "research_resumed",
+                "session_id": session_id,
+                "reason": "human_review",
+                "profile_ref": public_profile_ref(restored_basis.get("admin_profile_ref")),
+                "timestamp": datetime.now().isoformat(),
+            }
+            finalized = claim_service.finalize(
+                session_id, reviewer_id, token, candidate,
+                ui_state=self._build_ui_state(candidate),
+            )
+        except Exception as exc:
+            logger.warning(
+                "[Graph] claimed review deterministic finalization failed: session=%s, type=%s",
+                session_id, type(exc).__name__,
+            )
+            yield {"type": "error", "content": "人工复核恢复失败，请刷新后重试"}
+            return
+
+        yield self._human_review_completed_event(finalized.state_json, session_id)
+        yield build_complete_event(
+            finalized.state_json, self._ui_references(finalized.state_json),
+        )
+
     async def _drive(
         self,
         payload: Any,
         session_id: str,
         user_id: str = None,
+        review_context: Optional[Dict[str, Any]] = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         驱动一次图执行（首次运行或恢复），把三种收尾情况分开处理：
@@ -1706,6 +2045,18 @@ class DeepResearchGraph:
                 payload, config, stream_mode=["custom", "values"]
             ):
                 if mode == "custom":
+                    # The atomic claimed path may only announce completion
+                    # after ReviewClaimService.finalize returns.  This is a
+                    # defense in depth for future node changes: custom stream
+                    # writers cannot pre-empt the finalizer's authority.
+                    if (
+                        review_context is not None
+                        and isinstance(chunk, dict)
+                        and chunk.get("type") in {
+                            "human_review_completed", "research_complete",
+                        }
+                    ):
+                        continue
                     yield chunk
                 elif isinstance(chunk, dict):
                     if chunk.get("__interrupt__"):
@@ -1715,7 +2066,29 @@ class DeepResearchGraph:
 
             if interrupted is not None:
                 # 暂停：写 paused 状态，推出复核请求，**不发终局事件**
+                if review_context is not None:
+                    # An accepted claim must remain accepted if the graph did
+                    # not actually consume its Command.  In particular, do
+                    # not overwrite it with failed/paused status from this
+                    # best-effort SSE execution path.
+                    logger.warning(
+                        "[Graph] claimed review interrupted again: session=%s", session_id,
+                    )
+                    yield {"type": "error", "content": "人工复核恢复失败，请刷新后重试"}
+                    return
                 if self.checkpoint_service and session_id:
+                    # The graph snapshot and business checkpoint form one
+                    # review basis.  Persist the exact sealed pause state
+                    # before changing its status; otherwise a later claimed
+                    # resume would compare the interrupt snapshot with an
+                    # earlier writer checkpoint and (correctly) reject it.
+                    saved = self._save_checkpoint(
+                        final_state,
+                        final_state.get("_user_id"),
+                        self._build_ui_state(final_state),
+                    )
+                    if not saved:
+                        raise ValueError("待复核检查点保存失败")
                     if not self.checkpoint_service.update_status(session_id, "paused"):
                         raise ValueError("待复核检查点暂停状态保存失败")
                 # ``interrupt.value`` is serialized checkpointer data, not an
@@ -1736,6 +2109,25 @@ class DeepResearchGraph:
                 return
 
             final_state["phase"] = ResearchPhase.COMPLETED.value
+            if review_context is not None:
+                # The accepted decision and completed checkpoint are a single
+                # transaction in ReviewClaimService.  Do not call the ordinary
+                # checkpoint writer/status methods here: those would create a
+                # visible completed state without a finalized review claim.
+                self._seal_graph_state(final_state)
+                finalized = review_context["claim_service"].finalize(
+                    session_id,
+                    review_context["reviewer_id"],
+                    review_context["token"],
+                    final_state,
+                    ui_state=self._build_ui_state(final_state),
+                )
+                yield self._human_review_completed_event(finalized.state_json, session_id)
+                yield build_complete_event(
+                    finalized.state_json, self._ui_references(finalized.state_json),
+                )
+                return
+
             if self.checkpoint_service and session_id:
                 # ⚠️ 必须先落**完整状态**再改状态位（BC-69）。
                 #
@@ -1771,10 +2163,22 @@ class DeepResearchGraph:
             yield build_complete_event(final_state, self._ui_references(final_state))
 
         except Exception as e:
-            logger.error(f"[Graph] LangGraph execution error: {e}", exc_info=True)
-            if self.checkpoint_service and session_id:
+            if review_context is not None:
+                logger.warning(
+                    "[Graph] claimed review execution failed: session=%s, type=%s",
+                    session_id, type(e).__name__,
+                )
+            else:
+                logger.error(f"[Graph] LangGraph execution error: {e}", exc_info=True)
+            # Accepted ownership survives a disconnect, cancellation, or any
+            # graph-side exception.  Only the finalizer may advance its DB
+            # checkpoint; a later retry re-reads and safely resumes it.
+            if review_context is None and self.checkpoint_service and session_id:
                 self.checkpoint_service.update_status(session_id, "failed", str(e))
-            yield {"type": "error", "content": str(e)}
+            if review_context is not None:
+                yield {"type": "error", "content": "人工复核恢复失败，请刷新后重试"}
+            else:
+                yield {"type": "error", "content": str(e)}
 
     async def run_sync(self, query: str, session_id: str) -> ResearchState:
         """
