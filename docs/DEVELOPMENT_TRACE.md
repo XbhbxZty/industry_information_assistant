@@ -258,16 +258,16 @@
 
 ### DEV-BC-20260831-015：普通 SHA 可以随被篡改历史一起重新计算
 
-- **阶段 / 状态**：3.4D1 / 已缓解
+- **阶段 / 状态**：3.4D1 → 3.4D2b / 已关闭（开发版代码；已有库待显式迁移）
 - **发现方式**：现有 3.4C1 审计实现与篡改测试复核
 - **现象**：当前 `content_sha256` 和快照连续性不含秘密；拥有数据库写权限者可以改写领域快照、重算公开 SHA，并同步修改后继 before/current 行。
 - **影响**：3.4C1 可以发现意外损坏和未完整重算的篡改，但不能证明记录由持有独立审计密钥的应用签发。
 - **根因**：内容摘要用于一致性校验，不具备消息认证能力；模型尚无 key id、前序 MAC 或审计 MAC。
-- **解决办法**：D1 冻结版本化 HMAC 记录、完整快照摘要、显式 keyring、legacy anchor 和完整观测验证协议；D2b 再将其迁移和接入所有生产读写边界。
+- **解决办法**：D1 冻结版本化 HMAC 记录、完整快照摘要、显式 keyring、legacy anchor 和完整观测验证协议；D2b 已增加迁移，并将其接入实际档案读写边界。
 - **回归保护**：`test_mutating_any_persisted_audit_field_fails_closed`、`test_native_chain_crosses_key_rotation_without_resigning_history`、`test_observed_chain_binds_actual_snapshots_domain_semantics_and_current_row`。
-- **验证结果**：纯协议 49 项测试和全量回归通过；协议可以拒绝无 key 的重算，但生产表尚未使用该协议。
-- **提交**：`8460581`
-- **遗留风险**：状态为“已缓解”而非“已关闭”；在 3.4D2b 完成前，线上档案仍只有 3.4C1 结构校验。
+- **验证结果**：D1 当时完成纯协议 49 项测试；D2b 已接实际服务并通过 191 项定向组合测试。`test_recomputed_plain_hashes_and_metadata_forgery_cannot_pass` 证明重算业务及完整快照 SHA、同步修改当前行后，旧结构检查虽通过，HMAC 边界仍拒绝。真实 PostgreSQL 测试验证签名写入、旧链锚定和回滚。
+- **提交**：协议 `8460581`；实际接线 `5bb6704`
+- **遗留风险**：已有业务库未自动迁移；需配置独立密钥并在线升级 0002。HMAC 不证明锚定前历史真实性，也不抵抗签名密钥泄露或整库与 head 一起回滚。
 
 ### DEV-BC-20260831-016：检查点 key id 只能识别当前 secret，轮换会拒绝全部旧记录
 
@@ -532,6 +532,26 @@
 - **回归保护 / 验证**：启动配置静态测试检查 `.env` 排除项，compose 配置检查通过；本阶段不宣称已完成镜像部署验收。
 - **提交**：`27ad6a0`
 - **遗留风险**：镜像实际构建和部署仍待后续验收。
+
+### DEV-BC-20260902-004：新增 ORM 字段后旧库夹具不能再跟随当前模型建表
+
+- **阶段 / 状态**：轻量第二批 D2b / 已关闭（测试夹具）
+- **发现方式**：主审旧库冻结契约，随后真实 PostgreSQL 关联回归。
+- **现象 / 根因**：旧 preflight 夹具使用当前 `Base.metadata.create_all` 重建 0001；增加锚点和签名列后不再代表旧库。首版替换为完整 baseline upgrade，又使 Docker 混合库的两个测试因已有 `users` 表报 `DuplicateTable`。
+- **解决办法**：测试夹具从冻结 0001 revision 构建；混合库仅在测试内拦截建表/索引操作、跳过已有表，复现旧 create_all 的行为。生产迁移不使用这种跳过机制，原冻结 manifest 不变。
+- **回归保护 / 验证**：`test_docker_legacy_variants_are_known_incompatible_and_never_stamped`、`test_real_managed_unmanaged_fk_and_trigger_edges_are_explicitly_rejected`；关联组合 82 项通过，最终定向组合 191 项通过。
+- **提交**：`5bb6704`
+- **遗留风险**：adoption/preflight 固定面向 0001 旧库；已升级 0002 的库应用 Alembic current/check 与 head guard，不应再走旧库 adoption。
+
+### DEV-BC-20260902-005：旧回滚测试通过详情服务读取损坏档案，与新验链契约冲突
+
+- **阶段 / 状态**：轻量第二批 D2b / 已关闭（测试断言失配）
+- **发现方式**：第一次定向测试出现 1 failed / 80 passed。
+- **现象 / 根因**：测试故意破坏审计后，仍调用 `get_company_profile` 读取 revision 以证明更新已回滚；现在详情与研究入口统一失败关闭，该读取正确抛出完整性异常。
+- **解决办法**：回滚落盘状态改用测试内 ORM 查询核对，同时断言详情服务必须拒绝损坏档案；不放宽实际服务校验。
+- **回归保护 / 验证**：`test_audit_continuity_failure_blocks_history_and_research_snapshot` 及所有消费边界 409/503 测试通过；最终定向组合 191 项通过。
+- **提交**：`5bb6704`
+- **遗留风险**：无已知遗留。
 
 ## 新条目模板
 
