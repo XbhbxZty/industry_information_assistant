@@ -464,6 +464,45 @@
 - **提交**：`dc0f788`
 - **遗留风险**：测试进程被硬杀时可能遗留随机前缀角色，后续测试运维可增加孤儿扫描；不影响生产预检只读路径。
 
+### DEV-BC-20260901-011：稳定 policy ID 未绑定内容且目标身份缺少规范化定义
+
+- **阶段 / 状态**：3.4D2a2a / 已关闭
+- **发现方式**：主代理对初版纯契约的提交前审计
+- **现象**：初版 approval 只引用 `target_policy_id`，同一 ID 下替换 server/database 目标内容仍可通过；数据库目标还使用自由文本 binding，profile 写成未冻结的 `base-full`。
+- **影响**：部署策略可在审批后被静默重绑定，调用方也可能用不同字符串规范描述同一或不同目标，削弱错库保护。
+- **根因**：稳定标识符被误当成不可变内容凭证，且 D2a2.1 的冻结 profile 与 PostgreSQL 物理/逻辑身份尚未形成同一 canonical 协议。
+- **解决办法**：approval 同时绑定 policy ID 与 canonical policy SHA-256；复用 `BASE_MANIFEST_ID`；分别冻结包含 cluster system identifier/address/port/version 和 database name/OID/owner 的身份摘要格式。
+- **回归保护**：`test_policy_and_runtime_target_mismatch_fail_closed`、`test_canonical_target_identity_changes_when_any_bound_value_changes` 及固定 Unicode/hash 向量。
+- **验证结果**：策略内容在相同 ID 下变化、任一目标身份字段变化和歧义输入均失败关闭；定向组合测试通过。
+- **提交**：`5245101`
+- **遗留风险**：D2a2b 必须从受保护部署配置加载 policy，并在锁内从 PostgreSQL 重新计算身份；客户端传入同结构 JSON 不能成为信任根。
+
+### DEV-BC-20260901-012：非 UTC 服务端时钟会在校验前被静默归一化
+
+- **阶段 / 状态**：3.4D2a2a / 已关闭
+- **发现方式**：主代理时间边界审计
+- **现象**：初版先调用 `astimezone(UTC)` 再检查 offset，因此 `UTC+08:00` 等 aware datetime 会被接受，尽管接口契约要求执行层显式提供 UTC 时钟。
+- **影响**：调用方违反可信时钟协议时不会失败，时间来源/单位错误更难在 adoption 前暴露。
+- **根因**：规范化发生在输入前置条件验证之前。
+- **解决办法**：先要求 `server_now` timezone-aware 且原始 UTC offset 精确为零，再做 UTC 归一化；`now == expires_at` 明确判定过期。
+- **回归保护**：`test_expiry_future_and_ttl_use_supplied_server_clock_only` 覆盖非 UTC aware、未来确认、TTL 超限和到期相等边界。
+- **验证结果**：非 UTC 时钟稳定返回 `invalid_timestamp`，精确到期返回 `approval_expired`；定向组合测试通过。
+- **提交**：`5245101`
+- **遗留风险**：D2a2b 必须使用同一 writer connection 读取 PostgreSQL 时间，不能把客户端时间转成 UTC 后冒充服务端时钟。
+
+### DEV-BC-20260901-013：审批中的 preflight digest 曾是未参与门禁的孤立字段
+
+- **阶段 / 状态**：3.4D2a2a / 已关闭
+- **发现方式**：Terra High 子代理最终对抗复核
+- **现象**：候选实现只验证 `expected_preflight_sha256` 的 64 位格式，没有纯入口将它与 D2a2.1 的当前报告、`exact_adoptable` 状态和 base-full profile 同时比较。
+- **影响**：未来执行器若遗漏手工拼接校验，任意形状合法的 digest 可能通过审批验证，锁内二次指纹成为可选步骤。
+- **根因**：审批、目标和 preflight 各自有局部 validator，但缺少不可跳过的组合协议。
+- **解决办法**：新增 `validate_approved_preflight` 和统一 `validate_adoption_contract`；要求 fresh report 为 `EXACT_ADOPTABLE`、冻结 profile、无 unmanaged package/差异，且 snapshot/preflight digest 合法、审批摘要精确相等。
+- **回归保护**：`test_approved_preflight_requires_fresh_exact_report_and_digest`、`test_approved_preflight_rejects_untyped_or_malformed_report`、`test_composite_contract_applies_approval_target_and_preflight_gates`。
+- **验证结果**：漂移状态、profile 不符、摘要变化、unmanaged package、差异和错误目标均失败关闭；阶段全量 `1071 passed / 18 skipped`。
+- **提交**：`5245101`
+- **遗留风险**：纯函数不能证明 report 来源；D2a2b 必须只传入取得锁后由同一 writer connection 重采集的报告，并单独强制认证、受保护 policy 来源和 approval replay 语义。
+
 ## 新条目模板
 
 ```markdown

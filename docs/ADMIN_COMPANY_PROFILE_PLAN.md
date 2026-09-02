@@ -1,8 +1,7 @@
 # 管理员企业档案专项计划
 
 > **当前状态**：3.0～3.3、3.4A、3.4B、3.4C1、3.4C2a、3.4C2b 已完成；
-> 3.4D1、3.4D2a1、3.4D2a2.1 已完成；3.4D2a2 已进一步拆分，下一可开发单元为
-> 3.4D2a2a。
+> 3.4D1、3.4D2a1、3.4D2a2.1、3.4D2a2a 已完成；下一可开发单元为 3.4D2a2b。
 > 工程 Bad Case 见
 > [`DEVELOPMENT_TRACE.md`](DEVELOPMENT_TRACE.md)。
 
@@ -31,7 +30,7 @@
 | 3.4D1 | 无数据库副作用的审计链密码协议与固定向量 | 已完成 | `8460581` |
 | 3.4D2a1 | 统一数据库连接权威、Alembic 环境与空库 0001 | 已完成 | `735e36e` |
 | 3.4D2a2.1 | 冻结旧 schema catalog manifest 与只读 preflight | 已完成 | `dc0f788` |
-| 3.4D2a2a | 审批声明、受保护目标策略与纯验证协议 | 待开始 | — |
+| 3.4D2a2a | 审批声明、受保护目标策略与纯验证协议 | 已完成 | `5245101` |
 | 3.4D2a2b | 锁内二次指纹、事务化 adoption 与并发封板 | 待开始 | — |
 | 3.4D2a3 | 移除运行时建表、切换 Docker/脚本并建立启动 guard | 待开始 | — |
 | 3.4D2b | 审计链持久化、旧历史锚定与生产失败关闭 | 待开始 | — |
@@ -229,12 +228,12 @@ stamp/DDL 参数。最终纯测与真实 PostgreSQL 定向矩阵合计 `34 passe
   Alembic stamp、postverify、回滚/commit outcome unknown 和真实 PostgreSQL 并发测试。
 
 `AdoptionApproval` 只是操作者声明，不能被描述成工具已经验证备份可恢复或外部写者全部停止。
-目标信任根必须来自独立的部署配置/运维控制面；approval 只能引用 policy ID，不能在同一请求中
-自填目标身份并让工具宣称目标已经可信。
+目标信任根必须来自独立的部署配置/运维控制面；approval 只能引用 policy ID 及其 canonical
+content SHA-256，不能在同一请求中自填目标身份并让工具宣称目标已经可信。
 
-1. 操作者必须独立提供 expected database/server identity、旧 profile、preflight digest、备份
-   引用、维护窗口引用、确认时间与固定确认短语。工具只能校验和记录声明，不能伪称自动证明
-   备份可恢复或所有外部写者已停止。
+1. 受保护 target policy 独立保存 expected database/server identity；操作者声明旧 profile、
+   policy ID/content digest、preflight digest、备份引用、维护窗口引用、确认时间与固定确认短语。
+   工具只能校验和记录声明，不能伪称自动证明备份可恢复或所有外部写者已停止。
 2. adoption 使用一个短 PostgreSQL 事务：取得项目固定的 transaction advisory lock，对现有
    managed 表加 DDL 冲突锁，在同一连接重新读取 catalog，并逐项匹配目标身份、profile 与已
    审批 digest；任何变化立即回滚。
@@ -246,6 +245,18 @@ stamp/DDL 参数。最终纯测与真实 PostgreSQL 定向矩阵合计 `34 passe
 5. 真实 PostgreSQL 覆盖预检后漂移、错误目标库、两个 adoption 竞争、stamp 前后异常回滚、
    幂等和临时库清理身份保护。当前 D2a3 前仍有不使用共同锁的 `create_all`，因此技术锁不能
    取代真实排他维护窗口。
+
+D2a2a 完成证据：严格 JSON 拒绝重复键、未知/缺失字段与非标准值；approval 同时绑定稳定
+base-full profile、policy ID/content SHA-256 和 preflight SHA-256；服务器与数据库身份使用
+冻结格式生成 canonical digest；服务端 UTC 时钟执行 15 分钟 TTL 与精确到期边界；统一纯入口
+同时校验审批、目标和新鲜 `exact_adoptable` 报告。backup/window 始终标记为 operator
+attestation。定向契约/预检组合 `38 passed`，后端全量 `1071 passed / 18 skipped`；代码检查点
+为 `5245101`。
+
+D2a2b 的执行入口不得接收客户端提供的 target policy 或 preflight report；必须从受保护部署
+配置加载 policy，由已认证的 maintenance principal 发起，在锁内同一 writer connection 取得
+PostgreSQL 时间、目标身份与二次 preflight，再调用统一纯验证入口。approval ID 必须进入可审计、
+可判断重放/结果未知的执行结果；固定短语和合法 JSON 本身都不构成授权。
 
 #### 4.4.3 3.4D2a3：切换唯一 schema 权威
 
