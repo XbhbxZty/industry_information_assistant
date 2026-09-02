@@ -1,8 +1,8 @@
 # 管理员企业档案专项计划
 
 > **当前状态**：3.0～3.3、3.4A、3.4B、3.4C1、3.4C2a、3.4C2b 已完成；
-> 3.4D1、3.4D2a1、3.4D2a2.1、3.4D2a2a、3.4D2a2b、3.4D2a3、3.4D2b、3.4D3 已完成；下一批为
-> 3.4D4a＋3.4D4b：检查点可信绑定与 reviewer 原子裁决。当前按开发/演示口径交付，不代表已可直接上线。
+> 3.4D1、3.4D2a1、3.4D2a2.1、3.4D2a2a、3.4D2a2b、3.4D2a3、3.4D2b、3.4D3、3.4D4a 已完成；
+> 下一批为 3.4D4b：reviewer 原子裁决与断流恢复。当前按开发/演示口径交付，不代表已可直接上线。
 > 工程 Bad Case 见
 > [`DEVELOPMENT_TRACE.md`](DEVELOPMENT_TRACE.md)。
 
@@ -36,14 +36,14 @@
 | 3.4D2a3 | 移除运行时建表、切换 Docker/脚本并建立启动 guard | 已完成（开发版） | `27ad6a0` |
 | 3.4D2b | 审计链持久化、旧历史锚定与实际读写失败关闭 | 已完成（开发版） | `5bb6704` |
 | 3.4D3 | 审计与检查点密钥轮换、保留和退役保护 | 已完成（开发版） | `f40832a` |
-| 3.4D4a | 检查点 owner/status/version 可信绑定与 claim 模型 | 待开始 | — |
+| 3.4D4a | 检查点 owner/status/version 可信绑定与 claim 模型 | 已完成（开发版） | `e33652c` |
 | 3.4D4b | reviewer 原子领取、幂等裁决与断流恢复 | 待开始 | — |
 | 3.5 | PostgreSQL、独立进程和浏览器端到端封板 | 待开始 | — |
 
 ### 2026-09-02 起的执行口径（用户已确认）
 
 优先真实实现和开发环境闭环；已经完成的协议/测试保留，不重新实现。剩余工作按五批交付：
-D2a2b＋D2a3（已完成）→ D2b（已完成）→ D3 最小轮换（已完成）→ D4a＋D4b → 3.5 集中联调。
+D2a2b＋D2a3（已完成）→ D2b（已完成）→ D3 最小轮换（已完成）→ D4a（已完成）＋D4b → 3.5 集中联调。
 不新增线上审批中心、密钥管理平台或通用旧库修复框架；部署加固不再阻塞后续业务和 RAG。
 权限、个人知识库隔离、数据不丢失、证据来源和唯一最终决定仍是基本正确性要求。
 
@@ -364,7 +364,7 @@ legacy adoption/preflight、启动 guard、演示 seed 和数据库探索器隔�
 `git diff --check` 通过；随机临时数据库确认已清理。
 未跑全后端、独立进程部署或浏览器验收，不把 MemorySaver 测试等同部署完成。
 
-**下次从 D4a 开工**：先检查 checkpoint session 唯一性、owner/status/business version 的
+**D3 当时的接续任务（已由 D4a 完成）**：先检查 checkpoint session 唯一性、owner/status/business version 的
 可信绑定和最小 claim/decision 模型，再接 D4b 短事务领取、幂等裁决及断流恢复。
 保持可保存的小检查点，不重做 D1/D2/D3，也不扩大为上线审批/密钥管理平台。
 
@@ -381,6 +381,36 @@ legacy adoption/preflight、启动 guard、演示 seed 和数据库探索器隔�
 
 验收：重复 session、缺失完整性、owner/status/version 篡改、非法状态转换和 FK/唯一约束
 在真实 PostgreSQL 中失败关闭。
+
+#### 2026-09-02 D4a 交付与恢复点
+
+代码检查点 `e33652c`，开始前为 `e5c2a1f`（工作区干净）。一个 Terra/high 子代理负责模型、
+迁移及定向复核；主代理负责上下文协议、服务接线、真实图/数据库集成与收尾。
+
+- 新增独立 context 封签域，不改 D3 的 v1 图/业务签名字节。绑定 checkpoint/session/owner/
+  status/business revision/business MAC；复用原 business_revision，不再维护一份平行版本。
+- `save_checkpoint`、状态转换先锁行并验旧值；进度保存保留 paused，终态不可重新改写；
+  状态变化也递增版本、重签。读取缺失配对或上下文一律拒绝，不再走 unsigned legacy 分支。
+- reviewer 在按 owner/status 过滤前验签，避免篡改成空 owner/本人任务后静默隐藏；图的暂停
+  和最终保存失败不再发送成功完成事件。最终裁决原子性仍未完成，不能扩大这个结论。
+- migration `20260902_0003`：session 唯一、status 非空检查、UUID 配对外键、版本单调触发器，
+  及 checkpoint 唯一的领取/裁决记录表。旧数据先核查并验原封签，只新增 `migration_observed_v1`
+  观测，不改旧 MAC/版本；损坏、重复、缺失完整性或历史 key 均使整次事务回滚。
+- 领取模型已保存 owner/reviewer/token/basis/lease/decision/timestamps，并与工作流状态分开。
+  **尚未接入领取接口和原子 finalization**；没有声称双 reviewer 或断流恢复已完成。
+
+验证：主定向组合 `252 passed`、补充原档案审计迁移 `6 passed`，均无跳过；包括真实 PostgreSQL
+升级/check/降级/重升、旧记录回填与失败回滚、并发保存版本不丢失、claim FK/唯一/状态形状、
+真实 LangGraph MemorySaver＋PostgreSQL 暂停/复核恢复、轮换预检、权限和探索器隔离。
+`py_compile` / `git diff --check` 通过。Bad Case `20260902-009`～`015` 已记入追踪台账。
+未跑全后端、浏览器或独立后端进程；不把内存图测试当作部署验收。
+
+仅创建/清理随机临时数据库，未改已有业务库、用户 `.env` 或运行中容器。实际使用前须停写、
+备份并独立核对旧 checkpoint owner/status，再按迁移说明升级。新 head 为 `20260902_0003`。
+Git 回退不等于数据库回退，降级会丢失 context/claim 元数据；真实数据回退应恢复匹配备份。
+
+**下次从 D4b 开工**：先用现有模型完成短事务领取/接受与真实竞争测试，再接最终事务、幂等
+重试及 SSE 断流恢复；仍按可保存的小检查点交付，不重做 D4a 或扩展管理平台。
 
 ### 4.8 3.4D4b：原子 reviewer 裁决与断流恢复
 

@@ -30,6 +30,7 @@
 | 2026-08-31 | 3.4D1 审计链密码协议 | 已完成 | DEV-BC-20260831-014 ～ 020 | `8460581` | 协议 49 项、相关定向 111 项、后端全量 1011 passed / 2 skipped；Terra High 复验无 P0/P1 |
 | 2026-09-01 | 3.4D2a1 连接权威与空库基线 | 已完成 | DEV-BC-20260901-001 ～ 005 | `735e36e` | 真实 PostgreSQL upgrade/check/downgrade/re-upgrade 通过；后端全量 1033 passed / 3 skipped；Terra High 复核无 P0，3 个 P1 已关闭 |
 | 2026-09-01 | 3.4D2a2.1 冻结指纹与只读预检 | 已完成 | DEV-BC-20260901-006 ～ 010 | `dc0f788` | 最终纯测+真实 PostgreSQL 定向 34 passed；阶段全量基线 1050 passed / 15 skipped；Terra High 最终无 P0/P1 |
+| 2026-09-02 | 3.4D4a 检查点上下文与领取模型 | 已完成（开发版） | DEV-BC-20260902-009 ～ 015 | `e33652c` | 主定向组合 252 passed，补充档案审计迁移 6 passed；含真实 PG 与图恢复，无跳过 |
 
 > 前两阶段是从已提交代码、测试和阶段验证结果做的基线回填；3.4C2b 起均在问题处理当期登记。
 
@@ -582,6 +583,77 @@
 - **回归保护 / 验证**：`test_persistence_never_treats_missing_stored_key_id_as_use_active` 从失败变为通过，并纳入 212 项组合及最终定向复跑。
 - **提交**：`f40832a`
 - **遗留风险**：owner/status/version 的完整可信绑定仍由 D4a 承接，本修复不代表该项已完成。
+
+### DEV-BC-20260902-009：研究内容已封签，但归属和工作流状态未绑定
+
+- **阶段 / 状态**：D4a / 已关闭
+- **发现方式**：恢复审计与上下文篡改测试。
+- **现象 / 根因 / 影响**：旧业务 MAC 只绑定 state/session/revision；owner/status 可单独改写，缺失 Integrity 还会被当作可读取的旧记录。保存旧记录会重新赋予完整性元数据，可能掩盖损坏。
+- **解决办法**：保留 v1 签名字节，新增独立上下文域，绑定 checkpoint/session/owner/status/revision/business MAC。所有持久化读取先验三层封签；缺失配对不再兼容。写入先锁定并验旧值，再递增版本、同时重签。旧迁移仅生成明确标识的观测封签。
+- **回归保护 / 验证**：`test_context_binds_every_identity_and_basis_field`、`test_real_corruption_never_passes_read_or_save`、真实 PG 迁移失败回滚与并发版本测试通过。
+- **提交**：`e33652c`
+- **遗留风险**：迁移观测不能证明迁移前 owner/status 的真实性；迁移前仍需独立核对归属与备份。
+
+### DEV-BC-20260902-010：在验证前过滤 owner 会隐藏被篡改的待复核任务
+
+- **阶段 / 状态**：D4a / 已关闭
+- **发现方式**：主审 reviewer 队列读取顺序。
+- **现象 / 根因 / 影响**：队列先排除空 owner 和本人任务，再验证完整性；将 owner 改成 NULL 或 reviewer 自身时，损坏任务可能静默消失。
+- **解决办法**：先验证上下文，再按可信 owner/status 筛选；详情同样先验证归属上下文。
+- **回归保护 / 验证**：`test_forged_owner_cannot_hide_a_task_from_the_review_queue` 两种篡改均抛完整性冲突；真实 PostgreSQL 图暂停后 reviewer 授权通过。
+- **提交**：`e33652c`
+- **遗留风险**：小规模开发队列逐条验证；本批不建设分页索引或后台队列系统。
+
+### DEV-BC-20260902-011：持久化返回失败时图仍可能发送完成事件
+
+- **阶段 / 状态**：D4a / 已关闭
+- **发现方式**：主审图终局调用与注入保存/状态转换失败的回归测试。
+- **现象 / 根因 / 影响**：调用方忽略 `_save_checkpoint`、`update_status` 的返回值；新增严格校验拒绝写入后，SSE 仍可能显示研究完成。
+- **解决办法**：暂停和最终完成检查写入结果；失败进入 error，不发 `research_complete`。保存进度保留 paused，不静默重开待复核。
+- **回归保护 / 验证**：`test_graph_does_not_emit_completion_when_persistence_rejects`、真实图＋PG 暂停/恢复/回读通过。替身的成功状态更新明确返回 True，与服务契约一致。
+- **提交**：`e33652c`
+- **遗留风险**：`human_review_completed` 的发送时点、终局同事务、竞争和断流恢复仍由 D4b 处理；本修复不代表唯一裁决完成。
+
+### DEV-BC-20260902-012：唯一约束误落到无对应列的 ORM 表
+
+- **阶段 / 状态**：D4a / 已关闭
+- **发现方式**：共享目录集成测试 collection 报 `ConstraintColumnNotFoundError`。
+- **现象 / 根因 / 影响**：子代理中间补丁把 token 唯一约束放进 ResearchCheckpoint，导致整个 models 包无法导入。
+- **解决办法**：将约束移至 ResearchReviewClaim；实现完成后再执行模型导入、静态合约与实际 `alembic check`。
+- **回归保护 / 验证**：静态 metadata/head 与真实 PG upgrade/check/downgrade/re-upgrade 通过。
+- **提交**：`e33652c`
+- **遗留风险**：子代理写入期间读取可看到中间状态；最终提交前必须集成复验。
+
+### DEV-BC-20260902-013：迁移日志配置关闭已有应用安全日志器
+
+- **阶段 / 状态**：D4a / 已关闭
+- **发现方式**：真实 PG 图测试后紧接权限测试，组合结果 1 failed / 62 passed。
+- **现象 / 根因 / 影响**：Alembic `fileConfig` 默认禁用已有日志器，使 reviewer 非法配置告警不再出现在 caplog；同进程调用也会失去该安全告警。
+- **解决办法**：显式 `disable_existing_loggers=False`，不关闭调用方已初始化的日志器。
+- **回归保护 / 验证**：`test_migration_keeps_existing_application_loggers_enabled` 与原告警脱敏测试通过。
+- **提交**：`e33652c`
+- **遗留风险**：不改变日志后端或部署配置，未建设日志平台。
+
+### DEV-BC-20260902-014：JSON null 不等于领取状态要求的 SQL NULL
+
+- **阶段 / 状态**：D4a / 已关闭
+- **发现方式**：主审后补充 `decision_json=None` 的真实 PG 创建反例，先复现 CHECK 失败。
+- **现象 / 根因 / 影响**：默认 JSONB 将 Python None 写成 JSON 字面量 null，不能满足未接受裁决时的 `decision_json IS NULL`；显式传空决定反而无法领取。
+- **解决办法**：领取记录的 `decision_json` 使用 `JSONB(none_as_null=True)`；其他业务 JSON 格式不变。
+- **回归保护**：`test_database_constraints_and_claim_skeleton` 显式传 None 并验证约束、禁止自审、外键、唯一目标和保留删除保护。
+- **验证结果**：修复后纳入最终 252 项组合通过，无跳过。
+- **提交**：`e33652c`
+- **遗留风险**：领取/裁决服务尚未开放，后续 D4b 使用该模型，不另建平行状态。
+
+### DEV-BC-20260902-015：旧迁移测试把阶段 revision 当成永远不变的 head
+
+- **阶段 / 状态**：D4a / 已关闭（测试合约修正）
+- **发现方式**：主审后续 head 对原迁移测试的影响，未将未经执行的失败记为测试结果。
+- **现象 / 根因 / 影响**：D2b 成功测试停在冻结 0002 后直接用当前 ORM 做 `alembic check`；新增 0003 后已不再处于当前 head，不能作为无漂移证明。
+- **解决办法**：保留 D2b 0002 目标及原失败回滚断言；成功路径继续升到当前 head，再检查 metadata 一致性。
+- **回归保护 / 验证**：`test_company_profile_audit_migration_postgres.py` 6 项真实 PG 测试通过。
+- **提交**：`e33652c`
+- **遗留风险**：后续增加 migration 时仍需区分冻结历史 revision 与动态应用 head。
 
 ## 新条目模板
 
