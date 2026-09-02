@@ -1,9 +1,8 @@
 """Durable, database-only ownership for a pending human review.
 
-This service deliberately stops at recording an accepted decision.  Applying
-that decision to the graph/checkpoint is a later, separately coordinated step;
-mixing it into the lease transaction would make the ownership boundary much
-harder to audit and recover.
+Accepted decisions remain durable review ownership.  Their only completion
+path is the short, atomic finalization transaction below, which applies the
+deterministic state/report result and seals it with the terminal claim.
 """
 from __future__ import annotations
 
@@ -31,9 +30,13 @@ try:  # The application is normally imported with ``backend/app`` on sys.path.
         ResearchReviewClaim,
     )
     from models.user import User
-    from service.checkpoint_integrity import CheckpointIntegrityError
+    from service.checkpoint_integrity import (
+        CheckpointIntegrityError,
+        _state_projection,
+        verify_graph_state_seal,
+    )
     from service.checkpoint_service import CheckpointService
-    from service.risk_scorecard import apply_human_review
+    from service.risk_scorecard import apply_human_review, render_markdown
 except ImportError:  # pragma: no cover - supports package-style callers.
     from app.config.reviewer_policy import REVIEWER_POLICY, ReviewerPolicy
     from app.core.database import SessionLocal
@@ -43,9 +46,13 @@ except ImportError:  # pragma: no cover - supports package-style callers.
         ResearchReviewClaim,
     )
     from app.models.user import User
-    from app.service.checkpoint_integrity import CheckpointIntegrityError
+    from app.service.checkpoint_integrity import (
+        CheckpointIntegrityError,
+        _state_projection,
+        verify_graph_state_seal,
+    )
     from app.service.checkpoint_service import CheckpointService
-    from app.service.risk_scorecard import apply_human_review
+    from app.service.risk_scorecard import apply_human_review, render_markdown
 
 
 class ReviewClaimError(RuntimeError):
@@ -102,6 +109,16 @@ class ReviewClaimReceipt:
     finalized_at: Optional[datetime]
 
 
+@dataclass(frozen=True)
+class FinalizedReview:
+    """Detached committed result of applying an accepted human decision."""
+
+    claim: ReviewClaimReceipt
+    state_json: Dict[str, Any] = field(repr=False)
+    ui_state_json: Optional[Dict[str, Any]] = field(repr=False)
+    final_report: str = field(repr=False)
+
+
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{43}$")
 _DIGEST_RE = re.compile(r"[0-9a-f]{64}\Z")
 _USER_DECISION_KEYS = frozenset({"approved", "comment", "override_level"})
@@ -110,7 +127,7 @@ _DB_CONFLICT_CODES = frozenset({"55P03", "40P01", "40001", "23505"})
 
 
 class ReviewClaimService:
-    """Claim/accept/release/renew pending review work in small PG transactions."""
+    """Claim, accept, and atomically finalize pending review work in short PG transactions."""
 
     def __init__(
         self,
@@ -247,6 +264,93 @@ class ReviewClaimService:
 
         return self._execute(operation)
 
+    def finalize(
+        self,
+        session_id: object,
+        reviewer_id: object,
+        token: object,
+        final_state: object,
+        *,
+        ui_state: Optional[object] = None,
+    ) -> FinalizedReview:
+        """Atomically apply one accepted decision and complete its checkpoint.
+
+        The graph state is an input to this boundary, not an authority: its
+        graph seal, every unchanged business field, the deterministic risk
+        result, and the report block are all checked before anything is made
+        durable.  This keeps the accepted decision and the completed evidence
+        record indivisible even if a client loses the commit response.
+        """
+        requested_session = self._session_id(session_id)
+        supplied_token = self._required_token(token)
+        reviewer_uuid = self._reviewer_uuid(reviewer_id)
+
+        def operation(db: Session) -> FinalizedReview:
+            # Keep database role authorization before any target lookup, like
+            # the other claim operations, so an untrusted identity cannot use
+            # this endpoint to probe checkpoint existence or lock state.
+            reviewer = self._authorized_reviewer(db, reviewer_uuid)
+            checkpoint, integrity, claim, now = self._locked_context(db, requested_session)
+            if claim is None:
+                owner_id = self._eligible_pending(checkpoint, integrity, requested_session)
+                self._forbid_self_review(owner_id, reviewer.id)
+                raise ReviewClaimConflict("staletoken")
+
+            if claim.state == "finalized":
+                # A completed checkpoint is no longer eligible_pending(), but
+                # it still has to pass the same seal/owner checks *before*
+                # identity comparison.  That makes self-review forbidden for
+                # lost-response retries too, rather than a token conflict.
+                try:
+                    self._integrity_verifier._verify_integrity_pair(
+                        checkpoint, integrity, requested_session,
+                    )
+                except CheckpointIntegrityError as exc:
+                    raise ReviewClaimIntegrityError() from exc
+                if checkpoint.user_id is None:
+                    raise ReviewClaimIntegrityError()
+                self._forbid_self_review(checkpoint.user_id, reviewer.id)
+                self._verify_claim_owner(claim, checkpoint)
+                self._require_claim_identity(claim, reviewer.id, supplied_token)
+                self._verify_finalized_retry(checkpoint, integrity, claim, requested_session)
+                return self._finalized_receipt(claim, checkpoint)
+
+            owner_id = self._eligible_pending(checkpoint, integrity, requested_session)
+            self._forbid_self_review(owner_id, reviewer.id)
+            self._verify_claim_owner(claim, checkpoint)
+            self._require_claim_identity(claim, reviewer.id, supplied_token)
+            self._verify_claim_basis(claim, checkpoint, integrity)
+            if claim.state != "accepted":
+                raise ReviewClaimConflict("conflict")
+            decision = self._verify_saved_decision(claim)
+            if not self._is_live(claim.lease_expires_at, now):
+                raise ReviewClaimConflict("expired")
+
+            completed_state, completed_report = self._validated_final_state(
+                final_state, checkpoint, integrity, claim, decision, requested_session,
+            )
+            completed_ui = self._clean_final_ui_state(ui_state, checkpoint.ui_state_json)
+
+            # No CheckpointService writer is called here: it owns a separate
+            # transaction.  We already hold all rows in its documented order,
+            # so the state, its versioned seals, and the terminal claim must
+            # be changed and committed together.
+            checkpoint.state_json = completed_state
+            checkpoint.ui_state_json = completed_ui
+            checkpoint.final_report = completed_report
+            checkpoint.phase = "completed"
+            checkpoint.status = "completed"
+            checkpoint.updated_at = datetime.utcnow()
+            self._integrity_verifier._refresh_integrity(
+                checkpoint, integrity, integrity.business_revision + 1,
+            )
+            claim.state = "finalized"
+            claim.finalized_at = now
+            db.flush()
+            return self._finalized_receipt(claim, checkpoint)
+
+        return self._execute(operation)
+
     def release(
         self, session_id: object, reviewer_id: object, token: object,
     ) -> ReviewClaimReceipt:
@@ -307,7 +411,223 @@ class ReviewClaimService:
 
         return self._execute(operation)
 
-    def _execute(self, operation: Callable[[Session], ReviewClaimReceipt]) -> ReviewClaimReceipt:
+    def _validated_final_state(
+        self,
+        final_state: object,
+        checkpoint: ResearchCheckpoint,
+        integrity: ResearchCheckpointIntegrity,
+        claim: ResearchReviewClaim,
+        decision: Dict[str, Any],
+        session_id: str,
+    ) -> tuple[Dict[str, Any], str]:
+        """Validate a graph-produced terminal state against the sealed basis."""
+        if not isinstance(final_state, dict):
+            raise ReviewClaimConflict("finalstate")
+        candidate = dict(final_state)
+        if candidate.get("session_id") != session_id or candidate.get("phase") != "completed":
+            raise ReviewClaimConflict("finalstate")
+
+        try:
+            # This must happen before storage cleaning.  Otherwise a cleaner
+            # could turn an attacker-provided graph value into a different,
+            # apparently valid persisted object.
+            verify_graph_state_seal(candidate, integrity.mode)
+        except CheckpointIntegrityError as exc:
+            raise ReviewClaimIntegrityError() from exc
+
+        # Runtime queues/locks can be uncopyable. They are explicitly outside
+        # the storage/signing contract, so validate the original first and
+        # copy only persisted fields; the cleaned result is verified again.
+        try:
+            candidate = copy.deepcopy({
+                key: value for key, value in candidate.items() if not key.startswith("_")
+            })
+        except Exception as exc:
+            raise ReviewClaimConflict("finalstate") from exc
+
+        pending = checkpoint.state_json
+        pending_assessment = pending.get("risk_assessment") if isinstance(pending, dict) else None
+        if not isinstance(pending_assessment, dict):
+            raise ReviewClaimIntegrityError()
+        try:
+            expected_assessment = apply_human_review(
+                copy.deepcopy(pending_assessment),
+                copy.deepcopy(decision),
+                scoring_view=copy.deepcopy(pending.get("scoring_view")),
+                field_checks=copy.deepcopy(pending.get("field_checks")),
+                reviewed_at=claim.accepted_at.isoformat(),
+            )
+        except (ValueError, TypeError, AttributeError) as exc:
+            # The decision was accepted against this exact basis.  A failure
+            # here therefore identifies persisted corruption, never a reason
+            # to silently choose another final risk result.
+            raise ReviewClaimIntegrityError() from exc
+
+        candidate_assessment = candidate.get("risk_assessment")
+        if not self._strict_json_equal(candidate_assessment, expected_assessment):
+            raise ReviewClaimConflict("finalstate")
+
+        try:
+            pending_projection = _state_projection(pending)
+            candidate_projection = _state_projection(candidate)
+        except CheckpointIntegrityError as exc:
+            raise ReviewClaimIntegrityError() from exc
+        for projection in (pending_projection, candidate_projection):
+            for field_name in ("risk_assessment", "final_report", "phase"):
+                projection.pop(field_name, None)
+        if not self._strict_json_equal(candidate_projection, pending_projection):
+            raise ReviewClaimConflict("finalstate")
+
+        pending_report = pending.get("final_report", "")
+        if pending_report is None:
+            pending_report = ""
+        if not isinstance(pending_report, str):
+            raise ReviewClaimIntegrityError()
+        expected_report = self._canonical_final_report(pending_report, expected_assessment)
+        if candidate.get("final_report") != expected_report:
+            raise ReviewClaimConflict("finalstate")
+
+        try:
+            clean_state = self._integrity_verifier._clean_state_for_storage(candidate)
+            # Runtime fields are intentionally absent from storage.  They are
+            # outside graph signing, but the resulting persisted value must
+            # still verify before it may receive a business/context seal.
+            verify_graph_state_seal(clean_state, integrity.mode)
+        except CheckpointIntegrityError as exc:
+            raise ReviewClaimIntegrityError() from exc
+        except Exception as exc:
+            raise ReviewClaimConflict("finalstate") from exc
+        return clean_state, expected_report
+
+    def _clean_final_ui_state(
+        self, ui_state: Optional[object], current_ui_state: Optional[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        """Preserve omitted UI state, or strictly clean the supplied snapshot."""
+        if ui_state is None:
+            try:
+                return copy.deepcopy(current_ui_state)
+            except Exception as exc:
+                raise ReviewClaimIntegrityError() from exc
+        if not isinstance(ui_state, dict):
+            raise ReviewClaimConflict("finalstate")
+        try:
+            clean = self._integrity_verifier._clean_state_for_storage(copy.deepcopy(ui_state))
+            # JSONB must not receive a Python-only value merely because the
+            # ordinary checkpoint cleaner would stringify it recursively.
+            json.dumps(clean, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+            return clean
+        except (TypeError, ValueError) as exc:
+            raise ReviewClaimConflict("finalstate") from exc
+        except Exception as exc:
+            raise ReviewClaimUnavailable("review claim service unavailable") from exc
+
+    @staticmethod
+    def _strict_json_equal(left: object, right: object) -> bool:
+        """Compare JSON values without Python's ``True == 1`` coercion."""
+        try:
+            return json.dumps(
+                left, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False,
+            ) == json.dumps(
+                right, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False,
+            )
+        except (TypeError, ValueError):
+            return False
+
+    @staticmethod
+    def _canonical_final_report(report: str, assessment: Dict[str, Any]) -> str:
+        # Importing a graph agent at module import time creates a substantial
+        # dependency cycle.  The writer already owns this report rule, so load
+        # only that helper after the accepted decision and its basis are known.
+        try:
+            from service.deep_research_v2.agents.writer import _canonicalize_risk_block
+        except ImportError:  # pragma: no cover - package-style callers.
+            from app.service.deep_research_v2.agents.writer import _canonicalize_risk_block
+        return _canonicalize_risk_block(report, render_markdown(assessment))
+
+    def _verify_finalized_retry(
+        self,
+        checkpoint: ResearchCheckpoint,
+        integrity: ResearchCheckpointIntegrity,
+        claim: ResearchReviewClaim,
+        session_id: str,
+    ) -> None:
+        """Fail closed before returning a lost-response finalization retry."""
+        try:
+            self._integrity_verifier._verify_integrity_pair(checkpoint, integrity, session_id)
+        except CheckpointIntegrityError as exc:
+            raise ReviewClaimIntegrityError() from exc
+        decision = self._verify_saved_decision(claim)
+        if (
+            checkpoint.status != "completed"
+            or checkpoint.phase != "completed"
+            or not isinstance(claim.finalized_at, datetime)
+            or claim.finalized_at.tzinfo is None
+            or claim.finalized_at < claim.accepted_at
+            or integrity.business_revision != claim.basis_version + 1
+        ):
+            raise ReviewClaimIntegrityError()
+        state = checkpoint.state_json
+        assessment = state.get("risk_assessment") if isinstance(state, dict) else None
+        if (
+            not isinstance(state, dict)
+            or state.get("phase") != "completed"
+            or not isinstance(assessment, dict)
+        ):
+            raise ReviewClaimIntegrityError()
+        if (
+            not isinstance(checkpoint.final_report, str)
+            or not isinstance(state.get("final_report"), str)
+            or checkpoint.final_report != state["final_report"]
+        ):
+            raise ReviewClaimIntegrityError()
+        self._verify_final_human_review(assessment, decision, claim.accepted_at)
+
+    @staticmethod
+    def _verify_final_human_review(
+        assessment: Dict[str, Any], decision: Dict[str, Any], accepted_at: datetime,
+    ) -> None:
+        review = assessment.get("human_review")
+        if not isinstance(review, dict):
+            raise ReviewClaimIntegrityError()
+        expected = {
+            "completed": True,
+            "approved": decision["approved"],
+            "reviewer": decision["reviewer"],
+            "reviewer_id": decision["reviewer_id"],
+            "comment": decision["comment"],
+            "override_level": decision["override_level"],
+            "reviewed_at": accepted_at.isoformat(),
+            "engine_composite_score": assessment.get("composite_score"),
+        }
+        if any(not ReviewClaimService._strict_json_equal(review.get(key), value)
+               for key, value in expected.items()):
+            raise ReviewClaimIntegrityError()
+        engine_level = review.get("engine_level")
+        if not isinstance(engine_level, str) or not engine_level:
+            raise ReviewClaimIntegrityError()
+        if decision["approved"] is not True or decision["override_level"] is None:
+            if not ReviewClaimService._strict_json_equal(engine_level, assessment.get("level")):
+                raise ReviewClaimIntegrityError()
+        elif not ReviewClaimService._strict_json_equal(
+            assessment.get("level"), decision["override_level"],
+        ):
+            raise ReviewClaimIntegrityError()
+
+    @staticmethod
+    def _finalized_receipt(
+        claim: ResearchReviewClaim, checkpoint: ResearchCheckpoint,
+    ) -> FinalizedReview:
+        report = checkpoint.final_report
+        if not isinstance(report, str):
+            raise ReviewClaimIntegrityError()
+        return FinalizedReview(
+            claim=ReviewClaimService._receipt(claim, checkpoint),
+            state_json=copy.deepcopy(checkpoint.state_json),
+            ui_state_json=copy.deepcopy(checkpoint.ui_state_json),
+            final_report=copy.deepcopy(report),
+        )
+
+    def _execute(self, operation: Callable[[Session], Any]) -> Any:
         db: Optional[Session] = None
         try:
             db = self._session_factory()

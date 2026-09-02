@@ -54,7 +54,7 @@ def _config() -> Config:
 def test_migration_history_has_one_reviewed_baseline_and_one_head():
     script = ScriptDirectory.from_config(_config())
     assert script.get_bases() == ["20260831_0001"]
-    assert script.get_heads() == ["20260902_0003"]
+    assert script.get_heads() == ["20260902_0004"]
     revision = script.get_revision("20260831_0001")
     assert revision is not None
     assert revision.down_revision is None
@@ -71,6 +71,8 @@ def test_data_dependent_upgrades_explicitly_reject_offline_sql():
         command.upgrade(config, "20260831_0001:20260902_0002", sql=True)
     with pytest.raises(RuntimeError, match="在线升级"):
         command.upgrade(config, "20260902_0002:20260902_0003", sql=True)
+    with pytest.raises(RuntimeError, match="在线升级"):
+        command.upgrade(config, "20260902_0003:20260902_0004", sql=True)
 
 
 def test_migration_keeps_existing_application_loggers_enabled():

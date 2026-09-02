@@ -10,9 +10,10 @@ import logging
 from typing import Dict, Any, Optional, List
 from uuid import UUID
 from datetime import datetime
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from models.research import ResearchCheckpoint, ResearchCheckpointIntegrity
+from models.research import ResearchCheckpoint, ResearchCheckpointIntegrity, ResearchReviewClaim
 from core.database import SessionLocal
 from service.checkpoint_integrity import (
     CheckpointIntegrityError,
@@ -49,10 +50,46 @@ class CheckpointService:
         return str(checkpoint_id)
 
     @staticmethod
-    def _integrity_row(db: Session, session_id: str) -> Optional[ResearchCheckpointIntegrity]:
-        return db.query(ResearchCheckpointIntegrity).filter(
+    def _integrity_row(
+        db: Session, session_id: str, *, for_update: bool = False,
+    ) -> Optional[ResearchCheckpointIntegrity]:
+        query = db.query(ResearchCheckpointIntegrity).filter(
             ResearchCheckpointIntegrity.session_id == session_id
-        ).first()
+        )
+        if for_update:
+            query = query.with_for_update(nowait=True)
+        return query.first()
+
+    @staticmethod
+    def _require_unclaimed_write(db: Session, checkpoint: ResearchCheckpoint) -> None:
+        """Normal saves cannot race or bypass a durable review owner.
+
+        Call only after locking checkpoint then integrity. The checkpoint lock
+        also serializes the absent-claim case against the first claim insert.
+        Accepted work stays protected even after lease expiry; only its atomic
+        finalizer may change the basis and completion status together.
+        """
+        claim = db.query(ResearchReviewClaim).filter(
+            ResearchReviewClaim.checkpoint_id == checkpoint.id,
+        ).with_for_update(nowait=True).first()
+        if claim is None:
+            return
+        if claim.owner_id != checkpoint.user_id:
+            raise CheckpointIntegrityError("复核领取与检查点归属不一致")
+        if claim.state in {"accepted", "finalized"}:
+            raise CheckpointIntegrityError("已接受复核决定的检查点只能通过最终事务写入")
+        if claim.state == "released":
+            return
+        if claim.state != "claimed":
+            raise CheckpointIntegrityError("复核领取状态非法")
+        expires = claim.lease_expires_at
+        if not isinstance(expires, datetime) or expires.tzinfo is None:
+            raise CheckpointIntegrityError("复核领取有效期非法")
+        now = db.execute(text("SELECT clock_timestamp()")).scalar_one()
+        if not isinstance(now, datetime) or now.tzinfo is None:
+            raise CheckpointIntegrityError("无法确认复核领取有效期")
+        if expires > now:
+            raise CheckpointIntegrityError("检查点正由复核人占用，不可修改复核材料")
 
     def _verify_integrity_pair(
         self,
@@ -180,7 +217,7 @@ class CheckpointService:
             existing = db.query(ResearchCheckpoint).filter(
                 ResearchCheckpoint.session_id == session_id
             ).with_for_update().first()
-            integrity = self._integrity_row(db, session_id)
+            integrity = self._integrity_row(db, session_id, for_update=True)
 
             if integrity and not existing:
                 raise CheckpointIntegrityError("检查点完整性记录没有对应检查点")
@@ -190,6 +227,7 @@ class CheckpointService:
                 # has already failed validation.  This preserves fail-closed
                 # semantics across writes, not just restores.
                 self._verify_integrity_pair(existing, integrity, session_id, mode)
+                self._require_unclaimed_write(db, existing)
                 if user_id is not None and UUID(str(user_id)) != existing.user_id:
                     raise CheckpointIntegrityError("检查点所属用户不可变更")
                 if existing.status == "completed":
@@ -434,8 +472,9 @@ class CheckpointService:
             if not checkpoint:
                 return False
 
-            integrity = self._integrity_row(db, session_id)
+            integrity = self._integrity_row(db, session_id, for_update=True)
             self._verify_integrity_pair(checkpoint, integrity, session_id)
+            self._require_unclaimed_write(db, checkpoint)
             self._require_transition(checkpoint.status, status)
             if checkpoint.status == status:
                 return True
@@ -472,7 +511,10 @@ class CheckpointService:
             ).with_for_update().first()
             if checkpoint is None:
                 return False
-            self._verify_integrity_pair(checkpoint, self._integrity_row(db, session_id), session_id)
+            self._verify_integrity_pair(
+                checkpoint, self._integrity_row(db, session_id, for_update=True), session_id,
+            )
+            self._require_unclaimed_write(db, checkpoint)
             # Paired deletion is atomic; a retained review claim's FK rejects it.
             db.query(ResearchCheckpointIntegrity).filter(
                 ResearchCheckpointIntegrity.session_id == session_id

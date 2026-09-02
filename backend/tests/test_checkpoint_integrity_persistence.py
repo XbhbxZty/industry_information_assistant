@@ -22,7 +22,7 @@ for path in (str(BACKEND), str(APP)):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from models.research import ResearchCheckpoint, ResearchCheckpointIntegrity  # noqa: E402
+from models.research import ResearchCheckpoint, ResearchCheckpointIntegrity, ResearchReviewClaim  # noqa: E402
 from service.checkpoint_integrity import (  # noqa: E402
     CheckpointIntegrityError,
     GRAPH_SEAL_FIELD,
@@ -143,6 +143,8 @@ class _Query:
             return self.db.checkpoint
         if self.model is ResearchCheckpointIntegrity:
             return self.db.integrity
+        if self.model is ResearchReviewClaim:
+            return None  # This double has no review claims; real ownership uses PG tests.
         raise AssertionError(f"unexpected model {self.model}")
 
     def delete(self):

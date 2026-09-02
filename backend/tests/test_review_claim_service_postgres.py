@@ -277,6 +277,8 @@ def test_accept_means_received_not_approval_or_finalization(pending, decision):
 @pytest.mark.parametrize("operation", ["claim", "accept"])
 def test_non_pending_but_validly_sealed_state_is_not_claimable(pending, operation):
     receipt = pending.service.claim(SESSION, pending.users["one"]) if operation == "accept" else None
+    if receipt is not None:
+        _expire(pending)  # New normal-write guard correctly blocks a live claim.
     assert pending.checkpoints.update_status(SESSION, "completed")
     with pytest.raises(ReviewClaimConflict):
         if operation == "claim":
@@ -310,7 +312,13 @@ def test_corrupt_checkpoint_cannot_be_claimed(pending, change):
 def test_changed_sealed_basis_blocks_live_claim_but_expiry_allows_new_basis(pending):
     one = pending.users["one"]
     old = pending.service.claim(SESSION, one)
-    assert pending.checkpoints.save_checkpoint(SESSION, pending.state)
+    # D4b2a now blocks normal writes during a live claim. Simulate an otherwise
+    # valid out-of-band sealed change to retain coverage of D4b1's last defense.
+    with Session(pending.engine) as db:
+        cp = db.query(ResearchCheckpoint).with_for_update().one()
+        integrity = db.query(ResearchCheckpointIntegrity).with_for_update().one()
+        pending.checkpoints._refresh_integrity(cp, integrity, integrity.business_revision + 1)
+        db.commit()
     for operation in (
         lambda: pending.service.accept(SESSION, one, old.token, APPROVE),
         lambda: pending.service.claim(SESSION, one),
@@ -352,7 +360,11 @@ def test_corrupted_accepted_decision_is_not_returned_as_an_idempotent_success(pe
     receipt = pending.service.claim(SESSION, one)
     pending.service.accept(SESSION, one, receipt.token, APPROVE)
     with pending.engine.begin() as connection:
+        # Privileged corruption fixture, disposable DB only. Ordinary writes
+        # are rejected by the new immutable-decision trigger (tested separately).
+        connection.execute(text("ALTER TABLE research_review_claims DISABLE TRIGGER research_review_claims_accepted_immutable"))
         connection.execute(text("UPDATE research_review_claims SET decision_digest=:digest"), {"digest": "0" * 64})
+        connection.execute(text("ALTER TABLE research_review_claims ENABLE TRIGGER research_review_claims_accepted_immutable"))
     with pytest.raises(ReviewClaimIntegrityError):
         pending.service.claim(SESSION, one)
     with pytest.raises(ReviewClaimIntegrityError):
@@ -379,6 +391,8 @@ def test_non_ascii_decision_digest_is_integrity_failure_not_database_outage(pend
     receipt = pending.service.claim(SESSION, one)
     pending.service.accept(SESSION, one, receipt.token, APPROVE)
     with pending.engine.begin() as connection:
+        connection.execute(text("ALTER TABLE research_review_claims DISABLE TRIGGER research_review_claims_accepted_immutable"))
         connection.execute(text("UPDATE research_review_claims SET decision_digest=:bad"), {"bad": "é" * 64})
+        connection.execute(text("ALTER TABLE research_review_claims ENABLE TRIGGER research_review_claims_accepted_immutable"))
     with pytest.raises(ReviewClaimIntegrityError):
         pending.service.accept(SESSION, one, receipt.token, APPROVE)

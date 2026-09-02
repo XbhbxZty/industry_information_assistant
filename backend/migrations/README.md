@@ -28,7 +28,7 @@ remain outside this managed application schema; Alembic never drops them.
 
 ## Company-profile audit chain (0002)
 
-The audit-chain revision is `20260902_0002`; current head is `20260902_0003`.
+The audit-chain revision is `20260902_0002`; current head is `20260902_0004`.
 Configure both settings from `.env.example`
 before upgrading a database containing company profiles or using profile CRUD:
 
@@ -103,6 +103,27 @@ The table is not available through the database explorer/Text2SQL demo allowlist
 their constraints. Use it only on disposable development data; real rollback
 requires a matching reviewed backup, code and keys. Git checkout alone does not
 roll back a database, and upgrading again cannot recover original observations.
+
+## Accepted review decision protection (0004)
+
+0004 adds triggers only; it does not rewrite data or add another review table.
+After acceptance, owner/reviewer/token/basis/decision/accepted time are immutable;
+lease renewal remains possible. Finalized claim rows cannot be changed or deleted,
+and the claim table cannot be truncated. A deferred check on accepted-to-finalized
+transitions requires the matching owned checkpoint to be completed with business
+revision `basis_version + 1` by the same commit. Deferring this check avoids
+depending on ORM flush ordering or acquiring locks in reverse order.
+
+The service remains responsible for authorization, seals, lease/token validation,
+the exact risk/report result and transaction orchestration. These triggers are
+not a substitute for service validation or protection against a database owner
+who can disable them, rewrite other tables, or manufacture new claim rows.
+
+Stop writers and confirm the selected database and restorable backup before an
+explicit `upgrade head`. No business database is upgraded automatically by this
+development checkpoint. `downgrade 20260902_0003` removes these guards but retains
+claim/decision data; use a matching code checkout when rolling back. HTTP/SSE
+review submission is not yet connected to the new claim/finalization service.
 
 ## Local legacy adoption (development/maintenance only)
 
