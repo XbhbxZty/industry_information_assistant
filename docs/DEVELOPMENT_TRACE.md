@@ -271,16 +271,16 @@
 
 ### DEV-BC-20260831-016：检查点 key id 只能识别当前 secret，轮换会拒绝全部旧记录
 
-- **阶段 / 状态**：3.4D 恢复审计 / 延期至 3.4D3
+- **阶段 / 状态**：3.4D 恢复审计 → 3.4D3 / 已关闭（开发版）
 - **发现方式**：主代理与 Terra High 子代理审计 `checkpoint_integrity.py`
 - **现象**：检查点 key id 从当前环境 secret 派生，验签也只重算当前 key id；切换 secret 后没有按记录 key id 查找历史验证 key 的路径。
 - **影响**：正常密钥轮换会让所有旧检查点不可恢复；若为兼容而回退 active/JWT key，又会形成降级验证风险。
 - **根因**：现有检查点封签是单 key 配置，不是版本化 verifier keyring。
-- **解决办法**：D1 的档案审计 keyring 明确区分 active 签发与按记录 key id 验证，并禁止 JWT fallback；3.4D3 将同类机制迁移到检查点并增加退役预检。
-- **回归保护**：档案协议已有 `test_unknown_historical_key_never_falls_back_to_jwt_or_active_key`；检查点的旧/新 key 集成测试由 D3 新增。
-- **验证结果**：档案 D1 行为通过；检查点当前实现仍维持原状，因此延期项尚未关闭。
-- **提交**：发现基线 `bbc6e0e`；延期项，无完成提交
-- **遗留风险**：D3 前不能在生产环境无迁移地替换检查点 HMAC secret。
+- **解决办法**：D3 新增显式 checkpoint keyring，按持久化派生指纹验旧/新 key；v1 原签名字节不变。无 key ID 的 v2 快照只认明确 legacy key，新快照用带 key ID 的 v3；统计业务、图、内层快照等所有本工具可读取的引用，阻止误退役。
+- **回归保护**：`test_old_checkpoint_restores_unchanged_after_rotation_and_new_writes_use_active`、`test_inventory_counts_inner_snapshot_and_blocks_retirement_without_writes`、`test_real_langgraph_review_resumes_across_key_rotation`。
+- **验证结果**：D3 组合 212 项通过，含真实 PostgreSQL 7 项和真实 LangGraph MemorySaver；最后定向复跑 15 项通过。未启用新配置时保留原兼容路径，显式模式不得 fallback。
+- **提交**：发现基线 `bbc6e0e`；完成 `f40832a`
+- **遗留风险**：需按 KEY_ROTATION.md 保留旧 key 并显式部署；备份/其他数据库/运行中任务未纳入本库统计，非空 LangGraph 历史保守阻断退役，不宣称全局无引用。
 
 ### DEV-BC-20260831-017：数据库内 HMAC 链不能单独证明整个合法后缀曾经存在
 
@@ -552,6 +552,36 @@
 - **回归保护 / 验证**：`test_audit_continuity_failure_blocks_history_and_research_snapshot` 及所有消费边界 409/503 测试通过；最终定向组合 191 项通过。
 - **提交**：`5bb6704`
 - **遗留风险**：无已知遗留。
+
+### DEV-BC-20260902-006：密钥配置对象默认 repr 会包含原始密钥
+
+- **阶段 / 状态**：轻量第三批 D3 / 已关闭
+- **发现方式**：主代理复核新增 `CheckpointKeyring` dataclass。
+- **现象 / 根因**：候选实现 `_keys` 使用 dataclass 默认 repr，调试打印或失败上下文可能包含原始 bytes。未观察到用户真实密钥泄露。
+- **解决办法**：`_keys` 使用 `field(repr=False, compare=False)`；报告显式投影 key ID/计数，不序列化 keyring。
+- **回归保护 / 验证**：`test_keyring_repr_does_not_expose_key_material` 断言 repr 不含原始或 Base64 secret；CLI 脱敏与错误输出测试通过。
+- **提交**：`f40832a`
+- **遗留风险**：密钥仍需由受保护环境提供，不应主动打印 `key_material()` 返回值。
+
+### DEV-BC-20260902-007：隐式数字解析让非规范指纹和版本越过形状检查
+
+- **阶段 / 状态**：轻量第三批 D3 / 已关闭
+- **发现方式**：主代理与 Terra/high 对签名字段边界的复核。
+- **现象 / 根因**：`int(value, 16)` 接受全角数字，之后 `compare_digest` 会抛 TypeError 而非完整性异常；快照 MAC 仅检查长度也有同类问题。v3 的 `version == 3` 还会接受 `3.0`，因为 JSON 类型差异没有显式验证。
+- **解决办法**：指纹和快照 MAC 限定 ASCII 小写十六进制；快照版本必须为精确 int，再按 v2/v3 验证形状。
+- **回归保护 / 验证**：全角 key ID 测试、`test_explicit_snapshot_bindings_are_v3_and_bind_alias` 中的浮点版本断言、`test_snapshot_non_ascii_mac_is_a_validation_error_not_compare_digest_type_error` 均通过；最终相关 15 项通过。
+- **提交**：`f40832a`
+- **遗留风险**：无已知遗留。
+
+### DEV-BC-20260902-008：持久化缺失 key_id 会误用底层函数的兼容默认值
+
+- **阶段 / 状态**：轻量第三批 D3 / 已关闭
+- **发现方式**：主代理新增反例，先复现 `DID NOT RAISE`，修复后同一测试通过。
+- **现象 / 根因**：为兼容旧直接调用，底层 `verify_business_state_seal(key_id=None)` 使用 active；服务把损坏的持久化 `None` 原样传入后，会在当前 MAC 仍有效时接受缺失 key ID。数据库非空约束能挡正常写入，但服务边界不应依赖此默认值。
+- **解决办法**：持久化入口先要求非空字符串 key ID，然后才调用按记录指纹的验证器；底层省略参数的旧直接调用仍保留。
+- **回归保护 / 验证**：`test_persistence_never_treats_missing_stored_key_id_as_use_active` 从失败变为通过，并纳入 212 项组合及最终定向复跑。
+- **提交**：`f40832a`
+- **遗留风险**：owner/status/version 的完整可信绑定仍由 D4a 承接，本修复不代表该项已完成。
 
 ## 新条目模板
 
