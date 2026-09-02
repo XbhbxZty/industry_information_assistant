@@ -1,6 +1,6 @@
 """SQLite regression coverage for administrator-maintained company profiles.
 
-These tests deliberately create only the two Stage-3 tables.  The production
+These tests deliberately create only the three profile/audit tables. The production
 ``User`` model uses PostgreSQL UUID types, whereas the profile tables are
 required to be independently portable to SQLite for service-level regression
 tests.
@@ -34,7 +34,9 @@ for path in (os.fspath(BACKEND), os.fspath(APP)):
 
 from core.database import get_db  # noqa: E402
 from config.dd_checklist import CHECKLIST, SCENARIO_CHECKLISTS  # noqa: E402
-from models.company_profile import AdminCompanyProfile, AdminCompanyProfileAudit  # noqa: E402
+from models.company_profile import (  # noqa: E402
+    AdminCompanyProfile, AdminCompanyProfileAudit, AdminCompanyProfileAuditAnchor,
+)
 from router.auth_router import get_current_user_required, require_superuser  # noqa: E402
 from router.company_profile_router import router  # noqa: E402
 from schemas.company_profile import (  # noqa: E402
@@ -62,7 +64,7 @@ from service.admin_company_profile_service import (  # noqa: E402
 
 
 @pytest.fixture()
-def db():
+def db(audit_signing_key):
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -70,11 +72,13 @@ def db():
     )
     AdminCompanyProfile.__table__.create(engine)
     AdminCompanyProfileAudit.__table__.create(engine)
+    AdminCompanyProfileAuditAnchor.__table__.create(engine)
     session = sessionmaker(bind=engine, expire_on_commit=False)()
     try:
         yield session
     finally:
         session.close()
+        AdminCompanyProfileAuditAnchor.__table__.drop(engine)
         AdminCompanyProfileAudit.__table__.drop(engine)
         AdminCompanyProfile.__table__.drop(engine)
         engine.dispose()
@@ -421,7 +425,9 @@ def test_audit_continuity_failure_blocks_history_and_research_snapshot(db):
             actor_id="admin-3", change_reason="第三版",
         )
     db.expire_all()
-    assert get_company_profile(db, created.id).revision == 2
+    assert db.get(AdminCompanyProfile, created.id).revision == 2
+    with pytest.raises(AdminCompanyProfileIntegrityError):
+        get_company_profile(db, created.id)
     assert db.query(AdminCompanyProfileAudit).count() == 2
 
     admin_client = _router_client(

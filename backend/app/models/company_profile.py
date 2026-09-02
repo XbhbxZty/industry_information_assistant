@@ -1,6 +1,6 @@
 """管理员维护的企业尽调档案与不可变修订审计记录。
 
-这两张表刻意不关联个人知识库：档案是全局、结构化的尽调输入，
+这三张表刻意不关联个人知识库：档案是全局、结构化的尽调输入，
 不是用户上传文档，也不会产生 Milvus collection。
 
 使用 ``String`` UUID 与 SQLAlchemy 通用 ``JSON``，让 SQLite 回归测试和
@@ -11,7 +11,16 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, Column, DateTime, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.types import JSON
 
 from core.database import Base
@@ -42,6 +51,11 @@ class AdminCompanyProfile(Base):
     status = Column(String(16), nullable=False, default="active", index=True)
     revision = Column(Integer, nullable=False, default=1)
     content_sha256 = Column(String(64), nullable=False)
+    # These heads remain nullable so pre-D2b rows can be represented faithfully.
+    # Legacy history is anchored by ``AdminCompanyProfileAuditAnchor`` rather than
+    # being retroactively signed.
+    audit_head_mac = Column(String(64), nullable=True)
+    audit_head_snapshot_sha256 = Column(String(64), nullable=True)
 
     # Canonical company profile and stage-3 sidecar data.  Do not use JSONB here:
     # this model is deliberately exercised against SQLite in deterministic tests.
@@ -87,4 +101,35 @@ class AdminCompanyProfileAudit(Base):
     before_snapshot = Column(JSON, nullable=True)
     after_snapshot = Column(JSON, nullable=False)
     content_sha256 = Column(String(64), nullable=False)
+    # All seal fields are nullable for the legacy, pre-chain audit rows.  New
+    # writes populate the complete set together in the service layer.
+    integrity_version = Column(Integer, nullable=True)
+    integrity_algorithm = Column(String(32), nullable=True)
+    key_id = Column(String(128), nullable=True)
+    before_snapshot_sha256 = Column(String(64), nullable=True)
+    after_snapshot_sha256 = Column(String(64), nullable=True)
+    previous_audit_mac = Column(String(64), nullable=True)
+    audit_mac = Column(String(64), nullable=True)
+    chain_start = Column(String(16), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+
+class AdminCompanyProfileAuditAnchor(Base):
+    """Migration-time seal for a profile's unsigned, legacy audit history."""
+
+    __tablename__ = "admin_company_profile_audit_anchors"
+
+    profile_id = Column(
+        String(36),
+        ForeignKey("admin_company_profiles.id"),
+        primary_key=True,
+    )
+    integrity_version = Column(Integer, nullable=False)
+    algorithm = Column(String(32), nullable=False)
+    key_id = Column(String(128), nullable=False)
+    legacy_cutover_revision = Column(Integer, nullable=False)
+    legacy_chain_sha256 = Column(String(64), nullable=False)
+    legacy_terminal_snapshot_sha256 = Column(String(64), nullable=False)
+    anchored_at = Column(DateTime, nullable=False)
+    migration_run_id = Column(String(128), nullable=False)
+    anchor_mac = Column(String(64), nullable=False)

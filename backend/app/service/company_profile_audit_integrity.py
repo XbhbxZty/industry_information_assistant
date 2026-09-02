@@ -215,6 +215,11 @@ class AuditKeyring:
     def active_key_id(self) -> str:
         return self._active_key_id
 
+    @property
+    def key_ids(self) -> frozenset[str]:
+        """Expose verification identifiers, never key material."""
+        return frozenset(self._keys)
+
     def _derived_key(self, key_id: str, domain: bytes) -> bytes:
         canonical_key_id = _require_key_id(key_id)
         material = self._keys.get(canonical_key_id)

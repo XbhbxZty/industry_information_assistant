@@ -230,6 +230,7 @@ def _load_admin_company_profile_snapshot(db: Session, company_profile_id: str) -
         try:
             from service.admin_company_profile_service import (
                 AdminCompanyProfileIntegrityError,
+                AdminCompanyProfileUnavailable,
                 AdminCompanyProfileNotFound,
                 AdminCompanyProfileValidationError,
                 get_active_profile_snapshot,
@@ -237,6 +238,7 @@ def _load_admin_company_profile_snapshot(db: Session, company_profile_id: str) -
         except ImportError:
             from app.service.admin_company_profile_service import (  # type: ignore
                 AdminCompanyProfileIntegrityError,
+                AdminCompanyProfileUnavailable,
                 AdminCompanyProfileNotFound,
                 AdminCompanyProfileValidationError,
                 get_active_profile_snapshot,
@@ -259,6 +261,8 @@ def _load_admin_company_profile_snapshot(db: Session, company_profile_id: str) -
             status_code=HTTP_409_CONFLICT,
             detail=f"企业档案审计连续性校验失败：{exc}",
         ) from exc
+    except AdminCompanyProfileUnavailable as exc:
+        raise HTTPException(status_code=503, detail="企业档案审计密钥不可用") from exc
     except AdminCompanyProfileValidationError as exc:
         raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=f"企业档案快照无效：{exc}") from exc
 

@@ -10,6 +10,7 @@ import copy
 import hashlib
 import json
 import re
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -17,7 +18,18 @@ from sqlalchemy import or_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from models.company_profile import AdminCompanyProfile, AdminCompanyProfileAudit
+from models.company_profile import (
+    AdminCompanyProfile, AdminCompanyProfileAudit, AdminCompanyProfileAuditAnchor,
+)
+from core.company_profile_audit_keys import (
+    CompanyProfileAuditKeyConfigurationError, load_company_profile_audit_keyring,
+)
+from service.company_profile_audit_integrity import (
+    AUDIT_CHAIN_FORMAT, LEGACY_ANCHOR_FORMAT, CHAIN_START_GENESIS,
+    CHAIN_START_LEGACY_ANCHOR, AuditChainHead, AuditSnapshotObservation,
+    CompanyProfileAuditIntegrityError, canonical_utc_timestamp,
+    issue_audit_record, snapshot_sha256, verify_observed_audit_chain,
+)
 from schemas.company_profile import CompanyProfileWrite
 
 try:
@@ -76,6 +88,10 @@ class AdminCompanyProfileValidationError(AdminCompanyProfileError):
 
 class AdminCompanyProfileIntegrityError(AdminCompanyProfileValidationError):
     """Persisted profile/audit state is inconsistent and must fail closed."""
+
+
+class AdminCompanyProfileUnavailable(AdminCompanyProfileValidationError):
+    """Signing/verification configuration is unavailable; routers return 503."""
 
 
 def _json_copy(value: Any) -> Any:
@@ -414,15 +430,13 @@ def _snapshot_content_sha256(snapshot: Dict[str, Any]) -> str:
     return rebuilt["content_sha256"]
 
 
-def validate_company_profile_audit_history(
+def _validate_structural_audit_history(
     db: Session, profile_id: str,
 ) -> List[AdminCompanyProfileAudit]:
-    """Validate structural audit continuity; this is not a cryptographic seal.
+    """Domain/continuity checks, also used before explicitly anchoring legacy data.
 
-    The persisted audit hash chain is introduced only with the database
-    migration stage.  Until then this rejects missing/duplicate revisions,
-    broken before/after linkage, empty attribution, snapshot hash drift and a
-    latest snapshot that no longer matches the current profile row.
+    Runtime callers must use ``validate_company_profile_audit_history`` below;
+    this structural-only helper is not a cryptographic trust boundary.
     """
     try:
         row = _get_row(db, profile_id)
@@ -448,7 +462,7 @@ def validate_company_profile_audit_history(
             AdminCompanyProfileAudit.revision.asc(),
             AdminCompanyProfileAudit.created_at.asc(),
             AdminCompanyProfileAudit.id.asc(),
-        ).all()
+        ).populate_existing().all()
         if len(audits) != int(row.revision):
             raise AdminCompanyProfileIntegrityError("企业档案审计修订数量不连续")
 
@@ -506,6 +520,107 @@ def validate_company_profile_audit_history(
         raise AdminCompanyProfileIntegrityError("企业档案审计结构无法解析") from exc
 
 
+_AUDIT_SEAL_COLUMNS = (
+    "integrity_version", "integrity_algorithm", "key_id",
+    "before_snapshot_sha256", "after_snapshot_sha256", "previous_audit_mac",
+    "audit_mac", "chain_start",
+)
+
+
+def _audit_is_legacy(audit: AdminCompanyProfileAudit) -> bool:
+    return all(getattr(audit, name) is None for name in _AUDIT_SEAL_COLUMNS)
+
+
+def _legacy_audit_record(audit: AdminCompanyProfileAudit) -> Dict[str, Any]:
+    """Freeze every original audit column, including attribution and timestamps."""
+    return {
+        "id": audit.id, "profile_id": audit.profile_id, "revision": audit.revision,
+        "action": audit.action, "actor_id": audit.actor_id,
+        "change_reason": audit.change_reason, "before_snapshot": audit.before_snapshot,
+        "after_snapshot": audit.after_snapshot, "content_sha256": audit.content_sha256,
+        "created_at": canonical_utc_timestamp(audit.created_at),
+    }
+
+
+def _signed_audit_record(audit: AdminCompanyProfileAudit) -> Dict[str, Any]:
+    # Reconstruct from the actual ORM columns, never a detached stored envelope.
+    record = _legacy_audit_record(audit)
+    record["audit_id"] = record.pop("id")
+    record.pop("before_snapshot")
+    record.pop("after_snapshot")
+    record.update({name: getattr(audit, name) for name in _AUDIT_SEAL_COLUMNS})
+    record["algorithm"] = record.pop("integrity_algorithm")
+    record["format"] = AUDIT_CHAIN_FORMAT
+    return record
+
+
+def _anchor_record(anchor: AdminCompanyProfileAuditAnchor) -> Dict[str, Any]:
+    record = {column.name: getattr(anchor, column.name) for column in anchor.__table__.columns}
+    record["format"] = LEGACY_ANCHOR_FORMAT
+    record["anchored_at"] = canonical_utc_timestamp(anchor.anchored_at)
+    return record
+
+
+def _load_audit_keyring():
+    try:
+        return load_company_profile_audit_keyring()
+    except CompanyProfileAuditKeyConfigurationError as exc:
+        raise AdminCompanyProfileUnavailable("企业档案审计密钥配置不可用") from exc
+
+
+def validate_company_profile_audit_history(
+    db: Session, profile_id: str,
+) -> List[AdminCompanyProfileAudit]:
+    """Single runtime trust boundary: domain + observed snapshots + MAC chain."""
+    audits = _validate_structural_audit_history(db, profile_id)
+    row = _get_row(db, profile_id)
+    keyring = _load_audit_keyring()
+    try:
+        anchor = db.query(AdminCompanyProfileAuditAnchor).filter_by(
+            profile_id=str(profile_id),
+        ).populate_existing().first()
+        legacy_count = anchor.legacy_cutover_revision if anchor else 0
+        if type(legacy_count) is not int or not 0 <= legacy_count <= len(audits):
+            raise AdminCompanyProfileIntegrityError("旧历史锚点修订边界非法")
+        legacy = audits[:legacy_count]
+        signed = audits[legacy_count:]
+        if any(not _audit_is_legacy(item) for item in legacy):
+            raise AdminCompanyProfileIntegrityError("旧历史不得被补签或改写")
+        if any(_audit_is_legacy(item) for item in signed):
+            raise AdminCompanyProfileIntegrityError("企业档案存在未锚定的无签名审计")
+        for item in [*signed, *([anchor] if anchor else [])]:
+            if isinstance(item.key_id, str) and item.key_id not in keyring.key_ids:
+                raise AdminCompanyProfileUnavailable("企业档案历史验证密钥不可用")
+        verify_observed_audit_chain(
+            [AuditSnapshotObservation(
+                record=_signed_audit_record(item), before_snapshot=item.before_snapshot,
+                after_snapshot=item.after_snapshot,
+            ) for item in signed],
+            keyring=keyring, expected_profile_id=str(profile_id),
+            expected_head=AuditChainHead(
+                profile_id=str(profile_id), revision=row.revision,
+                snapshot_sha256=row.audit_head_snapshot_sha256, mac=row.audit_head_mac,
+            ),
+            expected_current_snapshot=_row_snapshot(row),
+            validate_snapshot=_snapshot_content_sha256,
+            legacy_anchor=_anchor_record(anchor) if anchor else None,
+            legacy_audits=[_legacy_audit_record(item) for item in legacy] if anchor else None,
+            legacy_terminal_snapshot=legacy[-1].after_snapshot if legacy else None,
+        )
+        if signed and row.updated_at != signed[-1].created_at:
+            raise AdminCompanyProfileIntegrityError("企业档案更新时间与签名审计不一致")
+        if not anchor and row.created_at != audits[0].created_at:
+            raise AdminCompanyProfileIntegrityError("企业档案创建时间与签名审计不一致")
+        if signed and row.status == "archived" and row.archived_at != signed[-1].created_at:
+            raise AdminCompanyProfileIntegrityError("企业档案归档时间与签名审计不一致")
+        return audits
+    except (AdminCompanyProfileIntegrityError, AdminCompanyProfileUnavailable):
+        raise
+    except (CompanyProfileAuditIntegrityError, AdminCompanyProfileValidationError,
+            AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise AdminCompanyProfileIntegrityError("企业档案签名审计校验失败") from exc
+
+
 def _append_audit(
     db: Session, *, row: AdminCompanyProfile, action: str, actor_id: str,
     reason: str, before: Optional[Dict[str, Any]], after: Dict[str, Any],
@@ -514,13 +629,29 @@ def _append_audit(
     change_reason = _required_change_reason(reason)
     if action not in {"created", "updated", "archived"}:
         raise AdminCompanyProfileValidationError("审计 action 非法")
+    keyring = _load_audit_keyring()
+    anchor = db.query(AdminCompanyProfileAuditAnchor).filter_by(profile_id=str(row.id)).first()
+    audit_id = str(uuid.uuid4())
+    record = issue_audit_record(
+        keyring=keyring, profile_id=str(row.id), audit_id=audit_id,
+        revision=row.revision, action=action, actor_id=actor, change_reason=change_reason,
+        created_at=canonical_utc_timestamp(row.updated_at), content_sha256=row.content_sha256,
+        before_snapshot_sha256=snapshot_sha256(before) if before is not None else None,
+        after_snapshot_sha256=snapshot_sha256(after), previous_audit_mac=row.audit_head_mac,
+        chain_start=CHAIN_START_LEGACY_ANCHOR if anchor else CHAIN_START_GENESIS,
+    )
+    seal_values = {name: record[name] for name in _AUDIT_SEAL_COLUMNS if name != "integrity_algorithm"}
+    seal_values["integrity_algorithm"] = record["algorithm"]
     db.add(AdminCompanyProfileAudit(
+        id=audit_id, created_at=row.updated_at, **seal_values,
         profile_id=str(row.id), revision=int(row.revision), action=action,
         actor_id=actor, change_reason=change_reason,
         before_snapshot=_json_copy(before) if before is not None else None,
         after_snapshot=_json_copy(after),
         content_sha256=row.content_sha256,
     ))
+    row.audit_head_mac = record["audit_mac"]
+    row.audit_head_snapshot_sha256 = record["after_snapshot_sha256"]
 
 
 def create_company_profile(
@@ -557,7 +688,9 @@ def create_company_profile(
 
 
 def _get_row(db: Session, profile_id: str) -> AdminCompanyProfile:
-    row = db.query(AdminCompanyProfile).filter(AdminCompanyProfile.id == str(profile_id)).first()
+    row = db.query(AdminCompanyProfile).filter(
+        AdminCompanyProfile.id == str(profile_id),
+    ).populate_existing().first()
     if row is None:
         raise AdminCompanyProfileNotFound("企业档案不存在")
     return row
@@ -565,6 +698,7 @@ def _get_row(db: Session, profile_id: str) -> AdminCompanyProfile:
 
 def get_company_profile(db: Session, profile_id: str, *, include_archived: bool = False) -> AdminCompanyProfile:
     row = _get_row(db, profile_id)
+    validate_company_profile_audit_history(db, profile_id)
     if row.status != "active" and not include_archived:
         raise AdminCompanyProfileNotFound("企业档案不存在")
     return row
@@ -582,6 +716,8 @@ def list_company_profiles(
         q = q.filter(or_(AdminCompanyProfile.name.ilike(needle), AdminCompanyProfile.credit_code.ilike(needle)))
     total = q.count()
     rows = q.order_by(AdminCompanyProfile.updated_at.desc(), AdminCompanyProfile.id.desc()).offset(offset).limit(limit).all()
+    for row in rows:
+        validate_company_profile_audit_history(db, str(row.id))
     return rows, total
 
 
@@ -714,7 +850,6 @@ def search_profile_materials(
 def get_active_profile_snapshot(db: Session, profile_id: str) -> Dict[str, Any]:
     """Return the JSON-only, integrity-checked snapshot consumed by the run-time layer."""
     row = get_company_profile(db, profile_id, include_archived=False)
-    validate_company_profile_audit_history(db, profile_id)
     # Re-run strict persistence validation to avoid making a tampered DB row a
     # source of an apparently valid no-record conclusion.
     try:

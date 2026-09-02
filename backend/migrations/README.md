@@ -26,6 +26,44 @@ existing PostgreSQL volumes while preventing automatic legacy business DDL. The
 seven restaurant/stock/legal/transport demo tables, if present in an old volume,
 remain outside this managed application schema; Alembic never drops them.
 
+## Company-profile audit chain (0002)
+
+Current head is `20260902_0002`. Configure both settings from `.env.example`
+before upgrading a database containing company profiles or using profile CRUD:
+
+- `COMPANY_PROFILE_AUDIT_KEYS_JSON`: JSON object mapping key IDs to standard
+  Base64-encoded, independently generated random keys of at least 32 bytes.
+- `COMPANY_PROFILE_AUDIT_ACTIVE_KEY_ID`: the ID used to sign new records; keep
+  all keys still referenced by historical audits/anchors in the JSON object.
+
+There is no default key or fallback to JWT/checkpoint secrets. Do not commit
+keys or print them in logs. The example value is deliberately not a usable key.
+An empty schema can upgrade without keys, but profile writes/reads requiring
+verification return 503 until valid keys are configured. Corrupt histories
+return 409 without profile content. Templates and empty lists remain available.
+
+0002 must run online: it first validates all existing profile/audit continuity
+and domain data, then creates one migration-time anchor per legacy profile.
+Original audit rows are not re-signed or rewritten. The anchor attests the
+history observed at migration, not the authenticity of earlier events. A bad
+history, orphan audit, or missing key rolls back the entire PostgreSQL upgrade,
+including added columns, anchors and version-table changes. Investigate and
+restore the correct data explicitly; never bypass the check using `stamp`.
+
+New create/update/archive operations sign the actual before/after snapshots
+and advance the profile head in one transaction. Detail/list/history/material
+search and research-input reads validate the observed chain. PostgreSQL guards
+reject UPDATE, DELETE and TRUNCATE on audit/anchor tables. Database owners or
+superusers can bypass these guards; whole-database rollback is not detectable
+without an external trusted head. This is not a claim of production hardening.
+
+Before migrating a real database, stop writers and preserve a restorable backup
+and the signing keys. Git rollback alone does not revert database schema.
+`downgrade 20260831_0001` removes signatures and anchors (not domain snapshots),
+so it is intended for disposable development data; restore the reviewed backup
+for a real rollback. Re-upgrading after a downgrade cannot recover the original
+signatures and can only anchor the then-observed history again.
+
 ## Local legacy adoption (development/maintenance only)
 
 This is a local command, not a web API or a signed approval service. Host access
@@ -66,6 +104,10 @@ rejected; 3 means configuration/connection failure; 4 means outcome unknown.
 For outcome unknown, **do not blindly retry**: run inspect read-only and check
 whether the version is already managed. No persistent approval ledger or
 production deployment automation is provided by this development tool.
+
+The adoption catalog stays frozen at 0001. Do not run adoption against databases
+already upgraded to 0002 or later; check those with `alembic current/check` and
+the runtime head guard. New columns/tables are not legacy schema drift to repair.
 
 For a fresh development environment, use a separately named empty database and
 `upgrade head`; never remove/reinitialize an existing PostgreSQL volume.

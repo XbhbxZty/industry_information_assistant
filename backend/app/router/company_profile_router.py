@@ -17,7 +17,8 @@ from schemas.company_profile import (
 )
 from service.admin_company_profile_service import (
     AdminCompanyProfileConflict, AdminCompanyProfileIntegrityError, AdminCompanyProfileNotFound,
-    AdminCompanyProfileValidationError, archive_company_profile, company_profile_templates,
+    AdminCompanyProfileValidationError, AdminCompanyProfileUnavailable,
+    archive_company_profile, company_profile_templates,
     create_company_profile, get_company_profile, list_company_profile_history,
     list_company_profiles, search_profile_materials, update_company_profile,
 )
@@ -33,6 +34,8 @@ def _error(exc: Exception) -> HTTPException:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     if isinstance(exc, AdminCompanyProfileIntegrityError):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    if isinstance(exc, AdminCompanyProfileUnavailable):
+        return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
     if isinstance(exc, AdminCompanyProfileValidationError):
         return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="企业档案服务异常")
@@ -80,10 +83,13 @@ async def get_profiles(
     current_user: User = Depends(get_current_user_required), db: Session = Depends(get_db),
 ):
     # Archive visibility is a server-side privilege decision, never a query flag.
-    rows, total = list_company_profiles(
-        db, query=query, include_archived=bool(include_archived and current_user.is_superuser),
-        offset=offset, limit=limit,
-    )
+    try:
+        rows, total = list_company_profiles(
+            db, query=query, include_archived=bool(include_archived and current_user.is_superuser),
+            offset=offset, limit=limit,
+        )
+    except AdminCompanyProfileValidationError as exc:
+        raise _error(exc) from exc
     return CompanyProfileListResponse(
         items=[
             _summary(row, reveal_actor_ids=current_user.is_superuser)

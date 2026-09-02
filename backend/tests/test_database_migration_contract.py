@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 import ast
+import io
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 
@@ -21,6 +24,7 @@ from core.database import Base  # noqa: E402
 
 
 EXPECTED_APPLICATION_TABLES = {
+    "admin_company_profile_audit_anchors",
     "admin_company_profile_audits",
     "admin_company_profiles",
     "bidding_info",
@@ -48,14 +52,21 @@ def _config() -> Config:
 def test_migration_history_has_one_reviewed_baseline_and_one_head():
     script = ScriptDirectory.from_config(_config())
     assert script.get_bases() == ["20260831_0001"]
-    assert script.get_heads() == ["20260831_0001"]
+    assert script.get_heads() == ["20260902_0002"]
     revision = script.get_revision("20260831_0001")
     assert revision is not None
     assert revision.down_revision is None
 
 
-def test_metadata_registers_the_frozen_seventeen_table_application_schema():
+def test_metadata_registers_the_current_application_schema():
     assert set(Base.metadata.tables) == EXPECTED_APPLICATION_TABLES
+
+
+def test_data_dependent_audit_upgrade_explicitly_rejects_offline_sql():
+    config = _config()
+    config.output_buffer = io.StringIO()
+    with pytest.raises(RuntimeError, match="在线升级"):
+        command.upgrade(config, "20260831_0001:20260902_0002", sql=True)
 
 
 def test_migration_runtime_never_imports_fastapi_startup_or_calls_create_all():

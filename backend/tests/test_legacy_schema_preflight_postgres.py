@@ -14,8 +14,9 @@ import re
 import sys
 import uuid
 from pathlib import Path
+from unittest.mock import patch
 
-from alembic import command
+from alembic import command, op
 from alembic.config import Config
 import psycopg2
 from psycopg2 import sql
@@ -195,15 +196,25 @@ def _public_relation_names(target: _DatabaseTarget) -> set[str]:
 
 
 def _create_application_schema(target: _DatabaseTarget) -> None:
-    import models  # noqa: F401
-    from core.database import Base
+    # The adoption manifest describes frozen baseline 0001, not evolving ORM
+    # metadata. For hybrid Docker fixtures, emulate old create_all's behavior:
+    # preserve existing tables/indexes and add only the missing baseline tables.
+    # This test-only interception is NEVER used by the real migration executor.
+    existing = _public_relation_names(target)
+    create_table, create_index = op.create_table, op.create_index
 
-    assert set(Base.metadata.tables) == APPLICATION_TABLES
-    engine = create_engine(target.sqlalchemy_url)
-    try:
-        Base.metadata.create_all(bind=engine)
-    finally:
-        engine.dispose()
+    def create_missing_table(name, *args, **kwargs):
+        if name not in existing:
+            return create_table(name, *args, **kwargs)
+
+    def create_missing_index(name, table_name, *args, **kwargs):
+        if table_name not in existing:
+            return create_index(name, table_name, *args, **kwargs)
+
+    with patch.object(op, "create_table", create_missing_table), patch.object(op, "create_index", create_missing_index):
+        command.upgrade(_alembic_config(target), HEAD_REVISION)
+    _execute_psycopg_sql(target, "DROP TABLE public.alembic_version")
+    assert _public_relation_names(target) == existing | APPLICATION_TABLES
 
 
 def _execute_psycopg_sql(target: _DatabaseTarget, statement: str) -> None:
@@ -516,7 +527,7 @@ def test_real_restricted_role_gets_stable_permission_error_without_secret(
     capsys,
 ):
     target = disposable_postgres_database
-    command.upgrade(_alembic_config(target), "head")
+    command.upgrade(_alembic_config(target), HEAD_REVISION)
     capsys.readouterr()
     role_name = f"codex_d2a2_reader_{uuid.uuid4().hex}"
     role_pattern = re.compile(r"^codex_d2a2_reader_[0-9a-f]{32}$")
@@ -582,9 +593,9 @@ def test_real_restricted_role_gets_stable_permission_error_without_secret(
 
 
 @pytest.mark.postgres_integration
-def test_alembic_head_is_already_managed(disposable_postgres_database):
+def test_alembic_baseline_is_already_managed(disposable_postgres_database):
     target = disposable_postgres_database
-    command.upgrade(_alembic_config(target), "head")
+    command.upgrade(_alembic_config(target), HEAD_REVISION)
 
     report = _preflight(target)
 

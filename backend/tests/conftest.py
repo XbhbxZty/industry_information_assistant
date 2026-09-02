@@ -9,8 +9,19 @@ to delete or replace it when exercising fail-closed configuration behavior.
 from __future__ import annotations
 
 import os
+import base64
+import json
 
 import pytest
+
+
+@pytest.fixture
+def audit_signing_key(monkeypatch: pytest.MonkeyPatch):
+    """Explicit opt-in test-only profile audit key; no application default."""
+    monkeypatch.setenv("COMPANY_PROFILE_AUDIT_ACTIVE_KEY_ID", "test-audit-v1")
+    monkeypatch.setenv("COMPANY_PROFILE_AUDIT_KEYS_JSON", json.dumps({
+        "test-audit-v1": base64.b64encode(b"test-only-profile-audit-key-32bytes").decode("ascii"),
+    }))
 
 
 @pytest.fixture(autouse=True)

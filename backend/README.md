@@ -45,7 +45,10 @@ python -m alembic upgrade head
 ```
 
 对于旧库，不能用 `alembic stamp` 跳过迁移；应先走经过评审的 legacy adoption
-流程。然后启动服务：
+流程。`0002` 会校验并锚定已有企业档案；有档案时，升级前必须配置 `.env.example`
+中的 `COMPANY_PROFILE_AUDIT_KEYS_JSON` 和 `COMPANY_PROFILE_AUDIT_ACTIVE_KEY_ID`。
+空库可先升级，但缺少密钥时档案功能会返回 503。详见 [迁移说明](migrations/README.md)。
+然后启动服务：
 
 ```sh
 python app/app_main.py
