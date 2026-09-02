@@ -29,6 +29,7 @@
 | 2026-08-31 | 3.4C2b reviewer 工作台 | 已完成 | DEV-BC-20260831-005 ～ 013 | `ae2f4ac` | 定向 42 项、后端全量 962 passed / 2 skipped；前端构建、变更文件 lint 与 diff check 通过 |
 | 2026-08-31 | 3.4D1 审计链密码协议 | 已完成 | DEV-BC-20260831-014 ～ 020 | `8460581` | 协议 49 项、相关定向 111 项、后端全量 1011 passed / 2 skipped；Terra High 复验无 P0/P1 |
 | 2026-09-01 | 3.4D2a1 连接权威与空库基线 | 已完成 | DEV-BC-20260901-001 ～ 005 | `735e36e` | 真实 PostgreSQL upgrade/check/downgrade/re-upgrade 通过；后端全量 1033 passed / 3 skipped；Terra High 复核无 P0，3 个 P1 已关闭 |
+| 2026-09-01 | 3.4D2a2.1 冻结指纹与只读预检 | 已完成 | DEV-BC-20260901-006 ～ 010 | `dc0f788` | 最终纯测+真实 PostgreSQL 定向 34 passed；阶段全量基线 1050 passed / 15 skipped；Terra High 最终无 P0/P1 |
 
 > 前两阶段是从已提交代码、测试和阶段验证结果做的基线回填；3.4C2b 起均在问题处理当期登记。
 
@@ -397,6 +398,71 @@
 - **验证结果**：默认全量命令最终 `1033 passed / 3 skipped`；真实 PostgreSQL 用例另行显式执行 `1 passed`。
 - **提交**：`735e36e`
 - **遗留风险**：手工外部 API 脚本仍不是 CI 测试；若要自动化，需另行提供测试凭据、async 插件和隔离的网络验收环境。
+
+### DEV-BC-20260901-006：seed 脚本只会产生三张行业表的判断是误判
+
+- **阶段 / 状态**：3.4D2a2.1 / 误判
+- **发现方式**：独立 Python 进程和真实 PostgreSQL 临时库重建
+- **现象**：初步审计曾把 `seed_industry_data` 当成三表 legacy 变体；实际导入 `models.industry_data` 会先执行 `models/__init__.py`，最终向同一 `Base.metadata` 注册 17 张表。
+- **影响**：若保留错误三表 profile，会增加不存在的 adoption 分支并削弱支持矩阵。
+- **根因**：只阅读 seed 文件的直接模型引用，没有验证 Python 包导入副作用后的完整 metadata。
+- **解决办法**：删除三表假设；支持矩阵只保留经临时库复现的 base-full 与 Docker 变体。
+- **回归保护**：真实 PG `Base.metadata.create_all()` 用例断言表集合精确等于 17 张 `APPLICATION_TABLES`。
+- **验证结果**：独立进程与临时库结果一致；计划已在 `95b9443` 更正，定向矩阵通过。
+- **提交**：计划更正 `95b9443`；代码检查点 `dc0f788`
+- **遗留风险**：Python 包导入仍有副作用，正式移除运行时 `create_all()` 由 3.4D2a3 承接。
+
+### DEV-BC-20260901-007：fake catalog 测试漏掉驱动对百分号的参数解释
+
+- **阶段 / 状态**：3.4D2a2.1 / 已关闭
+- **发现方式**：首次在真实 psycopg2/PostgreSQL 运行 catalog 查询
+- **现象**：schema 过滤 SQL 中的百分号被 psycopg2 当作参数格式符，真实库抛出 `TypeError`，而 fake connection 测试全部通过。
+- **影响**：只读预检无法在真实目标运行，纯替身绿色结果形成假安全感。
+- **根因**：`exec_driver_sql` 仍经过 DBAPI 参数规则；fake 只按 SQL 标记返回行，没有执行驱动解析。
+- **解决办法**：改用不含百分号占位歧义的 PostgreSQL 正则；把真实 PostgreSQL 变体矩阵设为阶段验收证据。
+- **回归保护**：`test_legacy_schema_preflight_postgres.py` 的所有场景都执行完整 catalog SQL。
+- **验证结果**：最终纯测和真实定向合计 34 项通过。
+- **提交**：`dc0f788`
+- **遗留风险**：新增 catalog SQL 不能只靠 fake 测试验收，必须继续保留真实 PG 套件。
+
+### DEV-BC-20260901-008：Unicode 传输和自洽摘要不足以冻结稳定 manifest ID
+
+- **阶段 / 状态**：3.4D2a2.1 / 已关闭
+- **发现方式**：Windows patch/console 边界复验与 manifest 篡改测试
+- **现象**：首轮含中文 default 的 JSON 在传输中出现替换字符，内存摘要与落盘内容不一致；只校验文件自带摘要时，也可同时替换 catalog 和摘要而沿用旧 ID。
+- **影响**：profile 可能因传输损坏不可加载，或在稳定 ID 下被静默换成另一套结构。
+- **根因**：可移植字节编码未冻结，摘要信任根仍位于被校验文件内部。
+- **解决办法**：manifest 统一使用 ASCII JSON Unicode escape；稳定 ID 绑定代码内硬编码 SHA-256，并校验声明对象集合与 catalog 投影完全一致。
+- **回归保护**：ASCII transport、embedded digest、frozen digest rebinding、声明不一致测试。
+- **验证结果**：六个真实 PG manifest 重新捕获并通过双重摘要和声明校验。
+- **提交**：`dc0f788`
+- **遗留风险**：更新 profile 必须使用新 ID 和人工评审，不能原地替换旧 ID。
+
+### DEV-BC-20260901-009：首版指纹遗漏可改变写入与授权语义的数据库对象
+
+- **阶段 / 状态**：3.4D2a2.1 / 已关闭
+- **发现方式**：两路 Terra High 对抗复核并用真实 PostgreSQL 反例验证
+- **现象**：首版没有覆盖 rewrite rule、独立 enum/domain、ACL/owner/default ACL 和显式 routine/rewrite 依赖；在精确 17 表上增加这些对象可能仍接近 `exact_adoptable`。
+- **影响**：rule 可改写 INSERT，PUBLIC grant 可暴露敏感表，未知类型/跨 managed-unmanaged 依赖会让 stamp 后语义并不等价。
+- **根因**：早期 catalog 过度聚焦列、约束、索引与 trigger，没有把安全/授权和独立对象作为 schema 语义。
+- **解决办法**：补齐 RLS/policy/rule/type、owner/ACL、routine 安全属性和依赖边；默认拒绝未知全局对象，并显式拒绝跨边界 FK/trigger。
+- **回归保护**：纯测与真实 PG 覆盖 rule、PUBLIC ACL、default ACL、enum/domain、SQL routine 依赖、跨边界 FK/trigger、RLS 和 event trigger。
+- **验证结果**：新增反例均返回 `schema_drift`，零 stamp；Terra High 最终复核无 P0/P1。
+- **提交**：`dc0f788`
+- **遗留风险**：PL/pgSQL 动态 SQL 不保证进入 `pg_depend`；因此任何未被精确 manifest 覆盖的 routine/rule/trigger 仍直接拒绝，而不是推断为无依赖。
+
+### DEV-BC-20260901-010：错误输出和测试失败可能回显敏感连接或 DDL 字面量
+
+- **阶段 / 状态**：3.4D2a2.1 / 已关闭
+- **发现方式**：限权角色集成测试首次失败及最终输出审计
+- **现象**：pytest fixture dataclass 的默认 repr 会在失败上下文显示带凭据连接串；CLI 若原样序列化 diff，也可能输出函数、rule 或 default 中内嵌的敏感字面量；Alembic 日志还一度污染 JSON 断言。
+- **影响**：CI/操作日志可能泄漏凭据或数据库定义中的秘密，并破坏机器可读错误协议。
+- **根因**：内部诊断对象与面向操作者的安全输出没有分层，测试 capture 未清空前序日志。
+- **解决办法**：连接字段 `repr=False`；CLI 不回显 DBAPI 文本，DDL/表达式值只返回 redacted 标记和 SHA-256；限权用例在调用 CLI 前清空前序日志。
+- **回归保护**：单元和真实限权角色测试验证稳定 `legacy_preflight_permission_denied`、无 URL；报告测试验证 `CREATE RULE` 不出现在 JSON。
+- **验证结果**：限权角色真实用例与最终 34 项定向矩阵通过，随机角色按 name/OID/cluster identity 清理。
+- **提交**：`dc0f788`
+- **遗留风险**：测试进程被硬杀时可能遗留随机前缀角色，后续测试运维可增加孤儿扫描；不影响生产预检只读路径。
 
 ## 新条目模板
 

@@ -1,8 +1,8 @@
 # 管理员企业档案专项计划
 
 > **当前状态**：3.0～3.3、3.4A、3.4B、3.4C1、3.4C2a、3.4C2b 已完成；
-> 3.4D1、3.4D2a1 已完成，3.4D2a2 已完成恢复审计并拆分；下一可开发单元为
-> 3.4D2a2.1。工程 Bad Case 见
+> 3.4D1、3.4D2a1、3.4D2a2.1 已完成；下一可开发单元为 3.4D2a2.2。
+> 工程 Bad Case 见
 > [`DEVELOPMENT_TRACE.md`](DEVELOPMENT_TRACE.md)。
 
 ## 一、目标与边界
@@ -29,7 +29,7 @@
 | 3.4C2b | reviewer 队列与最小复核材料包 | 已完成 | `ae2f4ac` |
 | 3.4D1 | 无数据库副作用的审计链密码协议与固定向量 | 已完成 | `8460581` |
 | 3.4D2a1 | 统一数据库连接权威、Alembic 环境与空库 0001 | 已完成 | `735e36e` |
-| 3.4D2a2.1 | 冻结旧 schema catalog manifest 与只读 preflight | 待开始 | — |
+| 3.4D2a2.1 | 冻结旧 schema catalog manifest 与只读 preflight | 已完成 | `dc0f788` |
 | 3.4D2a2.2 | 维护窗口内的目标绑定、二次指纹与事务化 adoption | 待开始 | — |
 | 3.4D2a3 | 移除运行时建表、切换 Docker/脚本并建立启动 guard | 待开始 | — |
 | 3.4D2b | 审计链持久化、旧历史锚定与生产失败关闭 | 待开始 | — |
@@ -196,7 +196,8 @@ Terra High 复核无 P0，发现的空白 URL fallback、无端口兼容和请�
    明确标记 `adoptable` 或 `known_incompatible`。
 2. catalog 格式覆盖数据库/服务器身份、public relation、按序列、类型/typmod/时区、nullable、
    default、identity/generated/collation、PK/FK/UQ/CHECK、索引定义与有效性、非内部 trigger、
-   extension 及非 extension-owned routine。输出 canonical digest 和逐项 diff，不输出 URL/密码。
+   RLS/policy、rewrite rule、独立类型、owner/ACL/default ACL、extension、非 extension-owned
+   routine 及显式依赖边。输出 canonical digest 和脱敏逐项 diff，不输出 URL/密码或 DDL 字面量。
 3. preflight 在 `REPEATABLE READ READ ONLY` 事务中运行。空库分类为 `upgrade_required`；精确
    base-full 为 `exact_adoptable`；精确 docker-hybrid 为 `known_incompatible`；已有
    `alembic_version`、缺表、单字段漂移、未知对象或权限不足分别明确分类并失败关闭。
@@ -204,8 +205,16 @@ Terra High 复核无 P0，发现的空白 URL fallback、无端口兼容和请�
    4 表/3 索引；禁止表名前缀放行，禁止跨 managed/unmanaged 的 FK、trigger 或 routine 依赖。
    `uuid-ossp` 可单独报告，但只要 managed 列仍引用其 server default 或 managed trigger 仍存在，
    就属于不兼容 drift。
-5. 本检查点绝不创建/修改 `alembic_version`，不执行 stamp、ALTER、DROP 或数据读取；真实
-   PostgreSQL 覆盖 base-full、docker-hybrid、空库、已版本化、单字段漂移和未知表。
+5. 本检查点绝不创建/修改 `alembic_version`，不执行 stamp、ALTER、DROP 或业务数据读取；只在
+   结构精确命中后读取 `alembic_version` / LangGraph provider 的版本元数据行。真实 PostgreSQL
+   覆盖 base-full、Docker 两变体、空库、已版本化、单字段漂移、未知表、RLS/rule/type/ACL、
+   跨边界依赖与限权角色。
+
+完成证据：六个 PostgreSQL 15 冻结 manifest 均以稳定 ID、显式 classification、仓库硬编码
+SHA-256 和对象声明自校验锁定；preflight 在 `REPEATABLE READ READ ONLY` 中运行，CLI 无
+stamp/DDL 参数。最终纯测与真实 PostgreSQL 定向矩阵合计 `34 passed`，阶段中后端全量基线
+`1050 passed / 15 skipped`；Terra High 最终复核无 P0/P1。代码检查点为 `dc0f788`，本阶段
+没有进入目标二次绑定、锁、审批或事务化 stamp；这些仍只属于 3.4D2a2.2。
 
 ##### 4.4.2.2 3.4D2a2.2：受控事务化 adoption
 

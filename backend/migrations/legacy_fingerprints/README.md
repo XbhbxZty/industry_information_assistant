@@ -29,9 +29,11 @@ server defaults, indexes, and update triggers are not equivalent to revision
 `20260831_0001`.
 
 The Docker demo and LangGraph manifests are exact unmanaged packages, never
-prefix allowlists.  Table RLS flags and policies are part of each exact
-fingerprint, while every database event trigger is rejected as unreviewed
-global DDL behavior.  Partial packages, a provider migration-row mismatch, an
-unknown table/schema/extension/routine, or any cross-boundary dependency causes
-preflight to fail closed.  This directory contains no stamp or normalization
-procedure; transactional adoption belongs to phase 3.4D2a2.2.
+prefix allowlists.  PostgreSQL 15 owner classes, ACL/default ACL, table RLS and
+policies, rewrite rules, standalone types, routine security attributes, and
+explicit dependency edges are part of the observation.  Unreviewed standalone
+types, default privileges, dependency edges, or database event triggers fail
+closed.  Partial packages, a provider migration-row mismatch, an unknown
+table/schema/extension/routine, or any managed/unmanaged FK or trigger edge also
+fails closed.  This directory contains no stamp or normalization procedure;
+transactional adoption belongs to phase 3.4D2a2.2.
