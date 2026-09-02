@@ -64,6 +64,10 @@ so it is intended for disposable development data; restore the reviewed backup
 for a real rollback. Re-upgrading after a downgrade cannot recover the original
 signatures and can only anchor the then-observed history again.
 
+Key rotation does not require another schema revision. See
+[`docs/KEY_ROTATION.md`](../../docs/KEY_ROTATION.md) for the read-only reference
+inventory, checkpoint v1/v2 compatibility, active-key switch and retirement checks.
+
 ## Local legacy adoption (development/maintenance only)
 
 This is a local command, not a web API or a signed approval service. Host access

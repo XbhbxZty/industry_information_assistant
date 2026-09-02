@@ -72,9 +72,10 @@ class CheckpointService:
             raise CheckpointIntegrityError("检查点完整性模式不可漂移")
         if integrity.integrity_version != INTEGRITY_VERSION:
             raise CheckpointIntegrityError("检查点完整性版本不受支持")
-        if integrity.key_id != business_key_id(mode):
-            raise CheckpointIntegrityError("检查点完整性密钥标识不一致")
-
+        if not isinstance(integrity.key_id, str) or not integrity.key_id:
+            # The primitive's omitted key_id supports legacy direct callers;
+            # persisted metadata must NEVER opt into that use-active shortcut.
+            raise CheckpointIntegrityError("检查点完整性密钥标识缺失")
         revision = integrity.business_revision
         if isinstance(revision, bool) or not isinstance(revision, int) or revision < 1:
             raise CheckpointIntegrityError("检查点完整性业务版本非法")
@@ -87,6 +88,7 @@ class CheckpointService:
             mode,
             revision,
             integrity.business_seal,
+            key_id=integrity.key_id,
         )
         return mode
 

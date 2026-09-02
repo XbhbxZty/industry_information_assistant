@@ -16,7 +16,6 @@ from copy import deepcopy
 import hashlib
 import hmac
 import json
-import os
 from datetime import datetime
 from enum import Enum
 
@@ -27,9 +26,16 @@ except ImportError:  # 兼容以 app 为包根的导入方式
 
 
 ADMIN_PROFILE_SNAPSHOT_BINDING_VERSION = 2
+_ADMIN_PROFILE_SNAPSHOT_BINDING_V3 = 3
 _ADMIN_PROFILE_SNAPSHOT_BINDING_KEYS = frozenset({"version", "algorithm", "mac"})
-_ADMIN_PROFILE_SNAPSHOT_HMAC_ENV = "ADMIN_PROFILE_SNAPSHOT_HMAC_KEY"
+_ADMIN_PROFILE_SNAPSHOT_BINDING_V3_KEYS = frozenset({"version", "algorithm", "key_id", "mac"})
 _ADMIN_PROFILE_SNAPSHOT_HMAC_CONTEXT = b"admin-profile-snapshot-binding-v2"
+_ADMIN_PROFILE_SNAPSHOT_HMAC_V3_CONTEXT = b"admin-profile-snapshot-binding-v3"
+
+try:
+    from core.checkpoint_keys import CheckpointKeyConfigurationError, load_checkpoint_keyring
+except ImportError:  # pragma: no cover - package-root import compatibility
+    from app.core.checkpoint_keys import CheckpointKeyConfigurationError, load_checkpoint_keyring
 
 
 def _admin_profile_snapshot_binding_bytes(
@@ -67,22 +73,46 @@ def _admin_profile_snapshot_binding_bytes(
         raise ValueError("管理端企业档案快照绑定内容必须是纯 JSON") from exc
 
 
+def _admin_profile_snapshot_binding_v3_bytes(
+    session_id: Any, profile: Any, ref: Any, scenario: Any, key_id: str,
+) -> bytes:
+    if not isinstance(session_id, str) or not session_id:
+        raise ValueError("管理端企业档案快照缺少合法 session_id")
+    if not isinstance(scenario, str) or not isinstance(key_id, str) or not key_id:
+        raise ValueError("管理端企业档案快照场景或密钥标识非法")
+    try:
+        return json.dumps(
+            {"version": _ADMIN_PROFILE_SNAPSHOT_BINDING_V3, "key_id": key_id,
+             "session_id": session_id, "profile": profile, "ref": ref, "scenario": scenario},
+            ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise ValueError("管理端企业档案快照绑定内容必须是纯 JSON") from exc
+
+
 def _admin_profile_snapshot_hmac_key() -> bytes:
     """Derive a purpose-separated key from configured server secrets."""
-    key = os.getenv(_ADMIN_PROFILE_SNAPSHOT_HMAC_ENV) or os.getenv("JWT_SECRET_KEY")
-    if not key:
-        raise ValueError(
-            f"缺少服务端 {_ADMIN_PROFILE_SNAPSHOT_HMAC_ENV} 或 JWT_SECRET_KEY，"
-            "拒绝创建或恢复管理端企业档案快照"
-        )
+    try:
+        ring = load_checkpoint_keyring()
+    except CheckpointKeyConfigurationError as exc:
+        raise ValueError("管理端企业档案快照密钥配置非法") from exc
     # The fallback deliberately reuses only the configured server secret, not
     # the JWT signing key bytes directly.  A fixed context derives a separate
     # HMAC sub-key so tokens and checkpoint bindings are different protocols.
     return hmac.new(
-        key.encode("utf-8"),
+        ring.key_material(ring.active_key_id),
         _ADMIN_PROFILE_SNAPSHOT_HMAC_CONTEXT,
         hashlib.sha256,
     ).digest()
+
+
+def _admin_profile_snapshot_v3_hmac_key(key_id: str) -> bytes:
+    try:
+        ring = load_checkpoint_keyring()
+        material = ring.key_material(key_id)
+    except CheckpointKeyConfigurationError as exc:
+        raise ValueError("管理端企业档案快照密钥配置非法") from exc
+    return hmac.new(material, _ADMIN_PROFILE_SNAPSHOT_HMAC_V3_CONTEXT, hashlib.sha256).digest()
 
 
 def create_admin_profile_snapshot_binding(
@@ -92,6 +122,22 @@ def create_admin_profile_snapshot_binding(
     scenario: Any,
 ) -> Dict[str, Any]:
     """Create the HMAC envelope persisted with a managed-profile run."""
+    try:
+        ring = load_checkpoint_keyring()
+    except CheckpointKeyConfigurationError as exc:
+        raise ValueError("管理端企业档案快照密钥配置非法") from exc
+    if ring.explicit:
+        body = _admin_profile_snapshot_binding_v3_bytes(
+            session_id, profile, ref, scenario, ring.active_key_id,
+        )
+        return {
+            "version": _ADMIN_PROFILE_SNAPSHOT_BINDING_V3,
+            "algorithm": "hmac-sha256",
+            "key_id": ring.active_key_id,
+            "mac": hmac.new(
+                _admin_profile_snapshot_v3_hmac_key(ring.active_key_id), body, hashlib.sha256
+            ).hexdigest(),
+        }
     body = _admin_profile_snapshot_binding_bytes(session_id, profile, ref, scenario)
     return {
         "version": ADMIN_PROFILE_SNAPSHOT_BINDING_VERSION,
@@ -108,17 +154,40 @@ def verify_admin_profile_snapshot_binding(
     scenario: Any,
 ) -> None:
     """Fail closed unless the stored binding exactly covers this snapshot."""
-    if not isinstance(binding, dict) or set(binding) != _ADMIN_PROFILE_SNAPSHOT_BINDING_KEYS:
+    if not isinstance(binding, dict):
         raise ValueError("管理端企业档案快照绑定缺失或形状非法")
-    if binding.get("version") != ADMIN_PROFILE_SNAPSHOT_BINDING_VERSION:
+    version = binding.get("version")
+    if type(version) is int and version == ADMIN_PROFILE_SNAPSHOT_BINDING_VERSION:
+        if set(binding) != _ADMIN_PROFILE_SNAPSHOT_BINDING_KEYS:
+            raise ValueError("管理端企业档案快照绑定缺失或形状非法")
+        try:
+            ring = load_checkpoint_keyring()
+            legacy_id = ring.legacy_key_id
+            if not legacy_id:
+                raise ValueError("管理端企业档案快照旧密钥不可用")
+            legacy_key = hmac.new(
+                ring.key_material(legacy_id), _ADMIN_PROFILE_SNAPSHOT_HMAC_CONTEXT, hashlib.sha256,
+            ).digest()
+        except CheckpointKeyConfigurationError as exc:
+            raise ValueError("管理端企业档案快照密钥配置非法") from exc
+        body = _admin_profile_snapshot_binding_bytes(session_id, profile, ref, scenario)
+        expected = hmac.new(legacy_key, body, hashlib.sha256).hexdigest()
+    elif type(version) is int and version == _ADMIN_PROFILE_SNAPSHOT_BINDING_V3:
+        if set(binding) != _ADMIN_PROFILE_SNAPSHOT_BINDING_V3_KEYS:
+            raise ValueError("管理端企业档案快照绑定缺失或形状非法")
+        key_id = binding.get("key_id")
+        if not isinstance(key_id, str) or not key_id:
+            raise ValueError("管理端企业档案快照绑定密钥标识非法")
+        body = _admin_profile_snapshot_binding_v3_bytes(session_id, profile, ref, scenario, key_id)
+        expected = hmac.new(_admin_profile_snapshot_v3_hmac_key(key_id), body, hashlib.sha256).hexdigest()
+    else:
         raise ValueError("管理端企业档案快照绑定版本不受支持")
     if binding.get("algorithm") != "hmac-sha256":
         raise ValueError("管理端企业档案快照绑定算法非法")
     supplied = binding.get("mac")
-    if not isinstance(supplied, str) or len(supplied) != 64:
+    if (not isinstance(supplied, str) or len(supplied) != 64
+            or any(character not in "0123456789abcdef" for character in supplied)):
         raise ValueError("管理端企业档案快照绑定 MAC 非法")
-    body = _admin_profile_snapshot_binding_bytes(session_id, profile, ref, scenario)
-    expected = hmac.new(_admin_profile_snapshot_hmac_key(), body, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(supplied, expected):
         raise ValueError("管理端企业档案快照绑定不一致")
 

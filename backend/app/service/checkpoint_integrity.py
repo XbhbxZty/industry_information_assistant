@@ -10,8 +10,18 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-import os
 from typing import Any, Dict, Optional
+
+try:
+    from core.checkpoint_keys import (
+        CheckpointKeyConfigurationError,
+        load_checkpoint_keyring,
+    )
+except ImportError:  # pragma: no cover - package-root import compatibility
+    from app.core.checkpoint_keys import (
+        CheckpointKeyConfigurationError,
+        load_checkpoint_keyring,
+    )
 
 
 MODE_MANAGED = "managed_v1"
@@ -22,7 +32,6 @@ INTEGRITY_VERSION = 1
 _ALLOWED_MODES = frozenset((MODE_MANAGED, MODE_STANDARD))
 _SEAL_KEYS = frozenset(("version", "algorithm", "mode", "key_id", "mac"))
 _ALGORITHM = "hmac-sha256"
-_SECRET_ENV = "ADMIN_PROFILE_SNAPSHOT_HMAC_KEY"
 _ROOT_CONTEXT = b"research-checkpoint-integrity/v1"
 _GRAPH_DOMAIN = b"graph-state"
 _BUSINESS_DOMAIN = b"business-state"
@@ -53,41 +62,37 @@ def _canonical_json_bytes(value: Any) -> bytes:
         raise CheckpointIntegrityError("检查点完整性内容必须是严格 JSON") from exc
 
 
-def _server_secret() -> bytes:
-    secret = os.getenv(_SECRET_ENV) or os.getenv("JWT_SECRET_KEY")
-    if not isinstance(secret, str) or not secret:
-        raise CheckpointIntegrityError(
-            f"缺少服务端 {_SECRET_ENV} 或 JWT_SECRET_KEY，拒绝处理检查点完整性"
-        )
-    return secret.encode("utf-8")
+def _keyring():
+    try:
+        return load_checkpoint_keyring()
+    except CheckpointKeyConfigurationError as exc:
+        raise CheckpointIntegrityError(str(exc)) from exc
 
 
-def _derived_key(domain: bytes, mode: str) -> bytes:
+def _derived_key(domain: bytes, mode: str, key_id: Optional[str] = None) -> bytes:
     """Derive a purpose- and mode-separated HMAC key from the server secret."""
     _require_mode(mode)
+    ring = _keyring()
+    selected = ring.active_key_id if key_id is None else key_id
     return hmac.new(
-        _server_secret(),
+        ring.key_material(selected),
         _ROOT_CONTEXT + b"/" + domain + b"/" + mode.encode("ascii"),
         hashlib.sha256,
     ).digest()
 
 
-def _key_id(domain: bytes, mode: str) -> str:
+def _key_id(domain: bytes, mode: str, key_id: Optional[str] = None) -> str:
     # Store a non-secret fingerprint of the *derived* key.  It catches domain
     # confusion and makes an accidental configuration/key rotation fail closed.
     return hmac.new(
-        _derived_key(domain, mode), _KEY_ID_CONTEXT, hashlib.sha256
+        _derived_key(domain, mode, key_id), _KEY_ID_CONTEXT, hashlib.sha256
     ).hexdigest()
 
 
 def _is_hex_digest(value: Any) -> bool:
     if not isinstance(value, str) or len(value) != 64:
         return False
-    try:
-        int(value, 16)
-    except ValueError:
-        return False
-    return True
+    return all(character in "0123456789abcdef" for character in value)
 
 
 def _state_projection(state: Any) -> Dict[str, Any]:
@@ -151,6 +156,16 @@ def _seal_for(domain: bytes, body: bytes, mode: str) -> Dict[str, Any]:
     }
 
 
+def _key_alias_for_fingerprint(domain: bytes, mode: str, fingerprint: Any) -> str:
+    if not _is_hex_digest(fingerprint):
+        raise CheckpointIntegrityError("检查点图完整性封签密钥标识不一致")
+    ring = _keyring()
+    for alias in ring.key_ids:
+        if hmac.compare_digest(fingerprint, _key_id(domain, mode, alias)):
+            return alias
+    raise CheckpointIntegrityError("检查点图完整性封签密钥标识不一致")
+
+
 def _verify_seal(seal: Any, domain: bytes, body: bytes, mode: str) -> None:
     mode = _require_mode(mode)
     if not isinstance(seal, dict) or set(seal) != _SEAL_KEYS:
@@ -161,12 +176,11 @@ def _verify_seal(seal: Any, domain: bytes, body: bytes, mode: str) -> None:
         raise CheckpointIntegrityError("检查点图完整性封签算法非法")
     if seal.get("mode") != mode:
         raise CheckpointIntegrityError("检查点图完整性封签模式不一致")
-    if seal.get("key_id") != _key_id(domain, mode):
-        raise CheckpointIntegrityError("检查点图完整性封签密钥标识不一致")
+    alias = _key_alias_for_fingerprint(domain, mode, seal.get("key_id"))
     supplied = seal.get("mac")
     if not _is_hex_digest(supplied):
         raise CheckpointIntegrityError("检查点图完整性封签 MAC 非法")
-    expected = hmac.new(_derived_key(domain, mode), body, hashlib.sha256).hexdigest()
+    expected = hmac.new(_derived_key(domain, mode, alias), body, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(supplied, expected):
         raise CheckpointIntegrityError("检查点图完整性封签不一致")
 
@@ -199,12 +213,20 @@ def issue_business_state_seal(
 
 def verify_business_state_seal(
     state: Dict[str, Any], session_id: str, mode: str, revision: int, seal: str,
+    *, key_id: Optional[str] = None,
 ) -> None:
     """Verify a database-business-state MAC against its exact persistence context."""
     mode = _require_mode(mode)
     if not _is_hex_digest(seal):
         raise CheckpointIntegrityError("检查点业务完整性 MAC 非法")
-    expected = issue_business_state_seal(state, session_id, mode, revision)
+    alias = _keyring().active_key_id if key_id is None else _key_alias_for_fingerprint(
+        _BUSINESS_DOMAIN, mode, key_id
+    )
+    expected = hmac.new(
+        _derived_key(_BUSINESS_DOMAIN, mode, alias),
+        _business_body(state, session_id, mode, revision),
+        hashlib.sha256,
+    ).hexdigest()
     if not hmac.compare_digest(seal, expected):
         raise CheckpointIntegrityError("检查点业务完整性封签不一致")
 
@@ -241,3 +263,14 @@ def mode_from_state(state: Dict[str, Any]) -> Optional[str]:
 def business_key_id(mode: str) -> str:
     """Internal persistence helper for the stored business-seal key id."""
     return _key_id(_BUSINESS_DOMAIN, _require_mode(mode))
+
+
+def describe_checkpoint_verification_keys() -> Dict[str, str]:
+    """Map every configured verification fingerprint to its logical alias."""
+    ring = _keyring()
+    return {
+        _key_id(domain, mode, alias): alias
+        for alias in ring.key_ids
+        for domain in (_GRAPH_DOMAIN, _BUSINESS_DOMAIN)
+        for mode in _ALLOWED_MODES
+    }
