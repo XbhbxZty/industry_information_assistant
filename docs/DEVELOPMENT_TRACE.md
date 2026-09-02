@@ -31,6 +31,7 @@
 | 2026-09-01 | 3.4D2a1 连接权威与空库基线 | 已完成 | DEV-BC-20260901-001 ～ 005 | `735e36e` | 真实 PostgreSQL upgrade/check/downgrade/re-upgrade 通过；后端全量 1033 passed / 3 skipped；Terra High 复核无 P0，3 个 P1 已关闭 |
 | 2026-09-01 | 3.4D2a2.1 冻结指纹与只读预检 | 已完成 | DEV-BC-20260901-006 ～ 010 | `dc0f788` | 最终纯测+真实 PostgreSQL 定向 34 passed；阶段全量基线 1050 passed / 15 skipped；Terra High 最终无 P0/P1 |
 | 2026-09-02 | 3.4D4a 检查点上下文与领取模型 | 已完成（开发版） | DEV-BC-20260902-009 ～ 015 | `e33652c` | 主定向组合 252 passed，补充档案审计迁移 6 passed；含真实 PG 与图恢复，无跳过 |
+| 2026-09-02 | 3.4D4b1 领取与接受决定短事务 | 已完成（开发版，未接 HTTP） | DEV-BC-20260902-016 ～ 018 | `fc707fb` | 关联组合 163 passed，无跳过；含新增服务 54 项，其中 43 项真实 PG；临时库已清理 |
 
 > 前两阶段是从已提交代码、测试和阶段验证结果做的基线回填；3.4C2b 起均在问题处理当期登记。
 
@@ -654,6 +655,36 @@
 - **回归保护 / 验证**：`test_company_profile_audit_migration_postgres.py` 6 项真实 PG 测试通过。
 - **提交**：`e33652c`
 - **遗留风险**：后续增加 migration 时仍需区分冻结历史 revision 与动态应用 head。
+
+### DEV-BC-20260902-016：领取服务的首版授权顺序遗漏自审和目标信息边界
+
+- **阶段 / 状态**：D4b1 / 已关闭
+- **发现方式**：主代理审查子代理首版，随后补真实 PostgreSQL 用例。
+- **现象 / 根因 / 影响**：首版先锁目标再查询 reviewer 权限，且没有显式比较 owner/reviewer；无权限调用可能根据 NotFound/锁冲突区分目标，自审只能依赖数据库 CHECK 阻止，错误语义也会变成 Unavailable。
+- **解决办法**：在查询或锁定目标之前按实际数据库用户和冻结 policy 授权；验证完整性后显式禁止自审，不将客户端标志作为管理员权限依据。
+- **回归保护 / 验证**：`test_role_and_self_review_checked_from_database_on_every_call`、`test_unauthorized_actor_cannot_probe_missing_or_busy_checkpoint`、数据库实际超级用户路径通过；纳入新增服务 54 项测试。
+- **提交**：`fc707fb`
+- **遗留风险**：新服务尚未连接 HTTP，不能将服务级通过视为接口接线验收。
+
+### DEV-BC-20260902-017：过期领取仍绑定旧版本，导致无法重领有效的新材料
+
+- **阶段 / 状态**：D4b1 / 已关闭
+- **发现方式**：主代理审查分支顺序与独立 PostgreSQL 版本漂移用例。
+- **现象 / 根因 / 影响**：首版在所有分支之前都要求 claim basis 与当前 checkpoint 完全相同；合法进度保存递增版本后，未接受且已过期的 claim 也永远无法重新领取。
+- **解决办法**：live/accepted 继续要求 basis 精确匹配；expired/released 先核对旧 owner 与记录形状，再允许无旧 token 的新领取绑定当前已验证的版本，生成新 token。已接受的决定不进入接管分支。
+- **回归保护 / 验证**：`test_changed_sealed_basis_blocks_live_claim_but_expiry_allows_new_basis`、`test_expired_claim_rotates_token_and_never_revives_old_work`、接受后不得换人用例均通过。
+- **提交**：`fc707fb`
+- **遗留风险**：接线时仍须阻止普通 checkpoint 写路径改动有效 claim 的基础材料；该保护随 D4b2 最终事务一起实现。
+
+### DEV-BC-20260902-018：非 ASCII 摘要被误报为服务故障，重领还可能覆盖损坏记录
+
+- **阶段 / 状态**：D4b1 / 已关闭
+- **发现方式**：主代理与子代理定向复核，真实 PG 反例先出现 5 failed，修复后新增服务 54 项全部通过。
+- **现象 / 根因 / 影响**：直接比较非 ASCII 的 basis_seal/decision_digest 会触发 TypeError，被上层误报 Unavailable；过期分支仅核对 owner/token 时，会把损坏的旧 basis 覆盖成新值。坏 token 则被归类为普通版本冲突。
+- **解决办法**：持久化 token、正整数 basis version 和 ASCII 十六进制摘要先检查形状；损坏统一为 IntegrityError。只允许合法但过期的 basis 被重绑；非法 UTF-8 决定也作为输入错误拒绝。
+- **回归保护 / 验证**：`test_malformed_persisted_claim_cannot_be_returned_or_auto_repaired` 四种路径和 `test_non_ascii_decision_digest_is_integrity_failure_not_database_outage` 从失败转为通过；损坏值保持原样，不自动修复。
+- **提交**：`fc707fb`
+- **遗留风险**：decision_digest 是内容摘要，不是 HMAC；不能凭该测试宣称抵御具有任意数据库改写权限的攻击者。数据库决定不可变保护与最终落盘由 D4b2 承接。
 
 ## 新条目模板
 
