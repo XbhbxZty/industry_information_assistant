@@ -32,6 +32,12 @@ declare module 'axios' {
      * plugins/service.ts
      */
     unwrap?: boolean
+
+    /**
+     * 响应顶层 status 是业务资源状态，而非通用 API envelope 状态。
+     * plugins/service.ts
+     */
+    responseStatusIsResourceState?: boolean
   }
 
   export interface AxiosResponse<T, D> {

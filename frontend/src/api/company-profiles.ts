@@ -145,22 +145,34 @@ export function getCompanyProfiles(params?: { query?: string; include_archived?:
 }
 
 export function getCompanyProfile(id: string) {
-  return request.get<CompanyProfile>(`/company-profiles/${id}`, { loading: false })
+  return request.get<CompanyProfile>(`/company-profiles/${id}`, {
+    loading: false,
+    responseStatusIsResourceState: true,
+  })
 }
 
 export function createCompanyProfile(payload: CompanyProfileDraft) {
-  return request.post<CompanyProfile>('/company-profiles', payload, { loading: false })
+  return request.post<CompanyProfile>('/company-profiles', payload, {
+    loading: false,
+    responseStatusIsResourceState: true,
+  })
 }
 
 export function updateCompanyProfile(
   id: string,
   payload: CompanyProfileDraft & { expected_revision: number; change_reason: string },
 ) {
-  return request.put<CompanyProfile>(`/company-profiles/${id}`, payload, { loading: false })
+  return request.put<CompanyProfile>(`/company-profiles/${id}`, payload, {
+    loading: false,
+    responseStatusIsResourceState: true,
+  })
 }
 
 export function archiveCompanyProfile(id: string, payload: CompanyProfileArchiveRequest) {
-  return request.post<CompanyProfile>(`/company-profiles/${id}/archive`, payload, { loading: false })
+  return request.post<CompanyProfile>(`/company-profiles/${id}/archive`, payload, {
+    loading: false,
+    responseStatusIsResourceState: true,
+  })
 }
 
 export function getCompanyProfileHistory(id: string) {

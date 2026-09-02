@@ -17,14 +17,14 @@ export const servicePlugin: IRequestPlugin = {
   install(instance) {
     instance.interceptors.response.use(
       (response) => {
-        const data = response?.data
-        if (!response || !isObject(data)) return response
+        const data = responseData(response?.data)
+        if (!response || !data) return response
+        if (response.config?.responseStatusIsResourceState) return response
         if (!(CODE_KEY in data)) return response
 
         const code = data[CODE_KEY]
         if (code !== 'success') {
-          const message =
-            data[MESSAGE_KEY] || data.detail || 'API data exception'
+          const message = errorMessage(data)
           const error = new ResponseError(message, response)
           return Promise.reject(error)
         }
@@ -32,16 +32,16 @@ export const servicePlugin: IRequestPlugin = {
         return response
       },
       (error) => {
-        const response = error.response as AxiosResponse<any> | undefined
+        const response = error.response as AxiosResponse<unknown> | undefined
 
-        const data = response?.data
-        if (!response || !isObject(data)) return Promise.reject(error)
+        const data = responseData(response?.data)
+        if (!response || !data) return Promise.reject(error)
+        if (response.config?.responseStatusIsResourceState) return Promise.reject(error)
         if (!(CODE_KEY in data)) return Promise.reject(error)
 
         const code = data[CODE_KEY]
         if (code !== 'success') {
-          const message =
-            data[MESSAGE_KEY] || data.detail || 'API data exception'
+          const message = errorMessage(data)
           const error = new ResponseError(message, response)
           return Promise.reject(error)
         }
@@ -55,4 +55,12 @@ export const servicePlugin: IRequestPlugin = {
 function isObject(value: unknown) {
   const type = typeof value
   return value != null && (type === 'object' || type === 'function')
+}
+
+function responseData(value: unknown): Record<string, unknown> | undefined {
+  return isObject(value) ? value as Record<string, unknown> : undefined
+}
+
+function errorMessage(data: Record<string, unknown>) {
+  return (data[MESSAGE_KEY] || data.detail || 'API data exception') as string
 }

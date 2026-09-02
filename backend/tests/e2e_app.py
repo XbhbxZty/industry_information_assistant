@@ -1,4 +1,4 @@
-"""Process-only application entry point for the isolated browser E2E test.
+"""Process-only application entry point for isolated HTTP-process acceptance.
 
 This module is deliberately outside ``app/``: it is not a production feature
 flag.  The supervisor must provide a fresh, disposable PostgreSQL URL and the
@@ -8,11 +8,18 @@ from __future__ import annotations
 
 import os
 import re
+import socket
+import importlib
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 
 _DATABASE_NAME = re.compile(r"^codex_d2a2_preflight_[0-9a-f]{32}$")
+_POSTGRES_SCHEMES = frozenset((
+    "postgres", "postgresql", "postgresql+psycopg", "postgresql+psycopg2",
+))
+_LOCAL_DATABASE_HOSTS = frozenset(("127.0.0.1", "::1", "localhost"))
+_PAUSE_EVENTS = frozenset(("research_resumed", "human_review_completed"))
 
 
 def _require_isolated_environment() -> None:
@@ -21,7 +28,17 @@ def _require_isolated_environment() -> None:
         raise RuntimeError("e2e_app requires PYTHON_DOTENV_DISABLED=1")
 
     raw_url = os.getenv("DATABASE_URL", "")
-    database = urlsplit(raw_url).path.lstrip("/")
+    parsed = urlsplit(raw_url)
+    if parsed.scheme not in _POSTGRES_SCHEMES:
+        raise RuntimeError("e2e_app requires a PostgreSQL DATABASE_URL")
+    # libpq accepts connection parameters in the query string (for example
+    # ``?host=remote`` or ``?service=production``).  The parsed authority
+    # alone therefore cannot prove the child will stay on the local target.
+    if parsed.query:
+        raise RuntimeError("e2e_app refuses DATABASE_URL query overrides")
+    if (parsed.hostname or "").lower() not in _LOCAL_DATABASE_HOSTS:
+        raise RuntimeError("e2e_app refuses a non-local PostgreSQL host")
+    database = unquote(parsed.path.lstrip("/"))
     if not _DATABASE_NAME.fullmatch(database):
         raise RuntimeError("e2e_app refuses a DATABASE_URL outside its disposable database prefix")
 
@@ -38,16 +55,77 @@ def _require_isolated_environment() -> None:
             raise RuntimeError(f"e2e_app requires {variable}")
 
 
+def _guard_outbound_connections() -> None:
+    """Keep an accidental provider call inside this disposable process local.
+
+    The app itself is allowed to connect to the local PostgreSQL instance; the
+    acceptance supervisor is the separate process which connects to Uvicorn.
+    This is deliberately process-local test scaffolding, never application
+    policy.
+    """
+    original_connect = socket.socket.connect
+    original_connect_ex = socket.socket.connect_ex
+
+    def _is_local(address: object) -> bool:
+        if not isinstance(address, tuple) or not address:
+            return True  # Unix sockets do not leave this machine.
+        host = address[0]
+        return isinstance(host, str) and host.lower() in _LOCAL_DATABASE_HOSTS
+
+    def _blocked_connect(sock: socket.socket, address: object) -> Any:
+        if not _is_local(address):
+            raise OSError("e2e_app blocked non-local outbound connection")
+        return original_connect(sock, address)
+
+    def _blocked_connect_ex(sock: socket.socket, address: object) -> int:
+        if not _is_local(address):
+            return getattr(socket, "EACCES", 13)
+        return original_connect_ex(sock, address)
+
+    socket.socket.connect = _blocked_connect
+    socket.socket.connect_ex = _blocked_connect_ex
+
+
+def _validate_signing_configuration() -> None:
+    """Fail before serving if the supplied persistence signing configuration is bad."""
+    from core.checkpoint_keys import load_checkpoint_keyring
+    from core.company_profile_audit_keys import load_company_profile_audit_keyring
+
+    try:
+        load_checkpoint_keyring()
+        load_company_profile_audit_keyring()
+    except Exception as exc:
+        raise RuntimeError("e2e_app refuses invalid persistence signing configuration") from exc
+
+
 _require_isolated_environment()
+_guard_outbound_connections()
+
+# app_main normally calls load_dotenv() during import.  The acceptance process
+# gets every value from its child environment; prevent an adjacent developer
+# .env from becoming an implicit, unreviewed input.
+import dotenv  # noqa: E402
+
+
+def _disabled_load_dotenv(*_args: Any, **_kwargs: Any) -> bool:
+    return False
+
+
+dotenv.load_dotenv = _disabled_load_dotenv
+_validate_signing_configuration()
 
 # Importing the real application preserves its router registration and, most
 # importantly, its normal read-only Alembic-head lifespan guard.
 import app_main  # noqa: E402
 from service.deep_research_v2.service import DeepResearchV2Service  # noqa: E402
 from service.deep_research_v2.state import ResearchPhase  # noqa: E402
-from router import research_router  # noqa: E402
+# ``router.__init__`` exports its ``APIRouter`` under the same name.  Import
+# the module explicitly: the dependency factories live on that module, not on
+# the exported router object.
+research_router = importlib.import_module("router.research_router")  # noqa: E402
 import service.scheduler_service as scheduler_service  # noqa: E402
 import service.deep_research_v2.agents.wizard as wizard_module  # noqa: E402
+import service.deep_research_v2.graph as graph_module  # noqa: E402
 
 
 class _DeterministicAgent:
@@ -105,6 +183,17 @@ class _NoNetworkWizard(_DeterministicAgent):
         super().__init__("E2EWizard", "wizard")
 
 
+class _NoNetworkScout(_DeterministicAgent):
+    """Constructor-compatible replacement before DeepResearchGraph is built.
+
+    ``DeepScout.__init__`` opens its Milvus client.  Replacing an already
+    constructed ``graph.scout`` is therefore too late for process isolation.
+    """
+
+    def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+        super().__init__("E2EScout", "scout")
+
+
 class _NoNetworkLegacyResearch:
     """Ensure a deliberately requested v1 stream cannot reach its providers."""
 
@@ -123,9 +212,36 @@ async def _deterministic_llm(*_args: Any, return_meta: bool = False, **_kwargs: 
     return response
 
 
+def _require_postgres_graph_saver() -> None:
+    """Reject the graph module's documented MemorySaver fallback in E2E."""
+    from langgraph.checkpoint.postgres import PostgresSaver
+
+    if not isinstance(getattr(graph_module, "_CHECKPOINTER", None), PostgresSaver):
+        raise RuntimeError("e2e_app requires the real PostgreSQL LangGraph saver")
+
+
+class _PausedReviewService(DeepResearchV2Service):
+    """SSE-only test wrapper used by the supervisor's hard-kill recovery run."""
+
+    async def submit_review(self, *args: Any, **kwargs: Any):
+        pause_at = os.getenv("E2E_REVIEW_PAUSE_AT", "")
+        if pause_at and pause_at not in _PAUSE_EVENTS:
+            raise RuntimeError("E2E_REVIEW_PAUSE_AT is not a supported review event")
+        paused = False
+        async for chunk in super().submit_review(*args, **kwargs):
+            yield chunk
+            if not paused and pause_at and f'"type": "{pause_at}"' in chunk:
+                paused = True
+                # The event has crossed the HTTP boundary; the supervisor may
+                # now close the stream and terminate this process.  No DB or
+                # graph state is altered by this wrapper.
+                import asyncio
+                await asyncio.sleep(30)
+
+
 def _e2e_research_service_v2() -> DeepResearchV2Service:
     """Build the real graph/PG saver, then replace only non-deterministic agents."""
-    service = DeepResearchV2Service(
+    service = _PausedReviewService(
         llm_api_key="e2e-no-network",
         llm_base_url="http://127.0.0.1:9",
         search_api_key="e2e-no-network",
@@ -143,6 +259,7 @@ def _e2e_research_service_v2() -> DeepResearchV2Service:
     # Its LLM helper is replaced too, so an accidental non-DD request cannot
     # escape to a configured provider from the test server.
     graph.data_analyst.call_llm = _deterministic_llm
+    _require_postgres_graph_saver()
     return service
 
 
@@ -152,7 +269,18 @@ async def _skip_scheduler() -> None:
 
 # Patch process-local import references before Uvicorn starts the app lifespan.
 scheduler_service.init_scheduler_and_check_data = _skip_scheduler
+# ``DeepResearchGraph.__init__`` resolves this global while constructing its
+# agents.  Patch it before any ``DeepResearchV2Service`` is created so Scout
+# cannot initialize a real Milvus client during acceptance startup.
+graph_module.DeepScout = _NoNetworkScout
+# ``Depends(get_research_service)`` captured the original function when the
+# route was declared.  Override that exact callable; reassigning the module
+# attribute would leave v1 able to instantiate its configured service.
+_original_get_research_service = research_router.get_research_service
+app_main.app.dependency_overrides[_original_get_research_service] = (
+    lambda: {"research_service": _NoNetworkLegacyResearch()}
+)
+# V2 factories are regular global lookups performed inside endpoint bodies.
 research_router.get_research_service_v2 = _e2e_research_service_v2
-research_router.get_research_service = lambda: {"research_service": _NoNetworkLegacyResearch()}
 wizard_module.CodeWizard = _NoNetworkWizard
 app = app_main.app
