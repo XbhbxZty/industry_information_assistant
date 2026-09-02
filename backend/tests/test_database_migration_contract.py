@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import ast
 import io
+import logging
 import subprocess
 import sys
 from pathlib import Path
@@ -41,6 +42,7 @@ EXPECTED_APPLICATION_TABLES = {
     "policy_data",
     "research_checkpoint_integrities",
     "research_checkpoints",
+    "research_review_claims",
     "users",
 }
 
@@ -52,7 +54,7 @@ def _config() -> Config:
 def test_migration_history_has_one_reviewed_baseline_and_one_head():
     script = ScriptDirectory.from_config(_config())
     assert script.get_bases() == ["20260831_0001"]
-    assert script.get_heads() == ["20260902_0002"]
+    assert script.get_heads() == ["20260902_0003"]
     revision = script.get_revision("20260831_0001")
     assert revision is not None
     assert revision.down_revision is None
@@ -62,11 +64,23 @@ def test_metadata_registers_the_current_application_schema():
     assert set(Base.metadata.tables) == EXPECTED_APPLICATION_TABLES
 
 
-def test_data_dependent_audit_upgrade_explicitly_rejects_offline_sql():
+def test_data_dependent_upgrades_explicitly_reject_offline_sql():
     config = _config()
     config.output_buffer = io.StringIO()
     with pytest.raises(RuntimeError, match="在线升级"):
         command.upgrade(config, "20260831_0001:20260902_0002", sql=True)
+    with pytest.raises(RuntimeError, match="在线升级"):
+        command.upgrade(config, "20260902_0002:20260902_0003", sql=True)
+
+
+def test_migration_keeps_existing_application_loggers_enabled():
+    logger = logging.getLogger("checkpoint_context_security_test")
+    logger.disabled = False
+    config = _config()
+    config.output_buffer = io.StringIO()
+    with pytest.raises(RuntimeError, match="在线升级"):
+        command.upgrade(config, "20260902_0002:20260902_0003", sql=True)
+    assert logger.disabled is False
 
 
 def test_migration_runtime_never_imports_fastapi_startup_or_calls_create_all():

@@ -21,8 +21,10 @@ from service.checkpoint_integrity import (
     MODE_STANDARD,
     business_key_id,
     issue_business_state_seal,
+    issue_checkpoint_context_seal,
     mode_from_state,
     verify_business_state_seal,
+    verify_checkpoint_context_seal,
     verify_graph_state_seal,
 )
 
@@ -59,10 +61,12 @@ class CheckpointService:
         session_id: str,
         required_mode: Optional[str] = None,
     ) -> str:
-        """Verify persisted metadata and both seals before accepting an update/read."""
-        if integrity.session_id != session_id:
+        """Verify graph, business and context seals before accepting a read/write."""
+        if integrity is None:
+            raise CheckpointIntegrityError("检查点缺少完整性记录，需离线审计")
+        if checkpoint.session_id != session_id or integrity.session_id != session_id:
             raise CheckpointIntegrityError("检查点完整性 session_id 不一致")
-        if integrity.checkpoint_id != self._checkpoint_id(checkpoint):
+        if str(integrity.checkpoint_id) != self._checkpoint_id(checkpoint):
             raise CheckpointIntegrityError("检查点完整性 checkpoint_id 不一致")
 
         mode = integrity.mode
@@ -70,7 +74,7 @@ class CheckpointService:
             raise CheckpointIntegrityError("检查点完整性模式非法")
         if required_mode is not None and mode != required_mode:
             raise CheckpointIntegrityError("检查点完整性模式不可漂移")
-        if integrity.integrity_version != INTEGRITY_VERSION:
+        if type(integrity.integrity_version) is not int or integrity.integrity_version != INTEGRITY_VERSION:
             raise CheckpointIntegrityError("检查点完整性版本不受支持")
         if not isinstance(integrity.key_id, str) or not integrity.key_id:
             # The primitive's omitted key_id supports legacy direct callers;
@@ -90,7 +94,40 @@ class CheckpointService:
             integrity.business_seal,
             key_id=integrity.key_id,
         )
+        if state.get("session_id") != session_id:
+            raise CheckpointIntegrityError("检查点状态 session_id 不一致")
+        verify_checkpoint_context_seal(
+            checkpoint.id, session_id, checkpoint.user_id, checkpoint.status,
+            mode, revision, integrity.business_seal, integrity.context_seal,
+        )
         return mode
+
+    @staticmethod
+    def _refresh_integrity(
+        checkpoint: ResearchCheckpoint, integrity: ResearchCheckpointIntegrity, revision: int,
+    ) -> None:
+        """Caller holds the checkpoint lock; state and context commit together."""
+        integrity.business_revision = revision
+        integrity.key_id = business_key_id(integrity.mode)
+        integrity.business_seal = issue_business_state_seal(
+            checkpoint.state_json, checkpoint.session_id, integrity.mode, revision,
+        )
+        integrity.context_seal = issue_checkpoint_context_seal(
+            checkpoint.id, checkpoint.session_id, checkpoint.user_id, checkpoint.status,
+            integrity.mode, revision, integrity.business_seal,
+        )
+        integrity.updated_at = datetime.utcnow()
+
+    @staticmethod
+    def _require_transition(previous: str, requested: str) -> None:
+        allowed = {
+            "running": {"running", "paused", "completed", "failed"},
+            "paused": {"paused", "running", "completed", "failed"},
+            "failed": {"failed", "running"},
+            "completed": {"completed"},
+        }
+        if requested not in allowed.get(previous, set()):
+            raise CheckpointIntegrityError(f"检查点状态不可从 {previous} 变为 {requested}")
 
     def save_checkpoint(
         self,
@@ -122,6 +159,8 @@ class CheckpointService:
             # checked before storage cleaning deliberately, so the cleaner can
             # never normalize an attacker-controlled value into a valid state.
             verify_graph_state_seal(state, mode)
+            if state.get("session_id") != session_id:
+                raise CheckpointIntegrityError("检查点状态 session_id 不一致")
 
             # 提取关键信息
             query = state.get("query", "")
@@ -140,17 +179,21 @@ class CheckpointService:
             # 查找现有检查点
             existing = db.query(ResearchCheckpoint).filter(
                 ResearchCheckpoint.session_id == session_id
-            ).first()
+            ).with_for_update().first()
             integrity = self._integrity_row(db, session_id)
 
             if integrity and not existing:
                 raise CheckpointIntegrityError("检查点完整性记录没有对应检查点")
 
-            if existing and integrity:
+            if existing:
                 # Do not overwrite a record whose previously persisted state
                 # has already failed validation.  This preserves fail-closed
                 # semantics across writes, not just restores.
                 self._verify_integrity_pair(existing, integrity, session_id, mode)
+                if user_id is not None and UUID(str(user_id)) != existing.user_id:
+                    raise CheckpointIntegrityError("检查点所属用户不可变更")
+                if existing.status == "completed":
+                    raise CheckpointIntegrityError("已完成检查点不可改写")
                 business_revision = integrity.business_revision + 1
             else:
                 business_revision = 1
@@ -164,7 +207,10 @@ class CheckpointService:
                     existing.ui_state_json = clean_ui_state
                 if final_report:
                     existing.final_report = final_report
-                existing.status = "running"
+                # Saving graph progress must not silently reopen a paused review.
+                # A failed run may restart; completed is immutable above.
+                if existing.status == "failed":
+                    existing.status = "running"
                 existing.updated_at = datetime.utcnow()
                 checkpoint_id = str(existing.id)
             else:
@@ -185,29 +231,15 @@ class CheckpointService:
                 existing = checkpoint
                 checkpoint_id = self._checkpoint_id(checkpoint)
 
-            # This MAC covers the state actually sent to JSONB, rather than
-            # the pre-cleaning graph object.  The graph seal remains separately
-            # verifiable inside that cleaned state.
-            business_seal = issue_business_state_seal(
-                clean_state, session_id, mode, business_revision
-            )
-            if integrity:
-                # checkpoint_id and mode are intentionally immutable after the
-                # first write.  _verify_integrity_pair above proved they match.
-                integrity.key_id = business_key_id(mode)
-                integrity.business_revision = business_revision
-                integrity.business_seal = business_seal
-                integrity.updated_at = datetime.utcnow()
-            else:
-                db.add(ResearchCheckpointIntegrity(
+            if integrity is None:
+                integrity = ResearchCheckpointIntegrity(
                     session_id=session_id,
-                    checkpoint_id=checkpoint_id,
+                    checkpoint_id=existing.id,
                     mode=mode,
                     integrity_version=INTEGRITY_VERSION,
-                    key_id=business_key_id(mode),
-                    business_revision=business_revision,
-                    business_seal=business_seal,
-                ))
+                )
+                db.add(integrity)
+            self._refresh_integrity(existing, integrity, business_revision)
 
             db.commit()
             # 详细日志
@@ -247,11 +279,6 @@ class CheckpointService:
                 return None
 
             integrity = self._integrity_row(db, session_id)
-            if not integrity:
-                # Legacy rows predate the paired metadata table and retain the
-                # old restore behavior by design.
-                return checkpoint.state_json
-
             mode = self._verify_integrity_pair(checkpoint, integrity, session_id)
             result = copy.deepcopy(checkpoint.state_json)
             result["_checkpoint_integrity_mode"] = mode
@@ -286,10 +313,7 @@ class CheckpointService:
                 return None
 
             integrity = self._integrity_row(db, session_id)
-            if integrity:
-                # Verify but do not add the private restore-only mode field to
-                # state_json: this method feeds the API response.
-                self._verify_integrity_pair(checkpoint, integrity, session_id)
+            self._verify_integrity_pair(checkpoint, integrity, session_id)
 
             result = checkpoint.to_dict(include_state=True)
             # 详细日志
@@ -331,8 +355,11 @@ class CheckpointService:
             if not checkpoint:
                 return None
 
+            self._verify_integrity_pair(checkpoint, self._integrity_row(db, session_id), session_id)
             return checkpoint.to_dict()
 
+        except CheckpointIntegrityError:
+            raise
         except Exception as e:
             logger.error(f"Failed to get checkpoint info: {e}")
             return None
@@ -369,8 +396,12 @@ class CheckpointService:
                 ResearchCheckpoint.updated_at.desc()
             ).limit(limit).all()
 
+            for cp in checkpoints:
+                self._verify_integrity_pair(cp, self._integrity_row(db, cp.session_id), cp.session_id)
             return [cp.to_dict() for cp in checkpoints]
 
+        except CheckpointIntegrityError:
+            raise
         except Exception as e:
             logger.error(f"Failed to list checkpoints: {e}")
             return []
@@ -398,15 +429,21 @@ class CheckpointService:
         try:
             checkpoint = db.query(ResearchCheckpoint).filter(
                 ResearchCheckpoint.session_id == session_id
-            ).first()
+            ).with_for_update().first()
 
             if not checkpoint:
                 return False
 
+            integrity = self._integrity_row(db, session_id)
+            self._verify_integrity_pair(checkpoint, integrity, session_id)
+            self._require_transition(checkpoint.status, status)
+            if checkpoint.status == status:
+                return True
             checkpoint.status = status
             if error_message:
                 checkpoint.error_message = error_message
             checkpoint.updated_at = datetime.utcnow()
+            self._refresh_integrity(checkpoint, integrity, integrity.business_revision + 1)
 
             db.commit()
             return True
@@ -430,8 +467,13 @@ class CheckpointService:
         """
         db = self._get_db()
         try:
-            # Kept in the same transaction as the checkpoint deletion.  There
-            # is deliberately no FK so old installations need no ALTER TABLE.
+            checkpoint = db.query(ResearchCheckpoint).filter(
+                ResearchCheckpoint.session_id == session_id
+            ).with_for_update().first()
+            if checkpoint is None:
+                return False
+            self._verify_integrity_pair(checkpoint, self._integrity_row(db, session_id), session_id)
+            # Paired deletion is atomic; a retained review claim's FK rejects it.
             db.query(ResearchCheckpointIntegrity).filter(
                 ResearchCheckpointIntegrity.session_id == session_id
             ).delete()
@@ -450,21 +492,16 @@ class CheckpointService:
             db.close()
 
     def get_checkpoint_integrity_mode(self, session_id: str) -> Optional[str]:
-        """Return a verified checkpoint integrity mode, if the row is modern.
-
-        A missing integrity row is the explicit legacy case.  Any present row
-        is a security boundary and is therefore fully verified rather than
-        silently treated as legacy when malformed or tampered.
-        """
+        """Return a verified mode; only a genuinely absent checkpoint returns None."""
         db = self._get_db()
         try:
             integrity = self._integrity_row(db, session_id)
-            if not integrity:
-                return None
             checkpoint = db.query(ResearchCheckpoint).filter(
                 ResearchCheckpoint.session_id == session_id
             ).order_by(ResearchCheckpoint.updated_at.desc()).first()
             if not checkpoint:
+                if integrity is None:
+                    return None
                 raise CheckpointIntegrityError("检查点完整性记录没有对应检查点")
             return self._verify_integrity_pair(checkpoint, integrity, session_id)
         except CheckpointIntegrityError:

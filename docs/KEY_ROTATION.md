@@ -1,15 +1,15 @@
 # 开发环境密钥轮换与退役预检
 
 D3 提供“保留旧验证 key、切换新签发 key”的最小能力，不提供密钥托管平台或自动删 key。
-本批没有更改用户 `.env`、已有业务数据库或运行中进程。无需新增数据库迁移，head 仍为
-`20260902_0002`；首次使用预检前，数据库需已按既有迁移流程到达 head。
+没有更改用户 `.env`、已有业务数据库或运行中进程。D3 本身没有新增迁移；D4a 已增加
+`20260902_0003` 上下文封签与领取模型。首次使用当前预检前，数据库需按迁移说明到达当前 head。
 
 ## 两类密钥各自管理
 
 | 用途 | keyring / active 设置 | 历史兼容 |
 |---|---|---|
 | 企业档案审计、legacy anchor | `COMPANY_PROFILE_AUDIT_KEYS_JSON` / `COMPANY_PROFILE_AUDIT_ACTIVE_KEY_ID` | key ID 原样保存在审计/锚点中；不覆盖旧签名 |
-| 检查点图、业务状态、冻结档案快照 | `RESEARCH_CHECKPOINT_KEYS_JSON` / `RESEARCH_CHECKPOINT_ACTIVE_KEY_ID` | v1 图/业务记录仍按原 64 位派生指纹选择历史 key |
+| 检查点图、业务状态、上下文、冻结档案快照 | `RESEARCH_CHECKPOINT_KEYS_JSON` / `RESEARCH_CHECKPOINT_ACTIVE_KEY_ID` | v1 图/业务记录保留原派生指纹；新增上下文使用独立域 |
 
 JSON 均为 `{"key-id":"Base64 编码的原始密钥字节"}`，不能填指纹或 MAC 代替原始密钥。
 新 key 至少 32 字节随机值。不要复用两类密钥，不要重复利用已使用的 ID 指代另一份材料。
@@ -55,7 +55,7 @@ python app/scripts/check_key_rotation.py --retire-checkpoint-key checkpoint-old
 预检用 PostgreSQL 只读、可重复读事务，并固定 public schema，检查：
 
 - 审计记录与迁移锚点的 key 引用及实际历史签名；旧无签名行仍由 anchor 保护。
-- 检查点业务签名、图签名，以及 v2/v3 内层档案快照各自使用的 key。
+- 检查点业务签名、图签名、上下文封签，以及 v2/v3 内层档案快照各自使用的 key。
 - 未知 key、错误 key 材料、缺失配对、重复 session、验签失败均阻断。
 - 当前 active 或仍被记录引用的 key 不允许退役。
 - 若本库 LangGraph `checkpoints/checkpoint_blobs/checkpoint_writes` 有数据，则检查点 key
@@ -79,4 +79,5 @@ python app/scripts/check_key_rotation.py --retire-checkpoint-key checkpoint-old
 
 定向测试覆盖旧、新、回滚 active、缺失历史 key、实际 PostgreSQL 保存/读取与只读预检；
 真实 LangGraph MemorySaver 暂停后跨密钥复核恢复也有回归保护。未完成独立进程部署、
-浏览器端到端或生产 KMS 验收；owner/status/version 与最终复核原子性仍属于 D4。
+浏览器端到端或生产 KMS 验收。D4a 已补齐 owner/status/version 可信绑定及引用统计；
+最终复核原子性仍由 D4b 承接。

@@ -76,7 +76,8 @@ def test_database_routes_allow_server_verified_superuser(monkeypatch):
 
 @pytest.mark.parametrize(
     "table_name",
-    ["users", "admin_company_profiles", "admin_company_profile_audits", "admin_company_profile_audit_anchors"],
+    ["users", "admin_company_profiles", "admin_company_profile_audits", "admin_company_profile_audit_anchors",
+     "research_review_claims"],
 )
 def test_table_endpoints_reject_relations_outside_public_demo_scope(table_name):
     with pytest.raises(ValueError, match="not available"):
@@ -108,6 +109,7 @@ def test_limited_select_contract_accepts_the_three_demo_tables(sql):
         "SELECT * FROM users",
         "SELECT * FROM admin_company_profile_audits",
         "SELECT * FROM admin_company_profile_audit_anchors",
+        "SELECT * FROM research_review_claims",
         "SELECT * FROM public.company_data",
         "SELECT * FROM company_data, users",
         "SELECT * FROM company_data JOIN users ON true",

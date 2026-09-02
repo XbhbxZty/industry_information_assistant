@@ -18,6 +18,7 @@ from service.checkpoint_integrity import (  # noqa: E402
     MODE_STANDARD,
     business_key_id,
     issue_business_state_seal,
+    issue_checkpoint_context_seal,
     issue_graph_state_seal,
 )
 from service.review_workspace_service import (  # noqa: E402
@@ -134,10 +135,14 @@ def _checkpoint(state, *, status="paused", owner=_OWNER, integrity=True):
     if not integrity:
         return checkpoint, None
     row = ResearchCheckpointIntegrity(
-        session_id=state["session_id"], checkpoint_id=str(checkpoint.id),
+        session_id=state["session_id"], checkpoint_id=checkpoint.id,
         mode=MODE_STANDARD, integrity_version=INTEGRITY_VERSION,
         key_id=business_key_id(MODE_STANDARD), business_revision=1,
         business_seal=issue_business_state_seal(state, state["session_id"], MODE_STANDARD, 1),
+    )
+    row.context_seal = issue_checkpoint_context_seal(
+        checkpoint.id, checkpoint.session_id, checkpoint.user_id, checkpoint.status,
+        row.mode, row.business_revision, row.business_seal,
     )
     return checkpoint, row
 

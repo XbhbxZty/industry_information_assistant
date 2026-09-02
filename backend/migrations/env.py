@@ -15,7 +15,9 @@ from sqlalchemy.engine import Connection
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Library callers may already have application/security loggers loaded.
+    # A migration must not silently disable those loggers for the process.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 APP_DIR = BACKEND_DIR / "app"

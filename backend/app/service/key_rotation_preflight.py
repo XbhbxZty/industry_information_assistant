@@ -107,7 +107,10 @@ def _collect(db: Session, retire_audit: list[str], retire_checkpoint: list[str])
     issues["duplicate_checkpoint_session"] += sum(count - 1 for count in session_counts.values())
     for integrity in integrities:
         add("checkpoint", integrity.key_id, "business", fingerprint=True)
-        if integrity.checkpoint_id not in checkpoint_ids:
+        context = integrity.context_seal
+        add("checkpoint", context.get("key_id") if isinstance(context, dict) else None,
+            "context", fingerprint=True)
+        if str(integrity.checkpoint_id) not in checkpoint_ids:
             issues["orphan_checkpoint_integrity"] += 1
     if (checkpoints or integrities or retire_checkpoint) and checkpoint_ring is None:
         issues["checkpoint_key_configuration_unavailable"] += 1
@@ -144,8 +147,7 @@ def _collect(db: Session, retire_audit: list[str], retire_checkpoint: list[str])
         integrity = paired.get(checkpoint.session_id)
         if integrity is None:
             unsigned_checkpoints += 1
-            if graph_seal or binding:
-                issues["checkpoint_integrity_missing"] += 1
+            issues["checkpoint_integrity_missing"] += 1
         elif checkpoint_ring is not None:
             try:
                 service._verify_integrity_pair(checkpoint, integrity, checkpoint.session_id)

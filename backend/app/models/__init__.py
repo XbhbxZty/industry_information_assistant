@@ -7,7 +7,7 @@ from .user import User
 from .chat import ChatSession, ChatMessage, ChatAttachment, LongTermMemory
 from .knowledge import KnowledgeBase, Document
 from .industry_data import IndustryStats, CompanyData, PolicyData
-from .research import ResearchCheckpoint, ResearchCheckpointIntegrity
+from .research import ResearchCheckpoint, ResearchCheckpointIntegrity, ResearchReviewClaim
 from .news import IndustryNews, BiddingInfo, NewsCollectionTask
 from .company_profile import (
     AdminCompanyProfile,
@@ -28,6 +28,7 @@ __all__ = [
     "PolicyData",
     "ResearchCheckpoint",
     "ResearchCheckpointIntegrity",
+    "ResearchReviewClaim",
     "IndustryNews",
     "BiddingInfo",
     "NewsCollectionTask",

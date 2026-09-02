@@ -162,7 +162,7 @@ def test_inventory_counts_inner_snapshot_and_blocks_retirement_without_writes(ro
     assert not report["preflight_passed"]
     assert report["references"]["audit"]["audit-old"] == {"audits": 1}
     assert report["references"]["checkpoint"]["old-checkpoint"] == {"snapshot_v2": 1}
-    assert report["references"]["checkpoint"]["new-checkpoint"] == {"business": 1, "graph": 1}
+    assert report["references"]["checkpoint"]["new-checkpoint"] == {"business": 1, "graph": 1, "context": 1}
     assert all("retained_records_reference_key" in item["reasons"] for item in report["retirement"]["blocked"])
     clean = inspect_key_rotation(engine, retire_audit_keys=["audit-unused"], retire_checkpoint_keys=["unused-checkpoint"])
     assert clean["preflight_passed"]

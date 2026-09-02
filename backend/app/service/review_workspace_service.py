@@ -128,15 +128,18 @@ class ReviewWorkspaceService:
             # reported as an integrity conflict, not disappear as an empty
             # queue.  We first make a permissive candidate selection below and
             # then authenticate every candidate before interpreting it.
-            rows = self.db.query(ResearchCheckpoint).filter(
-                ResearchCheckpoint.user_id.isnot(None),
-            ).order_by(ResearchCheckpoint.updated_at.desc()).all()
+            rows = self.db.query(ResearchCheckpoint).order_by(
+                ResearchCheckpoint.updated_at.desc(),
+            ).all()
         except Exception as exc:
             raise ReviewWorkspaceUnavailable("无法读取待复核队列") from exc
 
         tasks: List[ReviewTaskSummary] = []
         for checkpoint in rows:
-            if str(checkpoint.user_id) == str(reviewer_id):
+            # Authenticate before filtering owner/status: tampering either to
+            # NULL/self/nonpending must not silently erase work from the queue.
+            self._verify_checkpoint(checkpoint)
+            if checkpoint.user_id is None or str(checkpoint.user_id) == str(reviewer_id):
                 continue
             state_hint = checkpoint.state_json
             assessment_hint = (
@@ -200,6 +203,7 @@ class ReviewWorkspaceService:
         if len(rows) != 1:
             raise ReviewWorkspaceIntegrityError("同一 session_id 对应多个检查点")
         checkpoint = rows[0]
+        self._verify_checkpoint(checkpoint)
         if checkpoint.user_id is None:
             raise ReviewTaskNotPending("无归属会话不能进入复核队列")
         if str(checkpoint.user_id) == str(reviewer_id):
@@ -208,9 +212,7 @@ class ReviewWorkspaceService:
         # precise status is checked after integrity, from business state.
         return checkpoint, self._packet_for_checkpoint(checkpoint, require_pending=True)
 
-    def _packet_for_checkpoint(
-        self, checkpoint: ResearchCheckpoint, *, require_pending: bool,
-    ) -> ReviewTaskPacket:
+    def _verify_checkpoint(self, checkpoint: ResearchCheckpoint) -> None:
         session_id = checkpoint.session_id
         if not isinstance(session_id, str) or not session_id:
             raise ReviewWorkspaceIntegrityError("检查点缺少合法 session_id")
@@ -221,8 +223,7 @@ class ReviewWorkspaceService:
         except Exception as exc:
             raise ReviewWorkspaceUnavailable("无法读取检查点完整性记录") from exc
         if integrity is None:
-            # Review access is a new, high-trust path.  Unlike generic restore,
-            # it has no safe legacy compatibility mode.
+            # Missing metadata is never an unsigned legacy compatibility mode.
             raise ReviewWorkspaceIntegrityError("待复核检查点缺少完整性证明")
         try:
             self._integrity_verifier._verify_integrity_pair(checkpoint, integrity, session_id)
@@ -231,6 +232,11 @@ class ReviewWorkspaceService:
         except Exception as exc:
             raise ReviewWorkspaceUnavailable("检查点完整性校验服务失败") from exc
 
+    def _packet_for_checkpoint(
+        self, checkpoint: ResearchCheckpoint, *, require_pending: bool,
+    ) -> ReviewTaskPacket:
+        self._verify_checkpoint(checkpoint)
+        session_id = checkpoint.session_id
         state = checkpoint.state_json
         if not isinstance(state, dict):
             raise ReviewWorkspaceIntegrityError("待复核检查点状态不是对象")
@@ -239,8 +245,8 @@ class ReviewWorkspaceService:
         assessment = state.get("risk_assessment")
         if not isinstance(assessment, dict):
             raise ReviewWorkspaceIntegrityError("待复核状态缺少风险评级")
-        # The row's status is mutable metadata.  The sealed business state
-        # proves whether the workflow still needs a human decision.
+        # Both row status and state are sealed; they must also be semantically
+        # consistent before admitting a pending human decision.
         review = assessment.get("human_review")
         already_completed = isinstance(review, dict) and review.get("completed") is True
         if require_pending and (

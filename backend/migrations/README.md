@@ -28,7 +28,8 @@ remain outside this managed application schema; Alembic never drops them.
 
 ## Company-profile audit chain (0002)
 
-Current head is `20260902_0002`. Configure both settings from `.env.example`
+The audit-chain revision is `20260902_0002`; current head is `20260902_0003`.
+Configure both settings from `.env.example`
 before upgrading a database containing company profiles or using profile CRUD:
 
 - `COMPANY_PROFILE_AUDIT_KEYS_JSON`: JSON object mapping key IDs to standard
@@ -67,6 +68,41 @@ signatures and can only anchor the then-observed history again.
 Key rotation does not require another schema revision. See
 [`docs/KEY_ROTATION.md`](../../docs/KEY_ROTATION.md) for the read-only reference
 inventory, checkpoint v1/v2 compatibility, active-key switch and retirement checks.
+
+## Checkpoint context and review claims (0003)
+
+0003 makes checkpoint sessions unique, restricts non-null workflow statuses,
+adds an actual UUID/pair foreign key for integrity metadata, and persists a
+separate context seal over checkpoint ID, session ID, owner, status, business
+revision and business MAC. Existing v1 graph/business signatures do not change.
+The existing `business_revision` also advances on status changes; normal writes
+take a short checkpoint row lock and PostgreSQL rejects non-increasing updates.
+
+Before upgrading existing checkpoints, stop writers, preserve a restorable backup
+and all historical checkpoint keys, and independently review current ownership
+and status. See `docs/KEY_ROTATION.md` for checkpoint keyring configuration.
+The migration rejects duplicate sessions, missing/mismatched integrity, invalid
+status/UUID/version, missing keys and invalid graph/business seals. It never
+deletes duplicates, repairs records or silently treats them as unsigned legacy.
+Any failure rolls back both data changes and DDL; investigate offline, without
+`stamp`. An empty database still upgrades without signing keys.
+
+Valid old rows receive an `origin=migration_observed_v1` context seal: it attests
+only what was observed during migration, NOT ownership/status authenticity before
+that moment. Old MACs and revisions are preserved. The next normal write creates
+a new `native_v1` context seal. All runtime checkpoint reads require valid paired
+metadata and context; there is no missing-integrity compatibility bypass.
+
+`research_review_claims` supplies one checkpoint-keyed row with separate reviewer,
+opaque token, lease, basis version/seal, decision fields and lifecycle timestamps.
+This revision provides the schema only. Atomic claiming/finalization, idempotency
+and interrupted-stream recovery are D4b work, not yet exposed by this checkpoint.
+The table is not available through the database explorer/Text2SQL demo allowlist.
+
+`downgrade 20260902_0002` drops claim records and context signatures as well as
+their constraints. Use it only on disposable development data; real rollback
+requires a matching reviewed backup, code and keys. Git checkout alone does not
+roll back a database, and upgrading again cannot recover original observations.
 
 ## Local legacy adoption (development/maintenance only)
 

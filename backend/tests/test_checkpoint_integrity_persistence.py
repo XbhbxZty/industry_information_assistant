@@ -135,6 +135,9 @@ class _Query:
     def order_by(self, *_args):
         return self
 
+    def with_for_update(self, **_kwargs):
+        return self
+
     def first(self):
         if self.model is ResearchCheckpoint:
             return self.db.checkpoint
@@ -197,7 +200,7 @@ def test_service_pairs_rows_revisions_and_excludes_ui_from_business_seal(monkeyp
         "checkpoint-session", state, ui_state={"progress": 10}
     )
     assert checkpoint_id == str(db.checkpoint.id)
-    assert db.integrity.checkpoint_id == checkpoint_id
+    assert str(db.integrity.checkpoint_id) == checkpoint_id
     assert db.integrity.mode == MODE_STANDARD
     assert db.integrity.business_revision == 1
     assert "_checkpoint_integrity_mode" not in db.checkpoint.state_json
@@ -214,7 +217,7 @@ def test_service_pairs_rows_revisions_and_excludes_ui_from_business_seal(monkeyp
     next_state[GRAPH_SEAL_FIELD] = issue_graph_state_seal(next_state, MODE_STANDARD)
     assert service.save_checkpoint("checkpoint-session", next_state) == checkpoint_id
     assert db.integrity.business_revision == 2
-    assert db.integrity.checkpoint_id == checkpoint_id
+    assert str(db.integrity.checkpoint_id) == checkpoint_id
     assert db.integrity.mode == MODE_STANDARD
     assert db.commits == 2
 
@@ -255,7 +258,7 @@ def test_service_rejects_cleaner_induced_public_state_change(monkeypatch: pytest
     assert db.integrity is None
 
 
-def test_service_keeps_legacy_row_legacy(monkeypatch: pytest.MonkeyPatch):
+def test_service_never_treats_missing_integrity_as_safe_legacy(monkeypatch: pytest.MonkeyPatch):
     db = _Db()
     db.checkpoint = ResearchCheckpoint(
         id=uuid.uuid4(), session_id="legacy", query="legacy", phase="planning",
@@ -264,5 +267,8 @@ def test_service_keeps_legacy_row_legacy(monkeypatch: pytest.MonkeyPatch):
     service = CheckpointService()
     monkeypatch.setattr(service, "_get_db", lambda: db)
 
-    assert service.load_checkpoint("legacy") == {"query": "legacy"}
-    assert service.get_checkpoint_integrity_mode("legacy") is None
+    for read in (service.load_checkpoint, service.load_full_checkpoint,
+                 service.get_checkpoint_info, service.get_checkpoint_integrity_mode):
+        with pytest.raises(CheckpointIntegrityError, match="缺少完整性"):
+            read("legacy")
+    assert not service.update_status("legacy", "completed")

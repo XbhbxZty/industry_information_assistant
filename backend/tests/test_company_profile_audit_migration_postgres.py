@@ -25,7 +25,7 @@ from service.company_profile_audit_backfill import backfill_company_profile_audi
 
 pytestmark = pytest.mark.postgres_integration
 BASELINE = "20260831_0001"
-HEAD = "20260902_0002"
+HEAD = "20260902_0002"  # Frozen D2b target, not necessarily the current application head.
 
 
 def _insert_legacy(connection, *, name="legacy profile", broken=False, revisions=2, profile_id=None):
@@ -76,6 +76,9 @@ def test_upgrade_anchors_untouched_legacy_and_services_extend_chain(disposable_p
             profile_id = _insert_legacy(connection)
             original = _legacy_rows(connection, profile_id)
         command.upgrade(config, HEAD)
+        # The audit revision remains frozen, but metadata/check targets the
+        # latest application schema, including subsequent checkpoint changes.
+        command.upgrade(config, "head")
         command.check(config)
         with engine.connect() as connection:
             assert _legacy_rows(connection, profile_id) == original

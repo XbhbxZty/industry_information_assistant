@@ -159,6 +159,7 @@ def _build_graph(critic_phases=(ResearchPhase.COMPLETED.value,), saved=None,
                             ui_state=None, final_report=None): return "cp_1"
         def update_status(self, session_id, status, error_message=None):
             self.statuses.append(status)
+            return True
         def load_checkpoint(self, session_id): return None
         def get_checkpoint_info(self, session_id): return None
 

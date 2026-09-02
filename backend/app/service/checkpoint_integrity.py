@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from uuid import UUID
 from typing import Any, Dict, Optional
 
 try:
@@ -35,6 +36,10 @@ _ALGORITHM = "hmac-sha256"
 _ROOT_CONTEXT = b"research-checkpoint-integrity/v1"
 _GRAPH_DOMAIN = b"graph-state"
 _BUSINESS_DOMAIN = b"business-state"
+_CONTEXT_DOMAIN = b"checkpoint-context"
+CHECKPOINT_STATUSES = frozenset(("running", "paused", "completed", "failed"))
+CONTEXT_NATIVE = "native_v1"
+CONTEXT_MIGRATION = "migration_observed_v1"
 _KEY_ID_CONTEXT = b"key-id"
 _RUNTIME_COMPANY_PROFILE_MARKER = "_admin_profile_snapshot_authorized"
 
@@ -265,12 +270,68 @@ def business_key_id(mode: str) -> str:
     return _key_id(_BUSINESS_DOMAIN, _require_mode(mode))
 
 
+def _checkpoint_context_body(
+    checkpoint_id: Any, session_id: str, owner_id: Any, status: str,
+    mode: str, revision: int, business_seal: str, origin: str,
+) -> bytes:
+    try:
+        checkpoint_id = str(UUID(str(checkpoint_id)))
+        owner_id = str(UUID(str(owner_id))) if owner_id is not None else None
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise CheckpointIntegrityError("检查点上下文 UUID 非法") from exc
+    if not isinstance(session_id, str) or not session_id or len(session_id) > 64:
+        raise CheckpointIntegrityError("检查点上下文 session_id 非法")
+    if not isinstance(status, str) or status not in CHECKPOINT_STATUSES:
+        raise CheckpointIntegrityError("检查点上下文 status 非法")
+    if type(revision) is not int or revision < 1:
+        raise CheckpointIntegrityError("检查点上下文业务版本非法")
+    if not _is_hex_digest(business_seal):
+        raise CheckpointIntegrityError("检查点上下文业务封签非法")
+    if origin not in (CONTEXT_NATIVE, CONTEXT_MIGRATION):
+        raise CheckpointIntegrityError("检查点上下文来源非法")
+    return _canonical_json_bytes({
+        "version": 1, "checkpoint_id": checkpoint_id, "session_id": session_id,
+        "owner_id": owner_id, "status": status, "mode": _require_mode(mode),
+        "business_revision": revision, "business_seal": business_seal,
+        "origin": origin,
+    })
+
+
+def issue_checkpoint_context_seal(
+    checkpoint_id: Any, session_id: str, owner_id: Any, status: str,
+    mode: str, revision: int, business_seal: str, *, origin: str = CONTEXT_NATIVE,
+) -> Dict[str, Any]:
+    """Bind row identity/ownership/workflow to the existing v1 business MAC.
+
+    This is a separate domain: neither old graph nor business signing bytes
+    change. Migration observations explicitly do not claim historical binding.
+    """
+    body = _checkpoint_context_body(
+        checkpoint_id, session_id, owner_id, status, mode, revision, business_seal, origin,
+    )
+    return {**_seal_for(_CONTEXT_DOMAIN, body, mode), "origin": origin}
+
+
+def verify_checkpoint_context_seal(
+    checkpoint_id: Any, session_id: str, owner_id: Any, status: str,
+    mode: str, revision: int, business_seal: str, seal: Any,
+) -> None:
+    if not isinstance(seal, dict) or set(seal) != _SEAL_KEYS | {"origin"}:
+        raise CheckpointIntegrityError("检查点缺少合法上下文封签")
+    if type(seal.get("version")) is not int:
+        raise CheckpointIntegrityError("检查点上下文封签版本非法")
+    body = _checkpoint_context_body(
+        checkpoint_id, session_id, owner_id, status, mode, revision, business_seal, seal["origin"],
+    )
+    _verify_seal({k: v for k, v in seal.items() if k != "origin"}, _CONTEXT_DOMAIN, body, mode)
+
+
 def describe_checkpoint_verification_keys() -> Dict[str, str]:
     """Map every configured verification fingerprint to its logical alias."""
     ring = _keyring()
     return {
         _key_id(domain, mode, alias): alias
         for alias in ring.key_ids
-        for domain in (_GRAPH_DOMAIN, _BUSINESS_DOMAIN)
+        for domain in (_GRAPH_DOMAIN, _BUSINESS_DOMAIN, _CONTEXT_DOMAIN)
         for mode in _ALLOWED_MODES
     }

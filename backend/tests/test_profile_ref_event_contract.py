@@ -230,6 +230,7 @@ class _Checkpoint:
 
     def update_status(self, _session_id, status, error_message=None):
         self.statuses.append(status)
+        return True
 
 
 def test_human_review_required_uses_current_state_not_interrupt_payload():

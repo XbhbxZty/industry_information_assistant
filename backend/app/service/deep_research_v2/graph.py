@@ -1716,7 +1716,8 @@ class DeepResearchGraph:
             if interrupted is not None:
                 # 暂停：写 paused 状态，推出复核请求，**不发终局事件**
                 if self.checkpoint_service and session_id:
-                    self.checkpoint_service.update_status(session_id, "paused")
+                    if not self.checkpoint_service.update_status(session_id, "paused"):
+                        raise ValueError("待复核检查点暂停状态保存失败")
                 # ``interrupt.value`` is serialized checkpointer data, not an
                 # event authority.  Rebuild the complete public request from
                 # the current graph state so neither a forged event type nor
@@ -1748,14 +1749,17 @@ class DeepResearchGraph:
                 # 可用性正常、可审计性为零。而这个项目的核心业务约束正是
                 # "出坏账要追责"，追责要问的恰恰是这条记录。
                 #
-                # `save_checkpoint` 只写 phase/state_json/final_report，
-                # 不碰 status，两者可安全共存。
-                self._save_checkpoint(
+                # 保存进度保留 paused；状态转换会单独递增版本并封签。
+                # D4b 再把最终状态与唯一裁决并入同一个短事务。
+                saved = self._save_checkpoint(
                     final_state,
                     final_state.get("_user_id"),
                     self._build_ui_state(final_state),
                 )
-                self.checkpoint_service.update_status(session_id, "completed")
+                if not saved:
+                    raise ValueError("最终检查点保存失败")
+                if not self.checkpoint_service.update_status(session_id, "completed"):
+                    raise ValueError("最终检查点完成状态保存失败")
                 self._verify_review_persisted(final_state, session_id)
 
             logger.info(

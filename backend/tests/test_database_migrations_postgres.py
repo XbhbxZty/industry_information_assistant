@@ -87,7 +87,7 @@ def test_empty_database_upgrade_check_downgrade_and_reupgrade(empty_postgres_dat
         tables_after_upgrade = set(inspect(engine).get_table_names())
         assert tables_after_upgrade == EXPECTED_APPLICATION_TABLES | {"alembic_version"}
         with engine.connect() as connection:
-            assert MigrationContext.configure(connection).get_current_revision() == "20260902_0002"
+            assert MigrationContext.configure(connection).get_current_revision() == "20260902_0003"
     finally:
         engine.dispose()
 
