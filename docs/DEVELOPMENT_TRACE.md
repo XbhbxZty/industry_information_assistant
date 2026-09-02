@@ -503,6 +503,36 @@
 - **提交**：`5245101`
 - **遗留风险**：纯函数不能证明 report 来源；D2a2b 必须只传入取得锁后由同一 writer connection 重采集的报告，并单独强制认证、受保护 policy 来源和 approval replay 语义。
 
+### DEV-BC-20260902-001：固定 public 版本表后 Alembic check 误报删除版本表
+
+- **阶段 / 状态**：轻量第一批 D2a2b＋D2a3 / 已关闭
+- **发现方式**：真实 PostgreSQL upgrade 后执行 `command.check`。
+- **现象 / 根因**：`version_table_schema="public"` 与 `include_schemas=False` 的默认 schema 反射不一致，产生 `remove_table(alembic_version)` 差异。
+- **解决办法**：autogenerate 精确排除版本表与已知七张演示表、LangGraph 表，不使用前缀放行；未知表仍可报告差异。
+- **回归保护 / 验证**：`test_real_head_guard_rejects_unmigrated_stale_and_accepts_upgrade`、`test_demo_seed_requires_head_then_creates_once_without_migration_drift` 及迁移全生命周期真实测试通过；本批合计 `165 passed`。
+- **提交**：`27ad6a0`
+- **遗留风险**：这些 unmanaged 表不由 ORM/Alembic 迁移；其结构正确性仍由各自维护路径负责。
+
+### DEV-BC-20260902-002：新演示 seed 的连接配置与写入 schema 没有对齐
+
+- **阶段 / 状态**：轻量第一批 D2a3 / 已关闭
+- **发现方式**：主审代码检查。
+- **现象 / 根因**：首版直接调用 import-safe URL resolver，未加载 `backend/.env`；存在性检查固定 public，但未限定的 DDL/DML 又依赖会话 search_path，读写目标可能不一致。
+- **解决办法**：CLI 在解析 URL 前加载 `.env`，保留进程环境优先；同一 seed 事务内设置 public search_path、检查 head 和已有表，再创建/插入。已有任一演示表直接拒绝。
+- **回归保护 / 验证**：`test_demo_cli_loads_dotenv_before_resolving_target` 验证顺序；真实 PG 以非默认 search_path 验证建表、重复拒绝和数据计数不变，通过。
+- **提交**：`27ad6a0`
+- **遗留风险**：演示 seed 是显式一次性命令，不做已有演示数据的升级或合并。
+
+### DEV-BC-20260902-003：扩大 Docker 构建目录后可能把本地环境凭据打入镜像
+
+- **阶段 / 状态**：轻量第一批 D2a3 / 已关闭
+- **发现方式**：主审 Dockerfile 构建范围检查，未执行镜像构建。
+- **现象 / 根因**：为包含 Alembic，构建上下文改为 backend/，而 `COPY . /app/` 在缺少 `.dockerignore` 时也会包含本地 `.env`。
+- **解决办法**：新增 backend/.dockerignore，排除 `.env`、环境变体和缓存，仅保留示例配置；文档明确使用运行时配置。
+- **回归保护 / 验证**：启动配置静态测试检查 `.env` 排除项，compose 配置检查通过；本阶段不宣称已完成镜像部署验收。
+- **提交**：`27ad6a0`
+- **遗留风险**：镜像实际构建和部署仍待后续验收。
+
 ## 新条目模板
 
 ```markdown
