@@ -71,13 +71,15 @@ const snippets = sources.map(source => `<details class="source" id="${source.id}
 <button type="button" class="small" data-copy="${escape(source.file)}:${source.start}">复制路径与行号</button>
 <pre class="source-code"><code>${source.lines.map((line, index) => `<span class="code-line" id="${source.id}-L${source.start + index}"><a class="line-no" href="#${source.id}-L${source.start + index}" aria-label="第 ${source.start + index} 行">${source.start + index}</a><span>${escape(line) || ' '}</span></span>`).join('\n')}</code></pre>
 <p class="muted">该版本文件 SHA-256：<code>${source.sha256}</code></p></details>`).join('\n')
-let result = readFileSync(path.join(folder, 'handbook.template.html'), 'utf8')
+// Git on Windows may check these text artifacts out as CRLF. Only EOLs differ;
+// normalize them without relaxing the content/source reproducibility check.
+let result = readFileSync(path.join(folder, 'handbook.template.html'), 'utf8').replaceAll('\r\n', '\n')
 for (const [token, replacement] of [['@@REVISION@@', revision], ['@@SHORT_REVISION@@', revision.slice(0, 7)], ['@@SOURCE_COUNT@@', String(sources.length)], ['@@SOURCES@@', snippets]]) {
   if (!result.includes(token)) throw new Error(`missing template token ${token}`)
   result = result.replaceAll(token, replacement)
 }
 if (process.argv.includes('--check')) {
-  if (readFileSync(path.join(folder, 'index.html'), 'utf8') !== result) throw new Error('index.html is stale; run node docs/project-handbook/build.mjs')
+  if (readFileSync(path.join(folder, 'index.html'), 'utf8').replaceAll('\r\n', '\n') !== result) throw new Error('index.html is stale; run node docs/project-handbook/build.mjs')
   console.log(`Build reproducible: ${sources.length} source snapshots at ${revision.slice(0, 7)}`)
 } else {
   writeFileSync(path.join(folder, 'index.html'), result, 'utf8')
