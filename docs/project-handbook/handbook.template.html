@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="尽调项目学习手册：完整目录与管理员档案数据链路样章，附版本化源码快照。">
+<title>尽调项目学习手册 · 目录与样章</title>
+<style>
+:root{color-scheme:light;--paper:#f7f6f2;--card:#fff;--ink:#233349;--muted:#52647a;--line:#d3dce4;--accent:#155e80;--soft:#e9f2f6;--warning:#80501a;--warn-bg:#fff5e6;--nav:#152c3d;--nav-ink:#e8f0f5;--code:#f2f5f7;--ok:#236649;--shadow:0 5px 24px #142d3b09}
+:root[data-theme=dark]{color-scheme:dark;--paper:#131d28;--card:#1c2937;--ink:#e0e8f1;--muted:#b2c1d0;--line:#405163;--accent:#8ed1ef;--soft:#233e50;--warning:#f0c17d;--warn-bg:#392e21;--nav:#0e1822;--nav-ink:#e8f0f5;--code:#15212e;--ok:#95d8b8;--shadow:none}
+*{box-sizing:border-box}html{scroll-padding-top:5rem}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.8 "Segoe UI","Microsoft YaHei",system-ui,sans-serif}a{color:var(--accent);text-decoration-thickness:1px;text-underline-offset:3px}a:hover{text-decoration-thickness:2px}button,input{font:inherit}button{border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--ink);padding:.35rem .8rem;cursor:pointer}button:hover{background:var(--soft)}button:disabled{opacity:.55;cursor:default}a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:4px}input{min-width:0;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:7px;padding:.4rem .7rem}code{font-family:Consolas,"Cascadia Code",monospace;font-size:.89em;overflow-wrap:anywhere}p,li,td,th{overflow-wrap:anywhere}p{margin:.6rem 0 1rem}pre{background:var(--code);border:1px solid var(--line);border-radius:8px;padding:1rem;overflow:auto;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}h1,h2,h3,h4{line-height:1.4;letter-spacing:.01em}h1{font-size:clamp(2rem,4vw,3.3rem);margin:.4rem 0 1rem}h2{font-size:1.65rem;margin:0 0 1rem}h3{font-size:1.15rem;margin:1.5rem 0 .6rem}h4{font-size:1rem;margin:1.1rem 0 .4rem}ul,ol{padding-left:1.5rem}li{margin:.3rem 0}.muted{color:var(--muted);font-size:.91rem}.eyebrow{font-size:.8rem;text-transform:uppercase;letter-spacing:.16em;font-weight:700;color:var(--accent)}.pill{display:inline-block;font-size:.78rem;padding:.05rem .55rem;border-radius:20px;background:var(--soft);color:var(--accent);vertical-align:middle}.pill.pending{background:var(--code);color:var(--muted)}.pill.test{color:var(--ok)}.skip{position:absolute;left:1rem;top:-10rem}.skip:focus{top:.5rem;z-index:10;background:var(--card);padding:.5rem}
+.topbar{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);padding:.65rem 1.4rem;display:flex;align-items:center;justify-content:space-between;gap:.7rem;flex-wrap:wrap}.brand{font-weight:700;letter-spacing:.04em}.top-actions{display:flex;gap:.5rem;align-items:center}.small{font-size:.85rem}.layout{display:grid;grid-template-columns:245px minmax(0,1fr);max-width:1580px;margin:0 auto}.sidebar{background:var(--nav);color:var(--nav-ink);padding:1.6rem 1.25rem;position:sticky;top:4rem;align-self:start;max-height:calc(100vh - 4rem);overflow:auto;border-radius:0 0 14px 0}.sidebar a{color:var(--nav-ink);text-decoration:none;display:block;padding:.4rem .6rem;border-left:2px solid transparent}.sidebar a:hover,.sidebar a[aria-current=location]{background:#ffffff12;border-left-color:#9ad9ef}.sidebar p{font-size:.8rem;opacity:.85;margin:1rem .6rem .3rem}.sidebar summary{font-weight:700;cursor:pointer}.sidebar .sub{font-size:.9rem;padding-left:1.3rem}.content{min-width:0;padding:2.4rem clamp(1.2rem,4vw,4rem) 5rem;max-width:1200px}.hero{padding:0 0 2rem;border-bottom:2px solid var(--accent);margin-bottom:2rem}.lede{font-size:1.15rem;max-width:55ch}.meta{display:flex;gap:.6rem;flex-wrap:wrap}.panel{margin:1.5rem 0;padding:1.7rem;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}.chapter{margin:2.5rem 0}.callout{border-left:4px solid var(--accent);background:var(--soft);padding:.8rem 1rem;margin:1.1rem 0}.callout.warn{border-color:var(--warning);background:var(--warn-bg)}.columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}.tile{padding:1rem;border:1px solid var(--line);border-radius:8px;background:var(--card)}.tile h3{margin:.1rem 0 .5rem}.toc-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem}.toc-card{padding:1rem;border:1px solid var(--line);border-radius:8px}.toc-card h3{margin:.2rem 0 .5rem}.toc-card p{font-size:.92rem}.toc-card details{font-size:.9rem}.table-wrap{overflow:auto;max-width:100%}table{width:100%;border-collapse:collapse;margin:1rem 0;text-align:left;font-size:.94rem}th,td{padding:.65rem .75rem;border-bottom:1px solid var(--line);vertical-align:top}th{background:var(--soft);font-weight:600}details{margin:.8rem 0}summary{cursor:pointer;color:var(--accent);font-weight:600}details[open]>summary{margin-bottom:.8rem}.crumb{font-size:.85rem;color:var(--muted)}.crumb a{margin-right:.25rem}.xref{font-size:.87rem}.jump-row{display:flex;flex-wrap:wrap;gap:.5rem 1rem;border-top:1px solid var(--line);padding-top:.8rem;margin-top:1rem}.step-list{counter-reset:step;list-style:none;padding-left:0}.step-list>li{position:relative;padding:.3rem 0 .8rem 2.7rem}.step-list>li::before{counter-increment:step;content:counter(step);position:absolute;left:0;top:.4rem;border-radius:50%;width:1.8rem;height:1.8rem;line-height:1.8rem;text-align:center;background:var(--soft);color:var(--accent);font-weight:700}.diagram{width:100%;height:auto;display:block;margin:1rem 0}.diagram rect{fill:var(--soft);stroke:var(--accent)}.diagram .storage{fill:var(--code);stroke:var(--muted)}.diagram text{font:14px "Microsoft YaHei",sans-serif;fill:var(--ink)}.diagram .hint{font-size:12px;fill:var(--muted)}.diagram path{fill:none;stroke:var(--muted);stroke-width:1.5}.diagram marker path{fill:var(--muted);stroke:none}.diagram a:hover rect{stroke-width:3}.diagram-caption{font-size:.85rem;color:var(--muted)}.mobile-flow{display:none}.flow-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.8rem}.flow-grid a{padding:1rem;background:var(--soft);border-radius:7px;text-decoration:none}.flow-grid small{display:block;color:var(--muted)}.flow-grid strong{display:block}.demo-controls{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.8rem}.demo-controls button[aria-pressed=true]{background:var(--accent);color:var(--card)}.demo-state{border:1px solid var(--line);padding:1rem;border-radius:8px}.demo-state h4{margin:0 0 .4rem}.demo-state pre{margin:0}.gloss-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.7rem}.gloss-grid details{padding:.7rem 1rem;border:1px solid var(--line);border-radius:7px;margin:0}.source{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:1rem}.source-path{display:block;font: .8rem/1.6 Consolas,monospace;color:var(--muted);overflow-wrap:anywhere}.source-code{padding:.6rem .2rem;font-size:13px;max-height:38rem;overflow:auto;white-space:pre}.code-line{display:grid;grid-template-columns:3.4rem minmax(0,1fr);min-height:1.7em}.code-line>span{white-space:pre-wrap;overflow-wrap:anywhere;padding-right:.5rem}.line-no{color:var(--muted);text-align:right;padding-right:.8rem;text-decoration:none;border-right:1px solid var(--line);margin-right:.6rem;user-select:none}.code-line:target{background:var(--soft);outline:2px solid var(--accent);outline-offset:-2px}.search-box{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}.search-box input{flex:1;min-width:180px}.search-results{list-style:none;padding:0;max-height:24rem;overflow:auto}.search-results li{border-bottom:1px solid var(--line);padding:.4rem 0}.search-results a{display:block}.search-results small{color:var(--muted)}.status-line{font-size:.85rem;color:var(--muted);min-height:1.8em}.footer{border-top:1px solid var(--line);padding-top:1.2rem;margin-top:3rem;color:var(--muted);font-size:.85rem}:target:not(.code-line){scroll-margin-top:5rem}section:target>h2,article:target>h3{color:var(--accent)}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:1050px){.layout{grid-template-columns:205px minmax(0,1fr)}.sidebar{padding:1rem .6rem}.content{padding:1.8rem 1.3rem}.toc-grid{grid-template-columns:1fr}.panel{padding:1.2rem}}
+@media(max-width:730px){.layout{display:block}.sidebar{position:static;max-height:none;border-radius:0;padding:.7rem 1rem}.sidebar details:not([open])>summary{margin:0}.topbar{position:static;padding:.6rem 1rem}.content{padding:1.5rem 1rem}.columns,.gloss-grid{grid-template-columns:1fr}.flow-grid{grid-template-columns:1fr}.diagram{display:none}.mobile-flow{display:block}.source-code{font-size:12px}.code-line{grid-template-columns:2.8rem minmax(0,1fr)}.top-actions{flex-wrap:wrap}html{scroll-padding-top:1rem}:target:not(.code-line){scroll-margin-top:1rem}}
+@media print{.sidebar,.topbar,.search-panel,.demo-controls,button,.jump-row{display:none}.layout{display:block}.content{max-width:none;padding:0}.panel{box-shadow:none;break-inside:avoid}.diagram{display:block}.mobile-flow{display:none}body{background:white;color:black}a{color:inherit}.source-code{max-height:none}.chapter{break-before:auto}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">跳到正文</a>
+<header class="topbar"><div class="brand">尽调智核 <span class="muted">/ 项目学习手册</span></div><div class="top-actions"><a href="#search">查词与定位</a><button id="back-button" type="button" class="small">返回上一处</button><button id="theme-button" type="button" class="small" aria-pressed="false">深色阅读</button></div></header>
+<div class="layout">
+<aside class="sidebar"><nav aria-label="文档导航"><details open id="navigation"><summary>阅读导航</summary>
+<a href="#overview">00　这份手册怎么读</a><a href="#roadmap">01　全项目学习目录</a><a href="#sample">02　样章 · 档案进入尽调</a>
+<a class="sub" href="#step-ui">① 表单与请求</a><a class="sub" href="#step-gates">② 权限与输入校验</a><a class="sub" href="#step-save">③ 同事务保存与审计</a><a class="sub" href="#step-read">④ 发起尽调前读取</a><a class="sub" href="#step-freeze">⑤ 冻结与共享状态</a><a class="sub" href="#step-consume">⑥ 事实、清单与 Adapter</a><a class="sub" href="#step-recover">⑦ 修改后为什么不串案</a>
+<a href="#structures">03　数据结构与生命周期</a><a href="#failures">04　失败路径与排查</a><a href="#glossary">05　关键词索引</a><a href="#evidence">06　测试依据与自检</a><a href="#sources">07　版本化源码快照</a>
+<p>本期：完整目录＋一条详细样章。<br>其余章节明确列为待编写。</p></details></nav></aside>
+<main class="content" id="main">
+<section class="hero" id="overview" data-search data-keywords="学习手册 阅读 总览 版本 范围">
+<div class="eyebrow">Learning edition · 01 / 2026-09-03</div>
+<h1>从一次建档，<br>读懂数据如何进入尽调。</h1>
+<p class="lede">给自己读的项目手册。沿着业务、数据变化和真实代码逐层下钻：不仅知道系统做了什么，也知道在哪里做、为什么这样做，以及失败后会怎样。</p>
+<div class="meta"><span class="pill">完整目录＋详细样章</span><span class="pill">源码基线 @@SHORT_REVISION@@</span><span class="pill">@@SOURCE_COUNT@@ 个内嵌源码片段</span></div>
+<div class="callout"><strong>先说明范围。</strong>这里不是“全项目已经写完”的文档。本期完整展开管理员建档 → 读取 → 研究版本冻结；评分、RAG、完整人工复核等给出学习目录与边界，不冒充已完成的深度章节。</div>
+<div class="columns"><div><h3>第一次阅读</h3><p>先看<a href="#roadmap">项目目录</a>，再从<a href="#sample">样章总图</a>顺序读七步。遇到概念先点词条，按“返回上一处”回到原位置；所有核心链接均在这个文件内。</p></div><div><h3>带着问题来查</h3><p>从<a href="#search">搜索</a>输入“来源”“revision”“快照”“未核实”等词。解释旁的源码链接会展开带行号的代码。<strong>源码是基线快照，不是对当前仓库的实时读取。</strong></p></div></div>
+<p class="muted">标记约定：<span class="pill">源码核对</span> 表示可从本页代码片段核对；<span class="pill test">已有测试依据</span> 指仓库已有测试及已记录执行结果，不表示本次重新跑了全部业务测试；<span class="pill pending">待编写／未接线</span> 不是当前可用能力。所有示例企业、标识和金额均为合成说明。</p>
+</section>
+<section class="panel search-panel" id="search"><h2>查词与定位</h2><div class="search-box"><label for="search-input">关键词</label><input id="search-input" type="search" placeholder="例如：coverage、材料、事务、冻结" autocomplete="off"><button id="clear-search" type="button">清空</button></div><p id="search-status" class="status-line" aria-live="polite">搜索讲解标题、关键词和源码路径；不会连接业务服务。</p><ul id="search-results" class="search-results"></ul><noscript><p>脚本未启用：请使用浏览器查找和左侧目录。正文、术语及源码折叠仍可阅读。</p></noscript></section>
+
+<section class="chapter" id="roadmap" data-search data-keywords="完整目录 架构 全项目 阅读路线 章节">
+<div class="eyebrow">01 / 全项目地图</div><h2>后续整本手册怎样展开</h2><p>以下是学习内容的覆盖计划，不是开发阶段进度。每章都将讲输入、子过程、输出、持久化、失败分支与测试；本期只有第 03 章的样章展开。不要把“待编写”误读为对应业务代码不存在。</p>
+<div class="toc-grid">
+<article class="toc-card" id="chapter-business" data-search data-keywords="业务 贷前 尽调 授信 保理 边界"><span class="pill pending">待编写</span><h3>01　业务目标与系统边界</h3><p>主体、申请、材料、事实、风险和最终建议分别是什么？公开信息、授权数据和企业提交内容如何分工？为什么缺数据不能推出无风险？</p><details><summary>将继续展开</summary><ul><li>一笔尽调的参与者与业务对象。</li><li>通用主体清单与保理场景项。</li><li>哪些结论由规则决定，哪些需要人判断。</li><li>系统模拟能力与真实业务数据的差距。</li></ul></details></article>
+<article class="toc-card" id="chapter-entry" data-search data-keywords="React API FastAPI JWT 登录 权限 前端"><span class="pill pending">完整章节待编写</span><h3>02　用户操作如何到达后端</h3><p>React 表单 → API 模块 → 请求插件 → FastAPI 依赖 → 服务。菜单权限和后端授权为什么不是同一层？</p><details><summary>将继续展开</summary><ul><li>路由、用户状态和鉴权。</li><li>Pydantic 请求与响应契约。</li><li>普通 JSON 与 SSE 的差异。</li><li>错误怎样进入前端状态。</li></ul></details><a href="#step-ui">先读本期相关样章 →</a></article>
+<article class="toc-card" id="chapter-profile" data-search data-keywords="管理员 档案 输入 冻结"><span class="pill">本期详细样章</span><h3>03　企业档案从输入到冻结</h3><p>最小创建、字段来源、事务审计、档案选择、研究快照、数据投影与恢复边界。</p><a href="#sample">进入完整样章 →</a></article>
+<article class="toc-card" id="chapter-sources" data-search data-keywords="company companies.json Adapter 数据源 仿真 oracle"><span class="pill pending">待编写</span><h3>04　多种数据入口如何共存</h3><p>静态企业档案、结构化 Adapter、管理档案、案例包和资料检索各自提供什么？谁可以补值，谁不能覆盖已有结论？</p><details><summary>将继续展开</summary><ul><li>来源注册、查询结果与失败类型。</li><li>案例 loader 的主体、路径、日期与摘要边界。</li><li>评测答案 oracle 与 Agent 输入隔离。</li><li>组件已实现与主路径已接通的区别。</li></ul></details></article>
+<article class="toc-card" id="chapter-rag" data-search data-keywords="RAG 知识库 Milvus PDF 材料 召回 切分 向量 证据桥"><span class="pill pending">待编写；组织级材料库另属后续能力</span><h3>05　材料、RAG 与证据之间的距离</h3><p>上传、解析、切分、索引、权限范围、召回、候选抽取、原文核验，以及为什么检索命中不自动等于事实。</p><details><summary>将继续展开</summary><ul><li>个人知识库当前链路及 Milvus 边界。</li><li>固定清单抽取与证据桥接。</li><li>离线案例检索和当前管理档案关键词检索。</li><li>未来组织级材料库的未实现边界，单独标注。</li></ul></details><a href="#material-boundary">本期先分清三类材料 →</a></article>
+<article class="toc-card" id="chapter-agents" data-search data-keywords="LangGraph Agent Architect Scout DataAnalyst Wizard Writer Critic 节点 循环"><span class="pill pending">待编写</span><h3>06　工作流与多 Agent</h3><p>每个节点读取和写入哪些状态？哪些节点调用模型，哪些判断由代码完成？条件边、循环与暂停在哪里？</p><details><summary>将继续展开</summary><ul><li>编排图与实际运行入口。</li><li>规划、搜索、分析、图表、写作、批判的内部步骤。</li><li>状态合并、消息队列与输出事件。</li><li>V1 历史路径与 V2 当前尽调路径分开展示。</li></ul></details></article>
+<article class="toc-card" id="chapter-risk" data-search data-keywords="verification scoring_view 风险 评分 完整度 冲突 双轨 报告"><span class="pill pending">待编写</span><h3>07　核查状态如何变成风险结论</h3><p>证据重放、时点和单位、核心完整度、场景完整度、评分输入、闸门、调查层与报告措辞。</p><details><summary>将继续展开</summary><ul><li>facts / field_checks / evidence_store / scoring_view 的转换。</li><li>未核实、冲突与已核实无记录。</li><li>规则层与探索性调查层如何比较。</li><li>报告风险块与证据附录如何保持一致。</li></ul></details></article>
+<article class="toc-card" id="chapter-persistence" data-search data-keywords="数据库 PostgreSQL SQLAlchemy 事务 HMAC 存储 checkpoint Redis"><span class="pill pending">待编写</span><h3>08　状态存在哪里，如何保持一致</h3><p>内存、关系库、图检查点、向量索引和文件分别承担什么？以实际使用路径核对，旧文档的表数量不能直接照抄。</p><details><summary>将继续展开</summary><ul><li>当前 ORM 模型与关键关系。</li><li>两类检查点、序列化与运行时字段剔除。</li><li>事务、版本比较和完整性校验。</li><li>仅历史路径使用的组件与主路径分离。</li></ul></details><a href="#hashes">本期：六项完整性机制 →</a></article>
+<article class="toc-card" id="chapter-review" data-search data-keywords="人工复核 reviewer claim lease CAS accepted finalized 幂等 恢复"><span class="pill pending">完整章节待编写</span><h3>09　人工复核、断流与恢复</h3><p>谁能看材料、谁能裁决、如何禁止自审？领取、接受决定和最终保存为什么是不同阶段？</p><details><summary>将继续展开</summary><ul><li>最小材料包与权限投影。</li><li>claim → accepted → finalized 的真实状态变换。</li><li>租约、原决定重试与最终事务。</li><li>图已完成但响应丢失的恢复分支。</li></ul></details><a href="#step-recover">本期只读档案冻结相关部分 →</a></article>
+<article class="toc-card" id="chapter-sse" data-search data-keywords="SSE stream 事件 前端 状态机 报告 progress UI"><span class="pill pending">待编写</span><h3>10　后端执行如何出现在界面上</h3><p>字节流如何被拆成事件，事件怎样更新卡片、报告和等待状态？连接结束为什么不一定表示任务完成？</p><details><summary>将继续展开</summary><ul><li>流前 HTTP 错误与流内 error 事件。</li><li>事件名与前端状态字段逐一映射。</li><li>profile_ref 的保留与校验。</li><li>取消、刷新、页面切换和恢复边界。</li></ul></details></article>
+<article class="toc-card" id="chapter-run" data-search data-keywords="运行 部署 配置 Alembic 迁移 密钥 Docker 数据库"><span class="pill pending">待编写</span><h3>11　如何安全运行这个版本</h3><p>依赖和服务、唯一数据库连接配置、迁移与启动检查、旧库识别、密钥配置和轮换。</p><details><summary>将继续展开</summary><ul><li>只读环境检查与应用启动。</li><li>空库升级和已有业务库准入不能混用。</li><li>测试环境与业务环境隔离。</li><li>Git 回退不等于数据库回退。</li></ul></details></article>
+<article class="toc-card" id="chapter-tests" data-search data-keywords="测试 pytest 评测 oracle Bad Case 回归 调试"><span class="pill pending">完整章节待编写</span><h3>12　怎样验证、排查和继续开发</h3><p>单元、接口、真实 PG、独立进程和模型评测各自证明什么？用真实 Bad Case 反向理解设计。</p><details><summary>将继续展开</summary><ul><li>从异常定位请求、状态和数据库层。</li><li>新增字段的变更影响清单。</li><li>仿真输入与隐藏答案防泄漏。</li><li>已知限制、未验证项与维护文档的方法。</li></ul></details><a href="#evidence">本期测试索引与自检 →</a></article>
+</div></section>
+
+<section class="chapter" id="sample" data-search data-keywords="样章 总图 档案 生命周期 建档 版本冻结">
+<div class="eyebrow">02 / 深入一条真实链路</div><h2>样章：一份管理员档案，如何成为固定的尽调输入</h2>
+<p>这条链路有两个不同的请求：管理员先保存档案；普通用户随后选择档案发起研究。<strong>保存档案本身不会启动尽调，读取档案也不等于已经得出风险结论。</strong></p>
+<svg class="diagram" viewBox="0 0 900 295" role="img" aria-labelledby="flow-title flow-desc">
+<title id="flow-title">建档与发起尽调是两个请求</title><desc id="flow-desc">第一行：管理员表单经过后端权限和校验，同一事务保存当前档案与审计。第二行：用户选择档案，后端在流前读取校验，产生冻结研究状态。数据库向读取步骤提供档案。</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
+<text x="20" y="22" class="hint">请求 A：保存档案（控制流 →）</text>
+<a href="#step-ui"><rect x="20" y="38" width="220" height="62" rx="8"/><text x="36" y="64">① 管理员表单</text><text x="36" y="85" class="hint">准备 CompanyProfileCreate</text></a>
+<a href="#step-gates"><rect x="338" y="38" width="220" height="62" rx="8"/><text x="354" y="64">② API 权限与输入校验</text><text x="354" y="85" class="hint">身份、结构、来源与规范化</text></a>
+<a href="#step-save"><rect class="storage" x="654" y="38" width="225" height="62" rx="8"/><text x="670" y="64">③ PostgreSQL 同事务提交</text><text x="670" y="85" class="hint">当前档案＋审计记录</text></a>
+<path d="M240 69H330" marker-end="url(#arrow)"/><text x="258" y="55" class="hint">POST</text><path d="M558 69H646" marker-end="url(#arrow)"/><text x="579" y="55" class="hint">commit</text>
+<text x="20" y="157" class="hint">请求 B：开始研究（控制流 →；虚线为读取数据）</text>
+<a href="#step-read"><rect x="20" y="174" width="220" height="68" rx="8"/><text x="36" y="202">④ 用户选择档案 ID</text><text x="36" y="223" class="hint">POST /research/stream · v2</text></a>
+<a href="#step-read"><rect x="338" y="174" width="220" height="68" rx="8"/><text x="354" y="202">⑤ 流前读取与完整性校验</text><text x="354" y="223" class="hint">纯 JSON 快照；不带材料正文</text></a>
+<a href="#step-freeze"><rect x="654" y="174" width="225" height="68" rx="8"/><text x="670" y="202">⑥ 冻结研究状态</text><text x="670" y="223" class="hint">再进入事实、清单与 Agent</text></a>
+<path d="M240 208H330" marker-end="url(#arrow)"/><path d="M558 208H646" marker-end="url(#arrow)"/><path d="M765 100V127H448V166" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+<text x="20" y="275" class="hint">点击节点深入；图中序号是概览节点，下面正文按七个学习步骤进一步拆解。</text>
+</svg>
+<ol class="mobile-flow"><li><a href="#step-ui">管理员填写表单</a> → <a href="#step-gates">后端授权与校验</a> → <a href="#step-save">当前档案与审计同事务保存</a>。</li><li><a href="#step-read">用户选择档案 ID 发起研究</a> → 从数据库读取并校验 → <a href="#step-freeze">冻结快照进入工作流</a>。</li></ol>
+<div class="callout warn"><strong>这里冻结的是“研究所用的结构化档案投影”。</strong>补充材料保存在管理档案中，但当前快照不会把它们的正文复制进研究状态。它不是完整企业材料库，也不是上传文件后自动进行组织级 RAG。见<a href="#material-boundary">材料边界</a>。</div>
+<div class="flow-grid"><a href="#step-ui"><strong>输入与保存</strong><small>步骤 1–3：前端、校验、事务</small></a><a href="#step-read"><strong>读取与解释</strong><small>步骤 4–6：ID、快照、事实与清单</small></a><a href="#step-recover"><strong>版本与恢复</strong><small>步骤 7：当前档案变了，旧研究怎么办</small></a></div>
+</section>
+
+<article class="panel" id="step-ui" data-search data-keywords="表单 创建 编辑 normaliseDraft CompanyProfileCreate 场景 前端">
+<p class="crumb"><a href="#sample">样章</a> / 1　输入</p><h2>1. 前端表单：让业务输入变成明确的请求</h2><span class="pill">源码核对</span>
+<p>入口是 <code>/company-profiles/new</code>。表单分成主体与场景、工商与股权、财务与业务、司法担保关联、来源与材料。记录列表允许添加股东、财务期间等；不是把整份企业情况塞进一个大文本框。</p>
+<ol class="step-list"><li><strong>读取服务端模板。</strong>核心清单、场景字段和字段输入类型由 <code>/company-profiles/templates</code> 提供。前端用模板渲染<a href="#term-required">“尽调必查”</a>标签与来源覆盖选择项，不能自己决定哪些项算必查。</li><li><strong>填写或暂留空白。</strong>企业名称是唯一创建必填业务字段。若你添加一条股东记录，该记录的名称和比例等仍需满足自己的要求；若填了场景值，还必须有覆盖该字段的来源。<em>可不提供一类资料 ≠ 可以提交一条残缺的资料记录。</em></li><li><strong>切换场景。</strong>当前支持通用（空字符串）和 <code>factoring</code>。切换时清空场景数据，并过滤不适用于新场景的来源覆盖字段。正文中明确说明这个动作，避免误以为切换只改展示。</li><li><strong>提交前清洗。</strong><code>normaliseDraft</code> 去除空场景值、处理可选文本，并去掉材料响应中的只读 <code>eligible_for_structured_evidence</code>。它不负责认定来源真实性。</li><li><strong>选择创建或修改请求。</strong>新建发 POST；修改发 PUT，附带当前 <a href="#term-revision">revision</a> 和必填修改原因。成功后才跳转档案详情。创建页面当前不提交修改原因字段，服务端使用创建原因默认值。</li></ol>
+<details id="example-minimal" data-search data-keywords="最小 JSON 示例 企业名称 唯一必填"><summary>展开：最小合法创建请求，以及响应里多了什么</summary>
+<p>下面是可以表达“先建一个壳，稍后补资料”的请求格式。公司名称为合成示例；这里只展示数据，不发送请求。</p>
+<pre><code>{
+  "profile": { "name": "示例澄川设备有限公司" }
+}</code></pre>
+<p>Pydantic 补上默认值：<code>scenario: ""</code>、空的 <code>scenario_data</code>、<code>field_sources</code> 和 <code>materials</code>；创建原因也有默认值。经过服务端准备后，<code>profile.coverage.queried</code> 是空列表，不是“全部查过”。</p>
+<p>成功响应是档案资源，包括服务端生成的 <code>id</code>、<code>revision: 1</code>、<code>status: "active"</code>、内容摘要和时间。数据库 ID 与哈希由后端生成，本页不伪造一份声称已经落库的完整响应。</p></details>
+<details><summary>为什么保存成功还可能被前端当成失败？</summary><p>本项目曾把所有响应顶层 <code>status</code> 都当作 API envelope，要求等于 <code>success</code>。档案资源却使用 <code>active / archived</code> 表示资源状态。现在仅四个档案资源接口声明 <code>responseStatusIsResourceState</code>，保留原 HTTP 错误，不再误判成功结果。见<a href="#src-interceptor">拦截器</a>与<a href="#src-badcase">DEV-BC-20260902-028</a>。</p></details>
+<p class="xref">依据：<a href="#src-form">表单与场景</a> · <a href="#src-normalise">规范化函数</a> · <a href="#src-submit">提交分支</a> · <a href="#src-api">API 模块</a></p>
+<div class="jump-row"><a href="#sample">返回总图</a><a href="#step-gates">下一步：后端如何接住请求 →</a><a href="#struct-write">查看请求数据结构</a></div>
+</article>
+
+<article class="panel" id="step-gates" data-search data-keywords="权限 Pydantic 校验 来源 coverage verified prepare_company_profile_content">
+<p class="crumb"><a href="#sample">样章</a> / 2　输入边界</p><h2>2. 后端不是直接把表单写进数据库</h2>
+<p>这里有不同性质的校验。鉴权依赖和请求解析都由 FastAPI 处理；它们不是供客户端依赖的固定错误优先级协议。下表按责任拆解，不声称所有无效输入总先得到同一个错误。</p>
+<div class="table-wrap"><table><thead><tr><th>边界</th><th>具体检查</th><th>它不证明什么</th></tr></thead><tbody>
+<tr><td>身份与权限</td><td>解析令牌、查实际用户、要求账号有效；写接口依赖 <code>require_superuser</code>。</td><td>前端展示了按钮不代表后端授权成功。</td></tr>
+<tr><td>Pydantic 请求结构</td><td>外层请求及来源/材料对象的类型、长度、枚举和额外字段；场景只能通用或保理；修改须带版本与原因。profile 与 scenario_data 是 Dict[str, Any]，内部业务规则交给下一层领域校验。</td><td>JSON 结构正确不代表其中事实可信。</td></tr>
+<tr><td>业务内容准备</td><td>规范化、校验字段来源、重建 coverage，按生产映射试算哪些项会变成 verified。</td><td>管理员声明来源类型不等于系统实际访问了原机关或银行核验真伪。</td></tr>
+</tbody></table></div>
+<details id="gate-prepare" open data-search data-keywords="规范化 子过程 coverage 来源覆盖 场景 未核实"><summary>深入：prepare_company_profile_content 的八个子过程</summary><ol>
+<li><strong>复制与名称规范化：</strong>要求 profile 为 JSON 对象、名称非空；禁止客户端提交自定义 <code>required</code>；空信用代码不保留，非空只去首尾空白并转大写。当前 18 位字母数字规则在前端表单，服务端并未验证格式或校验位；不能将前端限制误当成 API 保证。</li>
+<li><strong>确认场景及字段集合：</strong>场景只能是 <code>""</code> 或 <code>factoring</code>；<code>scenario_data</code> 不能混入其他场景的键。</li>
+<li><strong>检查 field_sources：</strong>来源 ID 唯一，名称、签发者、引用齐备；只接受 official/authorized/audited；覆盖字段须属于当前清单；取证日期与事实日期不能矛盾，提供的摘要须满足格式。</li>
+<li><strong>检查 materials：</strong>限制条数和文本长度；只接受企业提交/管理员观察；材料日期与未知日期原因二选一；补生成材料 ID，并强制标记不具备结构化证据资格。</li>
+<li><strong>检查场景值覆盖：</strong>主动填写的场景字段必须被受信来源明确覆盖；不能用一条“这是官方资料”的笼统备注代替字段级关联。</li>
+<li><strong>重建 coverage：</strong>抛弃客户端传入的 coverage；从来源的 field_ids 合并出 queried，并采用最早取证时间作为这一层汇总时间。后续逐字段来源的时点处理是另一层，不应混为一谈。</li>
+<li><strong>复用生产映射检查：</strong>调用 profile 结构校验、构建清单、profile_to_facts 与 fill_field_checks。任何会被投影成 verified 的字段，都必须出现在覆盖集合中；否则拒绝保存。</li>
+<li><strong>计算内容摘要：</strong>对规范化后的 profile、scenario、scenario_data、field_sources、materials 计算 content_sha256，供保存与后续核对。此时还未提交数据库。</li>
+</ol><p class="xref"><a href="#src-prepare">完整准备函数</a> · <a href="#src-source-gate">来源校验细节</a> · <a href="#src-material-gate">材料校验细节</a></p></details>
+<details id="example-source" data-search data-keywords="来源 JSON operating_status business_scope registration 示例"><summary>展开：一份带登记来源的合成请求</summary>
+<pre><code>{
+  "profile": {
+    "name": "示例澄川设备有限公司",
+    "registration": { "company_type": "有限责任公司", "operating_status": "存续" }
+  },
+  "field_sources": [{
+    "source_id": "demo-register-1",
+    "name": "合成登记查询结果",
+    "issuer": "示例登记来源（仅演示）",
+    "source_type": "official",
+    "field_ids": ["registration", "operating_status"],
+    "retrieved_at": "2026-08-20T10:00:00+08:00",
+    "as_of_date": "2026-08-20",
+    "reference": "test-fixture://register/demo-1"
+  }]
+}</code></pre>
+<p>为什么不只覆盖 registration？因为生产映射会从登记信息中单独产生 operating_status 项。只写 registration 来源会被拒绝。若进一步填写经营范围，还需补相应 business_scope 来源。这个例子解释字段覆盖，不代表系统验证了一个真实登记机关。</p><p>来源类型的意义是业务输入契约；签名能够约束数据之后是否被改动，不能证明管理员最初的声明一定真实。</p></details>
+<div class="jump-row"><a href="#step-ui">← 上一步</a><a href="#step-save">下一步：什么时候真正保存 →</a><a href="#src-auth">查实际鉴权</a><a href="#src-provenance-test">看来源反例测试</a></div>
+</article>
+
+<article class="panel" id="step-save" data-search data-keywords="SQLAlchemy flush commit rollback 事务 审计 当前行 保存 HMAC">
+<p class="crumb"><a href="#sample">样章</a> / 3　持久化</p><h2>3. 当前档案与审计，必须一起成为已提交数据</h2>
+<p>后端获得规范化内容后，新建 <code>AdminCompanyProfile</code>，初始 <code>status="active"</code>、<code>revision=1</code>。创建人来自当前登录用户，不接受前端代填。</p>
+<ol class="step-list"><li><strong>add / flush：</strong>把当前行放入本次 SQLAlchemy 事务并 flush 到数据库，获得记录 ID。<a href="#term-transaction">flush 不是 commit</a>，不能把它当成最终保存成功。</li><li><strong>追加审计：</strong><code>_append_audit</code> 记录动作、操作者、原因、修订号、前后快照摘要与上一个链节点的 MAC。新建时 before 为 null，after 是新档案快照。</li><li><strong>签发并更新链头：</strong>使用审计 keyring 签发记录；把最新 MAC 和快照摘要写回当前档案行。<a href="#term-hmac">HMAC</a> 是有密钥的完整性验证，不是加密。</li><li><strong>再次 flush 并验证审计历史：</strong>检查结构、领域快照、签名链和当前行一致性。它不是只检查某个哈希字符串是否存在。</li><li><strong>commit 后返回：</strong>提交事务、刷新对象，再由 API 投影成公开响应。遇到数据库约束或事务异常会 rollback；不能只留下档案而漏掉对应审计。</li></ol>
+<div class="columns"><div class="tile"><h3>当前行：方便读取最新版本</h3><p><code>admin_company_profiles</code> 保存当前 profile_json、场景、来源、材料、状态、版本和审计链头。它不等于一条聊天消息。</p><a href="#struct-row">看字段与用途 →</a></div><div class="tile"><h3>历史行：记录每次变化</h3><p><code>admin_company_profile_audits</code> 保存各修订的 before/after 和签名信息。旧历史还有独立 anchor 机制，不是事后假装所有旧记录从一开始都已签名。</p><a href="#src-audit-write">看签发过程 →</a></div></div>
+<div class="callout"><strong>不进入个人知识库。</strong>这一保存函数没有创建 KnowledgeBase、Document 或 Milvus collection。企业补充文本属于档案 materials；个人资料库是另一条上传、存储和授权路径。全局档案也不代表互联网公开，读取接口仍要求登录。</div>
+<details><summary>正常保存和“响应丢失”不是同一件事</summary><p>上述事务保证档案与审计一起提交。但网络可能在提交后、客户端收到结果前断开。这里不能因此宣称“创建接口天然幂等”。本项目复核决定的持久化幂等有专用协议，详见计划中的<a href="#chapter-review">人工复核章</a>；不要把那一套保证自动套用到创建接口。</p></details>
+<p class="xref">依据：<a href="#src-create">创建函数</a> · <a href="#src-audit-write">审计签发</a> · <a href="#src-audit-read">历史校验</a> · <a href="#src-model">ORM 模型</a></p>
+<div class="jump-row"><a href="#step-gates">← 上一步</a><a href="#step-read">下一步：另一位用户发起尽调 →</a></div>
+</article>
+
+<article class="panel" id="step-read" data-search data-keywords="research stream company_profile_id 读取 快照 流前 JSON 权限 资料库">
+<p class="crumb"><a href="#sample">样章</a> / 4　从记录到研究输入</p><h2>4. 发起尽调：传的是档案 ID，实际内容由后端读取</h2>
+<p>尽调页面分别加载企业档案列表和个人知识库列表。选中档案会帮助填写问题文本；请求中真正定位档案的是 <code>company_profile_id</code>，不是模型从名称里猜出的对象。</p>
+<pre><code>{
+  "query": "请对示例澄川设备有限公司做贷前尽职调查",
+  "version": "v2",
+  "due_diligence": true,
+  "company_profile_id": "11111111-1111-4111-8111-111111111111",
+  "as_of": "2026-08-27",
+  "search_modes": []
+}</code></pre>
+<p class="muted">这是精简请求形状。ID 为占位示例，实际需使用创建接口返回的 ID；前端还会生成 session_id。这个请求不会在文档中执行。search_modes 为空表示不启用该请求的外网／个人知识库搜索，不妨碍指定档案被读取。</p>
+<p>当前尽调页面未选资料库时传 <code>[]</code>，选中资料库时传 <code>["local"]</code>；该页面没有发起 <code>["web"]</code> 的操作。URL 里带来的档案 ID 即使不在列表中，也可能被继续提交；是否存在、是否已归档，最终由流前服务端检查并返回 404。</p>
+<details id="read-substeps" open><summary>深入：为什么要在 StreamingResponse 之前完成读取</summary><ol>
+<li>验证登录和已有 session_id 的访问/重复使用条件；创建 V2 服务。</li>
+<li>显式提供档案 ID 时调用 <code>_load_admin_company_profile_snapshot</code>，由唯一档案服务读取有效记录；不存在、已归档、坏审计或缺少验证密钥分别报错。</li>
+<li><code>get_company_profile</code> 在返回前验证审计历史；<code>get_active_profile_snapshot</code> 再按保存内容重算摘要并重新运行领域准备校验。</li>
+<li>构建 <code>{profile, ref, scenario}</code>。profile 带三个内部附加字段；ref 只有 ID、修订号、内容摘要、来源标识。</li>
+<li>路由用 JSON 序列化/反序列化再复制一次，拒绝非 JSON、NaN 等内容，切断与 ORM 活对象的引用关系并确认顶层形状。</li>
+<li>单独解析当前用户的个人知识库授权范围 kb_scope；选择企业档案不会授予别人的知识库权限。</li>
+<li>之后才返回 SSE 响应，并把已取好的快照传给工作流。此时档案错误可以作为普通 HTTP 错误返回，不必等流打开后再发现。</li>
+</ol></details>
+<div class="callout warn">显式 ID 无效时，系统不会回退为同名静态公司。因为“你指定的 A 档案没找到”和“我替你找一个名字近似的 B 档案”不是同一个任务。未指定管理档案时，原有名称匹配或动态主体路径仍存在。</div>
+<p class="xref">依据：<a href="#src-launch">页面选择</a> · <a href="#src-stream-client">前端请求</a> · <a href="#src-snapshot-route">路由快照边界</a> · <a href="#src-stream-route">SSE 接线</a> · <a href="#src-snapshot">快照构建</a></p>
+<div class="jump-row"><a href="#step-save">← 上一步</a><a href="#step-freeze">下一步：快照怎样冻结 →</a><a href="#struct-snapshot">看完整快照形状</a></div>
+</article>
+
+<article class="panel" id="step-freeze" data-search data-keywords="冻结 deepcopy ResearchState admin_profile_ref provided_company_profile payload HMAC 快照">
+<p class="crumb"><a href="#sample">样章</a> / 5　状态初始化</p><h2>5. “冻结”不是只记一个版本号</h2>
+<p>只保存 <code>profile_id</code>，恢复时再去查最新档案，会把后来录入的资料混进之前的判断。所以状态里既保留实际采用的结构化内容，也保留它来自哪个版本的引用。</p>
+<ol class="step-list"><li><strong>分离对象引用。</strong><code>create_initial_state</code> 再次深拷贝 profile 和 ref。后续修改数据库记录或调用方对象，不会直接修改这份研究内的副本。</li><li><strong>计算运行投影摘要。</strong>对复制后的 profile 计算 <code>admin_profile_payload_sha256</code>。它和数据库的 content_sha256 覆盖内容不同，见<a href="#hashes">六项完整性机制</a>。</li><li><strong>绑定研究身份。</strong>签发 <code>admin_profile_snapshot_binding</code>，把 session_id、profile、ref 和 scenario 绑定在一起。支持带 key ID 的配置，具体格式由当前 keyring 决定，不能硬写成所有环境固定一个版本。</li><li><strong>初始化工作容器。</strong>provided_company_profile 和 admin_profile_ref 保存冻结输入；company_profile、facts、field_checks、evidence_store、scoring_view 等先为空，等待后续各层填充。它们不是此时就全部可信或全部有值。</li><li><strong>选定完整性模式。</strong>有管理档案快照时进入管理档案模式；后续图保存与恢复会继续验签。内存里的 deepcopy 本身不具备跨进程持久性，跨重启依赖之后的检查点存储。</li></ol>
+<div id="hashes" data-search data-keywords="哈希 SHA256 HMAC 摘要 binding seal 审计 区别"><h3>六项机制，不能用“都是哈希”一笔带过</h3><div class="table-wrap"><table><thead><tr><th>名称</th><th>主要覆盖内容／目的</th><th>验证边界</th></tr></thead><tbody>
+<tr><td>content_sha256</td><td>数据库五块规范化业务内容：profile、scenario、scenario_data、field_sources、materials。</td><td>包括不进入研究投影的材料；不能仅凭研究 profile 重算它。</td></tr>
+<tr><td>snapshot_sha256（审计快照摘要）</td><td>完整审计快照，包括 id、name、status、revision 和五块业务内容等。</td><td>不同于内容摘要；归档可以不改业务内容，却会改变完整审计快照。仍是无密钥摘要。</td></tr>
+<tr><td>admin_profile_payload_sha256</td><td>本次研究携带的装饰后 profile 内容。</td><td>检测投影变化；普通摘要本身不证明是谁签发。</td></tr>
+<tr><td>admin_profile_snapshot_binding</td><td>用 HMAC 将 profile、ref、scenario 与本次 session_id 关联。</td><td>防止把有效的管理端快照投影改绑到另一任务或替换绑定内容；不直接携带、逐项验证 materials 正文。</td></tr>
+<tr><td>审计记录 HMAC 链</td><td>覆盖操作人、原因、修订、前后快照摘要和前序 MAC 等，保护档案修订历史。</td><td>与普通 SHA-256 不同，验证需要受控密钥；数据库中的链头并非外部单调锚点，不能单独保证抵御整库回滚。</td></tr>
+<tr><td>图状态 seal（封签）</td><td>保护节点边界的图状态，保存与恢复时校验。</td><td>不能代替业务检查点完整性记录或档案审计链；它们都不证明原始事实真实。</td></tr>
+</tbody></table></div></div>
+<p class="xref">依据：<a href="#src-initial">状态初始化</a> · <a href="#src-binding">快照绑定签发/验签</a> · <a href="#src-profile-check">运行投影校验及两种摘要说明</a> · <a href="#src-audit-hash">审计快照摘要</a> · <a href="#src-audit-snapshot">审计快照具体字段</a></p>
+<div class="jump-row"><a href="#step-read">← 上一步</a><a href="#step-consume">下一步：输入如何成为可用数据 →</a><a href="#term-snapshot">再解释一次快照</a></div>
+</article>
+
+<article class="panel" id="step-consume" data-search data-keywords="facts field_checks evidence_store Adapter 投影 风险评分 company_profile 来源">
+<p class="crumb"><a href="#sample">样章</a> / 6　进入现有尽调机制</p><h2>6. 冻结内容如何变成事实和核查项</h2>
+<p><code>_load_company_profile</code> 优先检查显式管理档案快照。必须同时有 profile 与 ref；验证后才把它认作本次主体。源码顶部有历史版本说明，不能据此断言今天只会读取硬编码 JSON。</p>
+<ol class="step-list"><li><strong>校验投影及引用。</strong>核对 ref 形状、摘要、内嵌 _admin_profile_ref 一致性，以及场景和来源附加字段。通过后重新签发进程内授权标记；不能仅凭客户端或存储中的一个布尔标志信任内容。</li><li><strong>写入可消费档案。</strong>设置主体名、company_profile 与 credit_context。company_profile 是用于后续确定性投影的结构化对象，不是最终报告。</li><li><strong>转换事实。</strong><code>profile_to_facts</code> 将已有结构化信息转换为 facts 记录。不会因为模板要求某项就替缺失信息编造值。</li><li><strong>构建并填充清单。</strong>确定业务场景，生成固定核心清单和场景项，调用 fill_field_checks 填值、状态及逐字段来源，再统计完整度。</li><li><strong>接入结构化 Adapter。</strong>复用原 apply_all 路径补充档案未覆盖的项；代码注释和实现边界强调不能仅凭“后执行”覆盖已经核实的结论。此处的每个 Adapter 内部过程留给第 04 章展开。</li><li><strong>交给后续分析。</strong>事实、清单、证据及后续构造的评分视图被后续节点使用。这里不是直接把整个原始档案交给模型“自由决定风险等级”。</li></ol>
+<div class="columns"><div class="tile"><h3>facts：表达“有哪条信息”</h3><p>内容、来源与事实 ID 等帮助叙述和引用。一段自然语言本身无法替代所有可重放的数值和核验状态。</p><a href="#term-facts">词条 →</a></div><div class="tile"><h3>field_checks：表达“每项查得怎么样”</h3><p>固定字段、状态、值、来源、失败原因等。即使没有事实，也应能看到该项缺口，避免从报告里消失。</p><a href="#struct-check">字段与消费者 →</a></div></div>
+<div class="callout">“与 company / adapter 同等效力”指进入同一套尽调消费与验证机制，不是来源形式完全相同。管理档案可保留字段级 profile_sources；Adapter 证据有 evidence_ids 等自己的路径。不能要求所有来源都长成同一个字典，也不能允许一种来源绕过判断边界。</div>
+<details id="material-boundary" open data-search data-keywords="materials RAG 个人知识库 组织级 离线 材料 不评分"><summary>必须分清：三类材料能力目前没有自动合为一体</summary>
+<ul><li><strong>管理档案 materials：</strong>数据库里的补充文本。当前可按该档案关键词检索；快照构建不把正文放进研究 profile，eligible_for_structured_evidence 固定为 false。</li><li><strong>个人知识库：</strong>另有文档上传、索引与用户权限范围。发起时选择资料库才走相应授权检索；选择企业档案并不自动把它们合并。</li><li><strong>仿真案例离线检索／未来组织材料库：</strong>已有离线案例组件不等于管理档案已经接上组织级向量检索。组织级上传、材料版本、候选证据确认写回属于后续能力。</li></ul>
+<p>这不是说“RAG 不适合尽调”，而是说明当前哪些路径已经接线。把检索候选提升为结构化证据，需要明确主体、原文、日期和来源条件；深入讲解安排在<a href="#chapter-rag">第 05 章</a>。</p><a href="#src-material-search">查看当前关键词检索实现 →</a></details>
+<p class="xref">依据：<a href="#src-graph-load">档案消费及 Adapter 接入</a> · <a href="#src-fieldcheck">FieldCheck 类型</a> · <a href="#src-snapshot">快照确实未复制 materials</a></p>
+<div class="jump-row"><a href="#step-freeze">← 上一步</a><a href="#step-recover">下一步：档案更新与旧任务恢复 →</a></div>
+</article>
+
+<article class="panel" id="step-recover" data-search data-keywords="revision 恢复 版本 冻结 并发 更新 checkpoint 对照">
+<p class="crumb"><a href="#sample">样章</a> / 7　时间与版本</p><h2>7. 当前档案改了，为什么旧研究不跟着改</h2>
+<p>修改接口携带 expected_revision。服务先检查当前版本，再执行带 ID、active 状态和旧版本条件的 UPDATE，并检查更新结果；成功后版本加一并追加审计。这个条件更新用于防止两个管理员把彼此的修改悄悄覆盖。</p>
+<div class="callout">档案 revision 是“这份企业档案修订了几次”；研究检查点还有自己的业务版本。二者不是同一个计数器。复核完成增加检查点业务版本，不代表管理员又修改了一次档案。</div>
+<h3>沿时间看一遍</h3><p class="muted">下面只切换解释用的静态示意数据，不会读取数据库、创建任务或执行恢复。这里的 v1/v2 指档案修订，不是研究接口版本。</p>
+<div class="demo-controls" role="group" aria-label="版本冻结示意步骤"><button type="button" data-demo-step="0" aria-pressed="true">1　创建并开始研究</button><button type="button" data-demo-step="1" aria-pressed="false">2　管理员修改档案</button><button type="button" data-demo-step="2" aria-pressed="false">3　恢复原研究</button></div>
+<div class="columns"><div class="demo-state"><h4>数据库当前档案</h4><pre><code id="demo-current">profile_id: demo-profile
+revision: 1
+name: 示例澄川设备有限公司</code></pre></div><div class="demo-state"><h4>原研究采用的快照</h4><pre><code id="demo-frozen">session_id: demo-research
+admin_profile_ref.revision: 1
+name: 示例澄川设备有限公司</code></pre></div></div>
+<p id="demo-note" class="status-line" aria-live="polite">研究开始时保存内容副本与 ref；此刻当前档案与研究输入都对应修订 1。</p>
+<details id="recover-substeps" open><summary>恢复不是无条件相信已保存的 JSON</summary><ol><li>先确认检查点完整性模式；管理档案痕迹不能被当作普通旧静态任务绕过检查。</li><li>按恢复路径要求校验图状态封签；确认当前 session_id 与保存的任务一致。</li><li>校验冻结 profile/ref/scenario 与 HMAC 绑定；缺失或不一致就拒绝，不读取最新档案“自动补好”。</li><li>重新验证管理档案投影、重建授权标记，并核对已保存 company_profile 与已验证的规范对象一致。</li><li>继续重建/核验清单、证据与评分输入，只有通过后才继续恢复执行。完整人审 claim、最终事务和幂等回放将在第 09 章单独拆解。</li></ol></details>
+<p>跨重启成立还依赖后续图检查点和业务检查点实际持久化。<code>_save_checkpoint</code> 在交给业务保存服务前刷新图状态封签。最近的独立进程验收使用真实 PG 图检查点，验证了更新当前档案后重启，复核包仍引用旧版本；这不等同浏览器交互已测。</p>
+<p class="xref">依据：<a href="#src-update">条件更新</a> · <a href="#src-graph-restore">恢复校验</a> · <a href="#src-checkpoint-save">图保存边界</a> · <a href="#src-process-test">真实进程测试</a></p>
+<div class="jump-row"><a href="#step-consume">← 上一步</a><a href="#structures">接着查数据结构 →</a><a href="#evidence">直接做自检 →</a></div>
+</article>
+
+<section class="chapter" id="structures" data-search data-keywords="数据结构 生命周期 字段 输入 输出 模型 Schema">
+<div class="eyebrow">03 / 数据字典</div><h2>同一份内容，为什么会有不同的数据形状</h2><p>表单对象、API 请求、ORM 当前行、研究快照和运行状态不是同一个对象的不同名字。每次转换都有保留、补充或舍弃的信息。下面按这条样章的生命周期解释；全量字段字典留给后续章节继续扩充。</p>
+<article class="panel" id="struct-write" data-search data-keywords="CompanyProfileWrite CompanyProfileCreate CompanyProfileUpdate profile field_sources materials scenario"><h3>① 写入契约：CompanyProfileCreate / Update</h3><p>由前端生成，Pydantic 接收，再由内容准备函数规范化。创建与修改共用核心内容；修改是整份替换，不是随意发送一个字段的 PATCH。</p><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型／缺省</th><th>含义与去向</th></tr></thead><tbody><tr><td>profile</td><td>对象；name 必须非空</td><td>主体结构化字段，后续成为 profile_json 与研究投影基础。</td></tr><tr><td>scenario</td><td>"" 或 "factoring"</td><td>选择清单扩展；不是由模型自由创建场景。</td></tr><tr><td>scenario_data</td><td>对象，默认空</td><td>仅所选场景键；填值需有对应字段来源。数值单位需按具体字段解释，不能把所有金额默认当同一单位。</td></tr><tr><td>field_sources</td><td>来源数组，默认空</td><td>来源 ID、类型、覆盖 field_ids、日期与引用。</td></tr><tr><td>materials</td><td>补充材料数组，默认空</td><td>正文与材料日期；不自动进入结构化核验。</td></tr><tr><td>expected_revision</td><td>仅修改要求，整数 ≥1</td><td>声明你编辑的是哪个版本；服务器做并发比较。</td></tr><tr><td>change_reason</td><td>创建有默认；修改必填</td><td>进入审计记录，不是事实字段。</td></tr></tbody></table></div><p class="xref"><a href="#src-schema">Pydantic 定义</a> · <a href="#src-source-schema">来源与材料子结构</a> · <a href="#step-ui">创建者：表单</a> · <a href="#step-gates">消费者：服务校验</a></p></article>
+<article class="panel" id="struct-row" data-search data-keywords="AdminCompanyProfile ORM PostgreSQL profile_json audit current revision"><h3>② 持久化当前行：AdminCompanyProfile</h3><p>create/update 服务写入，档案详情与研究快照服务读取。profile_json、scenario_data、field_sources、materials 为 JSON 列；name/credit_code 另有查询列。这里不能用旧说明里的数据库表总数推断现有模型。</p><ul><li><code>id</code>：档案身份；改版本不换 ID。</li><li><code>revision</code>：本档案修订号；创建为 1，修改/归档递增。</li><li><code>status</code>：active/archived。归档不是物理删除，旧审计仍保留；但它是本档案审计链的终态，不能再修改，当前没有取消归档接口。本章“恢复”指研究检查点恢复，不是重新激活档案。</li><li><code>content_sha256</code>：五块规范化业务内容摘要；这些内容变化时重算。状态与修订号不在其覆盖内，归档通常不改变此摘要。</li><li><code>audit_head_mac / audit_head_snapshot_sha256</code>：对照审计链的当前头，不是对外材料的真实性证明。</li><li><code>created_by / updated_by</code> 与时间：服务端记录操作者和时间；普通读取会按响应投影限制操作者信息。</li></ul><p class="xref"><a href="#src-model">模型定义</a> · <a href="#src-archive">归档终态</a> · <a href="#step-save">创建过程</a> · <a href="#step-recover">修改过程</a> · <a href="#src-profile-route">响应投影入口</a></p></article>
+<article class="panel" id="struct-snapshot" data-search data-keywords="快照 ref profile _admin_profile_ref _scenario_data _admin_field_sources"><h3>③ 读取投影：{ profile, ref, scenario }</h3><p>由 get_active_profile_snapshot 创建，路由复制，状态初始化和图加载消费。以下是结构示意，不是可提交请求；尖括号内容表示运行时值。</p><pre><code>{
+  "profile": {
+    "name": "示例澄川设备有限公司",
+    "coverage": { "queried": [] },
+    "_admin_profile_ref": { "id": "&lt;实际档案ID&gt;", "revision": 1,
+      "content_sha256": "&lt;64位内容摘要&gt;", "source": "admin_company_profile" },
+    "_scenario_data": {},
+    "_admin_field_sources": []
+  },
+  "ref": { "id": "&lt;同一档案ID&gt;", "revision": 1,
+    "content_sha256": "&lt;同一内容摘要&gt;", "source": "admin_company_profile" },
+  "scenario": ""
+}</code></pre><p>内外 ref 必须一致；附加字段让既有档案消费逻辑获得管理来源和场景信息。<strong>materials 正文不在这里。</strong>公开 ref 只是身份摘要，不包含整份档案或签名密钥。</p><p class="xref"><a href="#src-snapshot">生产者</a> · <a href="#src-snapshot-route">路由复制</a> · <a href="#src-profile-check">消费者验证</a></p></article>
+<article class="panel" id="struct-state" data-search data-keywords="ResearchState TypedDict provided_company_profile company_profile facts scoring_view evidence_store"><h3>④ 运行容器：ResearchState 的相关部分</h3><div class="table-wrap"><table><thead><tr><th>状态字段</th><th>谁创建／修改</th><th>为什么存在</th></tr></thead><tbody><tr><td>provided_company_profile</td><td>初始化深拷贝；作为冻结输入核对</td><td>保留服务端读到的实际投影。</td></tr><tr><td><code>admin_profile_ref / admin_profile_scenario</code></td><td>初始化复制</td><td>绑定来源版本与场景；SSE/复核材料可展示公开引用。</td></tr><tr><td><code>admin_profile_payload_sha256 / admin_profile_snapshot_binding</code></td><td>初始化计算／签发</td><td>支持之后检查投影和任务绑定。</td></tr><tr><td>company_profile</td><td>图加载校验后填充</td><td>供生产映射、证据重放等消费的规范化档案。</td></tr><tr><td>facts</td><td>档案投影和后续相关节点生成</td><td>事实条目集合，不替代固定清单。</td></tr><tr><td>field_checks / completeness</td><td>清单构建、填充、核验和统计</td><td>把已知、未知、冲突显式表达。</td></tr><tr><td>evidence_store / scoring_view</td><td>证据处理与验证层逐步构建</td><td>支撑可追溯判断与受控评分输入；不是原始文本直接打分。</td></tr></tbody></table></div><p class="muted">表中是相关字段的责任概览，不是完整 ResearchState。TypedDict 用于表达预期字典形状，本身不是自动运行时验证器。</p><p class="xref"><a href="#src-initial">初始化时的实际值</a> · <a href="#step-consume">下游怎样填充</a> · <a href="#step-recover">恢复时怎样复核</a></p></article>
+<article class="panel" id="struct-check" data-search data-keywords="FieldCheck field_checks verified unverified conflicting required profile_sources"><h3>⑤ 单个核查项：FieldCheck</h3><p>清单先创建骨架，再由档案、Adapter 或合格证据填充。DataAnalyst 的判断、完整度统计、前端清单和人工复核都需要理解它。相关字段：</p><ul><li><code>field_id / field_name / required</code>：检查什么、叫什么、是否属于尽调必查。</li><li><code>status / value</code>：本项核实状态和相应值。unverified 不表示业务事实不存在；不要仅凭这一状态反推具体是否查询过，应再看 attempted_sources 和 failure_reason。</li><li><code>sources</code>：关联事实 ID；不等于整个证据正文。</li><li><code>verification_origin / evidence_ids / source_adapter</code>：核实来源和证据索引，按实际来源路径使用。</li><li><code>profile_sources</code>：管理档案逐字段来源投影；只带覆盖这一字段的来源身份与时点，不带另一层的 field_ids 声明列表。</li><li><code>retrieved_at / as_of_date</code>：取证时间与事实日期，不能互换。</li></ul><p><strong>空值、零值、已核实无记录是三回事。</strong>空值可能是缺资料；零可以是一个有来源的真实数值；无记录必须来自明确查过的结果。当前哪些字段允许哪些状态，以各字段映射和核验规则为准。</p><p class="xref"><a href="#src-fieldcheck">类型与注释</a> · <a href="#src-provenance-test">来源与空结果测试</a> · <a href="#step-consume">字段从哪里来</a> · <a href="#chapter-risk">完整评分章待展开</a></p></article>
+</section>
+
+<section class="chapter" id="failures" data-search data-keywords="错误 401 403 404 409 422 503 排查 异常 失败">
+<div class="eyebrow">04 / 不只讲成功</div><h2>失败在哪一层，应该先看什么</h2><p>下面是本样章路径的典型分支，不是所有 API 的全局错误码规范。HTTP 状态相同也可能有不同原因，要连同响应说明和处理位置判断。</p>
+<div class="table-wrap"><table><thead><tr><th>现象</th><th>失败边界／含义</th><th>先查这里</th></tr></thead><tbody>
+<tr><td>401</td><td>未登录、令牌无效等鉴权失败；不是企业资料缺失。</td><td><a href="#src-auth">用户依赖</a></td></tr>
+<tr><td>403</td><td>有效普通用户尝试写档案，或其他权限拒绝。</td><td><a href="#step-gates">管理员判定</a></td></tr>
+<tr><td>422</td><td>写请求不符合 Schema 或领域要求，如记录残缺、来源覆盖不足、日期不合法。</td><td><a href="#gate-prepare">准备函数子过程</a></td></tr>
+<tr><td>409：修改冲突</td><td>expected_revision 已旧，或数据库约束拒绝写入。先重新核对当前档案，不要盲目覆盖。</td><td><a href="#src-update">版本条件更新</a></td></tr>
+<tr><td>409：读取/发起完整性失败</td><td>档案与审计不一致或摘要校验失败。不能当普通版本冲突自动重签“修复”。</td><td><a href="#src-snapshot-route">错误映射</a>、<a href="#src-audit-read">审计验证</a></td></tr>
+<tr><td>404：发起时找不到档案</td><td>ID 不存在或档案已归档，不回退名称匹配。</td><td><a href="#step-read">快照读取</a></td></tr>
+<tr><td>503：历史验证密钥不可用</td><td>服务无法验证已存签名；不能临时跳过验证继续用数据。</td><td><a href="#src-snapshot-route">发起时映射</a>、<a href="#chapter-run">密钥章</a></td></tr>
+<tr><td>恢复报快照、绑定或派生状态不一致</td><td>冻结快照、任务身份或派生状态不匹配。拒绝降级成静态任务或最新版本。</td><td><a href="#recover-substeps">恢复核对顺序</a></td></tr>
+<tr><td>HTTP 成功但界面报错</td><td>曾出现资源 status 被通用插件误当成 API 错误的 Bad Case。</td><td><a href="#src-interceptor">插件</a>、<a href="#src-badcase">修复记录</a></td></tr>
+</tbody></table></div>
+<details><summary>如果我自己排查，按什么顺序看？</summary><ol><li>先辨认失败的是保存档案还是发起研究，是否已经打开 SSE。</li><li>检查请求体属于哪个 Schema；不要把响应的只读字段原样回发。</li><li>核对登录用户和实际权限，不以菜单是否可见为依据。</li><li>核对 ID、expected_revision、来源覆盖与日期；材料缺失和证据冲突分别看。</li><li>如果进入完整性失败，不直接改数据库或重算摘要掩盖问题；先查签名/版本/审计是否一致。</li><li>使用相关测试定位层级。页面效果、接口行为、真实数据库与真实模型是不同验证范围。</li></ol></details>
+</section>
+
+<section class="chapter" id="glossary"><div class="eyebrow">05 / 随用随查</div><h2>关键词索引</h2><p>先给项目语境下的解释，再跳到具体发生位置。每个词条都可独立链接；点击链接进入折叠内容时会自动展开。</p>
+<div class="gloss-grid">
+<details id="term-required" data-search data-keywords="required 必查 必填 清单"><summary>尽调必查 ≠ 创建必填</summary><p>必查是研究流程应给出核实状态的要求；不是管理员必须现在就取得全部数据。名称可先建档，缺失项保留为缺口；已添加记录仍须自洽。</p><a href="#step-ui">发生位置：表单 →</a></details>
+<details id="term-profile" data-search data-keywords="profile 企业 档案"><summary>profile：结构化档案</summary><p>以字段和记录表达企业信息。与一份 PDF、补充文本、检索片段或最终报告不是一回事。</p><a href="#structures">看它的不同形状 →</a></details>
+<details id="term-coverage" data-search data-keywords="coverage queried 覆盖 声明"><summary>coverage：来源覆盖声明</summary><p>保存前由服务端重建，而非相信客户端自报。queried 由来源覆盖字段合并；声明覆盖并不等于所有字段有值、都已 verified，更不等于现实中绝无风险。</p><a href="#gate-prepare">看重建过程 →</a></details>
+<details id="term-source" data-search data-keywords="field_sources source_id 来源 证据 provenance"><summary>field_sources：字段级来源</summary><p>说明哪些来源支持哪些字段，附带来源类型、签发者、取证时间、事实日期和引用。来源记录与字段之间是明确关联，不是全文最后笼统列几个网址。</p><a href="#example-source">看合成 JSON →</a></details>
+<details id="term-material" data-search data-keywords="materials 补充文本 企业自报"><summary>materials：补充材料</summary><p>当前管理档案中用于阅读和受控关键词检索的补充文本。不自动具备结构化证据资格，不因为被录入就直接进入评分。</p><a href="#material-boundary">查看三类材料的边界 →</a></details>
+<details id="term-schema" data-search data-keywords="Pydantic Schema 类型 验证 TypedDict"><summary>Schema 与 TypedDict</summary><p>Pydantic Schema 在请求/响应边界执行验证和序列化。TypedDict 描述预期字典形状，不会单凭声明自动验证所有运行时数据。两者都不能单独证明事实真实性。</p><a href="#struct-write">请求 Schema →</a> · <a href="#struct-state">运行状态 →</a></details>
+<details id="term-orm" data-search data-keywords="ORM SQLAlchemy Session 数据库 对象"><summary>ORM 与 Session</summary><p>ORM 将 Python 模型映射到数据库表。SQLAlchemy Session 管理查询和事务中的对象；研究快照要脱离这样的活对象，转成可保存的纯 JSON。</p><a href="#step-save">保存 →</a> · <a href="#step-read">读取投影 →</a></details>
+<details id="term-transaction" data-search data-keywords="事务 flush commit rollback 原子性"><summary>事务、flush、commit、rollback</summary><p>事务把一组相关写入作为一个提交单元。flush 把待写数据送到数据库但尚未最终提交；commit 成功后才完成提交；rollback 撤销未提交事务。本例要求档案和审计一起保存。</p><a href="#step-save">查看五步写入 →</a></details>
+<details id="term-revision" data-search data-keywords="revision expected_revision 乐观并发 CAS 版本"><summary>revision 与条件更新</summary><p>revision 是档案修订号；expected_revision 表示编辑者基于的版本。UPDATE 同时匹配旧版本，避免后来提交的人静默覆盖别人。档案版本不是研究检查点业务版本。</p><a href="#step-recover">看版本时间线 →</a></details>
+<details id="term-snapshot" data-search data-keywords="snapshot 快照 冻结 deepcopy JSON"><summary>快照与冻结</summary><p>保存某个时点实际采用的数据副本和来源版本，不仅是保存一个可再次查询的 ID。内存副本只解决引用变化；跨进程恢复还依赖持久化和完整性校验。</p><a href="#step-freeze">进入冻结过程 →</a></details>
+<details id="term-hash" data-search data-keywords="SHA256 hash 摘要 哈希"><summary>SHA-256：内容摘要</summary><p>把指定内容算成摘要，用于检测两份内容是否一致。没有秘密密钥，能够修改内容的人通常也能重算摘要，所以它不能单独证明内容来自可信签发者。</p><a href="#hashes">看本项目几种摘要 →</a></details>
+<details id="term-hmac" data-search data-keywords="HMAC seal MAC 签名 keyring key_id"><summary>HMAC、封签与 keyring</summary><p>HMAC 用秘密密钥验证内容未被无密钥者任意改写。keyring 管理签发/历史验证用的密钥与 key ID。它不是内容加密，不证明外部事实真实，也不抵御同时拿到数据库和签名密钥的攻击者。</p><a href="#hashes">分别保护什么 →</a></details>
+<details id="term-facts" data-search data-keywords="facts Fact 事实"><summary>facts：事实条目集合</summary><p>描述所得到的信息、来源和引用身份。不要仅凭它叫 Fact 就认为任何检索文本都已通过核验；还要看进入路径和清单/证据层的验证结果。</p><a href="#step-consume">看它如何产生 →</a></details>
+<details id="term-checks" data-search data-keywords="field_checks FieldCheck verified unverified conflicting"><summary>field_checks：核实清单</summary><p>为每项问题显式保存状态、值和依据。unverified 不能翻译成不存在；具体为何未知要看失败原因和尝试记录。</p><a href="#struct-check">看字段及生命周期 →</a></details>
+<details id="term-evidence" data-search data-keywords="evidence_store evidence_ids 证据 仓库"><summary>evidence_store：证据索引容器</summary><p>供核验/重放使用的证据集合，与 facts 的自然语言记录和 RAG 的原始命中不是同一层。来源路径不同，对应引用字段也不同。</p><a href="#step-consume">本章消费位置 →</a> · <a href="#chapter-risk">后续深讲 →</a></details>
+<details id="term-scoring" data-search data-keywords="scoring_view 评分视图 风险"><summary>scoring_view：受控评分输入</summary><p>评分需要经过验证的字段视图，不是任意模型文字或材料正文。它如何构建、如何处理不足和冲突，将在核验与风险章详细拆解。</p><a href="#chapter-risk">进入章节目录 →</a></details>
+<details id="term-sse" data-search data-keywords="SSE stream HTTP 流"><summary>SSE：持续返回事件</summary><p>一次 HTTP 响应可以持续发送事件。流前失败可返回普通错误状态；流打开后则要看事件。连接结束不自动等于研究完成。</p><a href="#step-read">流前快照读取 →</a> · <a href="#chapter-sse">前端消费章 →</a></details>
+<details id="term-checkpoint" data-search data-keywords="checkpoint 检查点 LangGraph PostgresSaver"><summary>两类检查点</summary><p>工作流检查点保存图执行所需状态；业务检查点保存应用读取、报告和权限等业务状态。不是同一张表，也不能只保存其中一处就声称所有恢复场景都成立。</p><a href="#step-recover">本章恢复边界 →</a> · <a href="#chapter-persistence">后续存储章 →</a></details>
+<details id="term-rag" data-search data-keywords="RAG 召回 检索增强生成 embedding 向量"><summary>RAG：检索增强生成</summary><p>先检索相关材料，再让后续处理利用它。检索相关性不等于真实性；本项目还需要主体、日期、字段和证据条件。当前关键词检索与未来组织级向量库不要混称。</p><a href="#material-boundary">本章实际边界 →</a></details>
+<details id="term-failclosed" data-search data-keywords="fail-closed 失败关闭 拒绝降级"><summary>fail-closed：验证失败就拒绝</summary><p>发现指定档案损坏时停止使用，不偷偷换最新版本、同名公司或无签名旧状态。它保护判断依据，但不等于系统永不出错或能够自动修复数据。</p><a href="#failures">错误矩阵 →</a></details>
+</div></section>
+
+<section class="chapter" id="evidence" data-search data-keywords="测试 自检 验收 102 8 练习 Bad Case 已实现 未测">
+<div class="eyebrow">06 / 学会自己核对</div><h2>哪些测试支持讲解，哪些事情还没有证明</h2>
+<div class="table-wrap"><table><thead><tr><th>你想核对的结论</th><th>已有依据</th><th>边界</th></tr></thead><tbody><tr><td>只有名称可以创建；新填字段需要来源</td><td><a href="#src-process-test">真实进程创建路径</a>、<a href="#src-provenance-test">来源反例</a></td><td>真实世界来源真伪不由合成测试证明。</td></tr><tr><td>当前档案更新不改变已发起研究采用的版本</td><td><a href="#src-process-test">更新到 revision 3 后重启，材料包仍为 revision 2</a></td><td>使用合成数据和确定性模型/搜索替身。</td></tr><tr><td>补充材料不直接进入结构化证据</td><td><a href="#src-snapshot">快照无 materials 正文</a>、<a href="#src-process-test">材料标志与证据断言</a></td><td>不是证明所有未来 RAG 路径天然隔离。</td></tr><tr><td>档案 active 响应不再被误判失败</td><td><a href="#src-badcase">前端行为测试与修复台账</a></td><td>没有因此证明页面布局、按钮和表单交互已实测。</td></tr></tbody></table></div>
+<p>计划文件内的既有交付/验收记录（非本次重新执行）：后端关联 102 passed、前端 8 项行为测试通过，构建与定向 lint 通过；全前端仍有 24 项既有类型诊断。这里引用已有记录，<strong>本次文档制作不重新运行业务数据库验收，也不改业务代码。</strong>文档本身的链接、源码引用和脚本由单独检查验证；图的布局与实际浏览器阅读效果需另行确认。</p>
+<p class="xref"><a href="#src-scope">查看计划文件中的历史验收记录与范围</a></p>
+<h3>读完能回答这些问题，就真正理解了本章</h3>
+<details><summary>1. 为什么公司名称能先建档，而填写登记状态后却可能保存失败？</summary><p>创建允许信息缺失；主动提供的值如果会成为 verified，则必须满足来源覆盖等条件。两者是不同约束。回到<a href="#step-gates">来源覆盖子过程</a>。</p></details>
+<details><summary>2. content_sha256 为什么不能从研究 profile 直接重算？</summary><p>数据库摘要还包括 materials 等内容，研究投影故意不携带补充材料正文。运行投影另有 payload 摘要，二者不能混用。看<a href="#hashes">摘要对照表</a>。</p></details>
+<details><summary>3. 如果管理员在研究途中更新了档案，旧研究恢复时应读哪里？</summary><p>使用原研究保存并通过完整性检查的冻结内容，不重新查询最新档案替换。深拷贝避免内存引用污染，持久化与验签支持跨进程恢复。看<a href="#step-recover">时间线与恢复</a>。</p></details>
+<details><summary>4. 页面隐藏编辑按钮后，为什么还需要 require_superuser？</summary><p>用户可以绕过页面直接发 HTTP 请求。菜单是体验层，后端用户依赖才是接口权限边界。看<a href="#src-auth">实际用户验证</a>。</p></details>
+<details><summary>5. 给企业添加一条补充说明，为什么不能说“它已经进入 RAG 风险评分”？</summary><p>当前材料保存在独立档案字段，提供档案级关键词检索，结构化资格固定 false，研究快照不携带它的正文。组织级材料检索与候选确认尚未接通。看<a href="#material-boundary">材料边界</a>。</p></details>
+<details><summary>6. 我要新增一个可用于尽调判断的字段，应该检查哪些位置？</summary><p>先确定业务语义、单位和空值含义；检查清单定义、输入 Schema/模板、表单、来源覆盖、档案映射、证据验证、评分消费者、状态与响应、测试。哪些需要实际修改必须依据该字段的职责核对，不能只在页面加一个输入框。后续<a href="#chapter-tests">开发与验证章</a>会给完整案例。</p></details>
+<div class="callout"><strong>样章反馈重点：</strong>哪一步你仍无法从输入推导输出？哪个词条解释不够？源码片段是否足以找到逻辑？这些反馈用于调整全书深度，而不是先把十二章都写成同一种不合适的密度。</div>
+</section>
+
+<section class="chapter" id="sources"><div class="eyebrow">07 / 可核对的依据</div><h2>源码快照</h2><p>全部取自已提交版本 <code>@@REVISION@@</code>，不是运行时猜测的行号。每个片段保留原行号和整文件摘要；点击行号可以定位或分享文档内部位置。片段是局部摘录，边界可能位于函数中间；阅读解释时不要把被省略的后半段当作不存在。</p><p class="muted">仅内嵌讲解所需的一方仓库代码和记录；没有读取 .env、密钥值、数据库内容或用户材料。复制路径需要浏览器剪贴板支持；不支持时页面会提供可手动复制的文本。无需后端与联网。</p>
+@@SOURCES@@
+</section>
+<footer class="footer"><p>版本化学习文档 · 基线 @@SHORT_REVISION@@ · 内容编辑于 2026-09-03。生成命令：<code>node docs/project-handbook/build.mjs</code>；检查命令：<code>node docs/project-handbook/verify.mjs</code>。重新生成仍使用明确固定的基线，不自动把新代码和旧讲解混合。</p><p>源码、测试依据和后续计划分开展示；文档示意操作不是实际业务执行。<a href="#overview">返回阅读起点 ↑</a></p><p id="copy-status" class="status-line" aria-live="polite"></p></footer>
+</main></div>
+<script id="handbook-script">
+'use strict';
+const handbookLogic = {
+  search(entries, query) {
+    const terms = query.trim().toLocaleLowerCase().split(/\s+/u).filter(Boolean);
+    if (!terms.length) return [];
+    return entries.filter(entry => terms.every(term => entry.text.toLocaleLowerCase().includes(term)));
+  },
+  revisionStep(index) {
+    const frozen = 'session_id: demo-research\nadmin_profile_ref.revision: 1\nname: 示例澄川设备有限公司';
+    const notes = ['研究开始时保存内容副本与 ref；此刻当前档案与研究输入都对应修订 1。', '管理员已将当前档案改为修订 2，但原研究仍采用修订 1；内容不会因数据库更新自动改变。', '重启后的原研究必须先通过检查点与冻结快照校验，再用原修订 1 恢复；不会自动换用修订 2。'];
+    const step = Number.isInteger(index) && index >= 0 && index < notes.length ? index : 0;
+    return { current: 'profile_id: demo-profile\nrevision: ' + (step ? '2' : '1') + '\nname: ' + (step ? '示例澄川设备（更新后）有限公司' : '示例澄川设备有限公司'), frozen, note: notes[step], step };
+  }
+};
+if (typeof module !== 'undefined') module.exports = handbookLogic;
+if (typeof document !== 'undefined') {
+  const byId = id => document.getElementById(id);
+  const searchInput = byId('search-input');
+  const readingTrail = [];
+  const backButton = byId('back-button');
+  backButton.disabled = true;
+  let pendingHash = null;
+  const entries = [...document.querySelectorAll('[data-search]')].map(element => ({
+    id: element.id,
+    title: element.querySelector('h1,h2,h3,summary')?.textContent.trim() || element.id,
+    text: (element.dataset.keywords || '') + ' ' + (element.querySelector('h1,h2,h3,summary')?.textContent || '')
+  }));
+  function search() {
+    const hits = handbookLogic.search(entries, searchInput.value);
+    const list = byId('search-results');
+    list.replaceChildren();
+    for (const hit of hits.slice(0, 30)) {
+      const li = document.createElement('li');
+      const link = document.createElement('a');
+      link.href = '#' + hit.id;
+      link.textContent = hit.title;
+      li.append(link); list.append(li);
+    }
+    byId('search-status').textContent = !searchInput.value.trim() ? '搜索讲解标题、关键词和源码路径；不会连接业务服务。' : hits.length ? `找到 ${hits.length} 处${hits.length > 30 ? '，先显示前 30 处' : ''}。点击进入对应解释。` : '没有匹配项。可缩短关键词，或使用浏览器查找搜索全文。';
+  }
+  function revealHash(scroll = true) {
+    let id;
+    try { id = decodeURIComponent(location.hash.slice(1)); } catch { return; }
+    const target = byId(id);
+    if (!target) return;
+    for (let parent = target; parent; parent = parent.parentElement) {
+      if (parent.tagName === 'DETAILS') parent.open = true;
+    }
+    document.querySelectorAll('.sidebar a').forEach(link => {
+      if (link.getAttribute('href') === '#' + id) link.setAttribute('aria-current', 'location');
+      else link.removeAttribute('aria-current');
+    });
+    if (scroll) requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
+  }
+  searchInput.addEventListener('input', search);
+  byId('clear-search').addEventListener('click', () => { searchInput.value = ''; search(); searchInput.focus(); });
+  backButton.addEventListener('click', () => {
+    const previous = readingTrail.pop();
+    if (!previous) return;
+    pendingHash = null;
+    history.replaceState(null, '', location.href.split('#')[0] + previous.hash);
+    revealHash(false);
+    requestAnimationFrame(() => window.scrollTo({ top: previous.y, behavior: 'auto' }));
+    backButton.disabled = readingTrail.length === 0;
+  });
+  byId('theme-button').addEventListener('click', event => {
+    const dark = document.documentElement.dataset.theme !== 'dark';
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    event.currentTarget.setAttribute('aria-pressed', String(dark));
+    event.currentTarget.textContent = dark ? '浅色阅读' : '深色阅读';
+  });
+  document.querySelectorAll('[data-demo-step]').forEach(button => button.addEventListener('click', () => {
+    const values = handbookLogic.revisionStep(Number(button.dataset.demoStep));
+    byId('demo-current').textContent = values.current;
+    byId('demo-frozen').textContent = values.frozen;
+    byId('demo-note').textContent = values.note;
+    document.querySelectorAll('[data-demo-step]').forEach(item => item.setAttribute('aria-pressed', String(Number(item.dataset.demoStep) === values.step)));
+  }));
+  document.querySelectorAll('[data-copy]').forEach(button => button.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(button.dataset.copy);
+      byId('copy-status').textContent = '已复制：' + button.dataset.copy;
+      button.textContent = '已复制路径';
+    } catch {
+      const text = '请手动复制：' + button.dataset.copy;
+      byId('copy-status').textContent = text;
+      // Keep the fallback adjacent to the clicked control, not only at footer.
+      let fallback = button.parentElement.querySelector('.copy-fallback');
+      if (!fallback) { fallback = document.createElement('p'); fallback.className = 'copy-fallback'; button.after(fallback); }
+      fallback.textContent = text;
+    }
+  }));
+  document.addEventListener('click', event => {
+    const link = event.target.closest?.('a[href^="#"]');
+    if (!link || event.defaultPrevented || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button > 0) return;
+    const hash = link.getAttribute('href');
+    if (hash === location.hash) { revealHash(); return; }
+    readingTrail.push({ hash: location.hash, y: window.scrollY });
+    pendingHash = hash;
+    backButton.disabled = false;
+  });
+  window.addEventListener('hashchange', () => {
+    // Native back/forward or a manually edited fragment starts a new reading trail.
+    if (pendingHash !== location.hash) { readingTrail.length = 0; backButton.disabled = true; }
+    pendingHash = null;
+    revealHash();
+  });
+  if (window.matchMedia('(max-width: 730px)').matches) byId('navigation').open = false;
+  revealHash();
+}
+</script>
+</body>
+</html>
