@@ -1,0 +1,16 @@
+[
+  ["src-biz-checklist", "清单元数据与空结果的语义", "backend/app/config/dd_checklist.py", "class ChecklistItem:", 51],
+  ["src-biz-core", "固定核心核查项", "backend/app/config/dd_checklist.py", "CHECKLIST: List[ChecklistItem] = [", 61],
+  ["src-biz-completeness", "核心完整度与场景扩展分开统计", "backend/app/config/dd_checklist.py", "def compute_completeness(", 76],
+  ["src-entry-routes", "页面入口及前端权限守卫", "frontend/src/router/routes.tsx", "export const routes: IRouteObject[] = [", 107],
+  ["src-entry-app", "应用启动检查与路由注册", "backend/app/app_main.py", "async def lifespan(app: FastAPI):", 57],
+  ["src-entry-http", "Axios 实例与请求插件组装", "frontend/src/api/request/request.ts", "export function createRequest(", 15],
+  ["src-entry-token", "前端 Bearer 令牌添加", "frontend/src/api/request/plugins/auth.ts", "function getToken():", 27],
+  ["src-entry-request", "ResearchRequest 的输入字段", "backend/app/router/research_router.py", "class ResearchRequest(BaseModel):", 34],
+  ["src-entry-search-flags", "搜索标志优先级：空数组不等于省略", "backend/app/router/research_router.py", "    def get_search_web(self)", 11],
+  ["src-entry-ddapi", "尽调 API 强制 V2 与流响应模式", "frontend/src/api/duediligence.ts", "export function startDueDiligence(", 35],
+  ["src-entry-review-errors", "只解码失败的复核 SSE 请求", "frontend/src/api/duediligence.ts", "export async function submitReview(", 27],
+  ["src-entry-reviewer", "进程冻结的额外复核人策略", "backend/app/config/reviewer_policy.py", "class ReviewerPolicy:", 32],
+  ["src-entry-access", "检查点归属与复核禁自审", "backend/app/router/research_router.py", "def _assert_checkpoint_access(", 33],
+  ["src-entry-scope", "研究的知识库范围按登录用户解析", "backend/app/router/research_router.py", "def _resolve_scope(", 28]
+]

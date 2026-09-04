@@ -1,0 +1,118 @@
+<section class="chapter" id="body-persistence" data-search data-keywords="08 存储 状态 一致性 PostgreSQL JSONB checkpoint 图封签 HMAC Redis Milvus 恢复 fail closed">
+<div class="eyebrow">08 / 存储与状态一致性</div>
+<h2>同一个“进度”有多层状态；恢复时先认证，才解释</h2>
+<p>研究运行并非把一整个 Python 对象原样塞进一个地方。内存中的图状态负责本次节点推进；PostgreSQL 的 <code>research_checkpoints</code> 是可恢复的业务记录；LangGraph 自己的检查点保存图执行位置；Milvus 保存可检索的向量材料；Redis 在这条研究路径上只保存短期取消标志。它们的寿命、权威性和失败语义不同。把“Redis 有值”当作可恢复进度，或把 Milvus 命中当作已验证事实，都会跨越本不存在的保证。</p>
+<div class="callout"><strong>本章的判断顺序。</strong>先验证读取到的持久化状态是否仍可信，再根据状态机决定能否恢复；任何缺少、形状错误或 MAC 不匹配都应停在错误边界，而不是补一个默认值继续跑。这是 fail-closed：宁可要求人工排查，也不把受损状态推进为新的业务结论。</div>
+
+<article class="panel" id="store-layers" data-search data-keywords="内存 PostgreSQL LangGraph Milvus Redis 文件 层次">
+<h3>1. 五种载体不是五份等价备份</h3>
+<div class="table-wrap"><table><thead><tr><th>载体</th><th>实际保存／读取对象</th><th>在本链路中的职责</th><th>不能据此推出什么</th></tr></thead><tbody>
+<tr><td>进程内存</td><td><code>ResearchState</code>、节点局部对象、SSE 生成器</td><td>本次图执行、临时计算与事件输出。</td><td>进程退出后不构成恢复来源；非 JSON 对象也不能直接作为持久化事实。</td></tr>
+<tr><td>PostgreSQL</td><td>检查点行：<code>state_json</code>、<code>ui_state_json</code>、报告、phase/status；另有一对一 integrity 行与 review claim 行。</td><td>业务恢复、UI 重建、完整性元数据和人工复核的耐久所有权。</td><td>JSONB 有数据不等于已认证；读取前仍须验图、业务及上下文绑定。</td></tr>
+<tr><td>LangGraph checkpointer</td><td>图节点的执行检查点与恢复位置。</td><td>让图知道从哪个节点继续；图域封签在节点边界保护状态。</td><td>不能代替业务检查点的状态、UI 投影、版本和数据库事务。</td></tr>
+<tr><td>Milvus</td><td>知识库/文档切片的向量、集合索引与检索结果。</td><td>材料召回；插入后由集合 flush。</td><td>不是检查点、不会保存人工决定，也不证明召回内容已核验。</td></tr>
+<tr><td>Redis</td><td><code>research:cancel:{session_id}</code>，过期时间 300 秒。</td><td>取消协作的短期信号。</td><td>没有“当前研究状态”的恢复优先级；过期或丢失不应改变已持久化检查点。</td></tr>
+</tbody></table></div>
+<p class="xref">相关业务语境见 <a href="#body-rag">材料与 RAG</a>、<a href="#body-sse">流式事件</a>、<a href="#body-run">一次运行</a>。Milvus 文件或集合故障应作为检索能力故障处理，不应伪装成检查点已损坏。</p>
+</article>
+
+<article class="panel" id="store-shape" data-search data-keywords="ResearchCheckpoint Integrity JSONB business_revision context_seal 字段">
+<h3>2. 关系记录：业务状态与完整性元数据成对存在</h3>
+<p><a href="#src-store-model">模型</a>规定每个 <code>session_id</code> 至多一条检查点，完整性表以同一 session 为主键、以 <code>checkpoint_id + session_id</code> 外键绑定，并限制 <code>business_revision &gt;= 1</code>。检查点本身记录 <code>query</code>、<code>phase</code>、<code>iteration</code>、两个 JSONB 投影、<code>final_report</code>、<code>status</code> 及创建/更新时间；status 只能是 running、paused、completed、failed。完整性行不是可选的“额外日志”：它包含 mode、版本、派生 key 标识、业务 revision/MAC 和上下文 seal。</p>
+<div class="table-wrap"><table><thead><tr><th>字段组</th><th>输入/输出</th><th>一致性含义</th></tr></thead><tbody>
+<tr><td><code>state_json</code></td><td>图的可 JSON 化业务状态；读取时恢复给后端。</td><td>图封签与业务 MAC 都覆盖其业务投影。</td></tr>
+<tr><td><code>ui_state_json</code></td><td>研究步骤、搜索结果、图表等 UI 重建资料。</td><td>是显示投影，不是替代后端状态的授权来源。</td></tr>
+<tr><td><code>mode / integrity_version / key_id</code></td><td>由持久化服务填写，读取时检查。</td><td>拒绝模式漂移、未知版本与缺失持久化 key 标识；不能悄悄回落到 active key。</td></tr>
+<tr><td><code>business_revision / business_seal</code></td><td>每次允许的业务写入 revision 加一，再对清洗后的状态签 MAC。</td><td>防止以旧状态、旧 revision 或替换状态混搭恢复。</td></tr>
+<tr><td><code>context_seal</code></td><td>绑定 checkpoint UUID、session、owner、status、mode、revision 与业务 MAC。</td><td>防止把“正确的业务 MAC”挪到另一行、另一用户或另一状态。</td></tr>
+</tbody></table></div>
+</article>
+
+<article class="panel" id="store-seals" data-search data-keywords="图封签 业务封签 上下文封签 HMAC projection runtime">
+<h3>3. 两类 seal、三个域：不要混为同一个“签名”</h3>
+<p><a href="#src-store-projection">投影函数</a>不是脆弱的业务字段白名单：它默认覆盖每个非下划线顶层字段，排除顶层 <code>_*</code> 运行时字段和 <code>checkpoint_graph_seal</code> 本身；<code>company_profile</code> 内仅剔除恢复时重新签发的授权标记。这样新增业务字段自动纳入保护，但连接、回调、缓存句柄等 runtime 值不进入严格 JSON/HMAC 输入。随后规范 JSON 以稳定键序和 UTF-8 编码计算 MAC。</p>
+<div class="flow-grid"><a href="#src-store-graph-save"><strong>图域 seal</strong><small>节点边界写入 state 内的 <code>checkpoint_graph_seal</code>；保护图状态的未清洗业务投影。</small></a><a href="#src-store-save"><strong>业务域 seal</strong><small>存储服务验证图 seal、清洗 JSON、再对 session + mode + revision + 清洗状态签名。</small></a><a href="#src-store-context"><strong>上下文域 seal</strong><small>单独绑定行身份、所有者和 status；不修改已有图/业务域的签名字节。</small></a></div>
+<p>“图封签”与“业务封签”不是可互相替换的两份副本：前者说明交给图/持久化边界的状态未被改写，后者说明数据库中那份清洗状态与特定 revision 相符；上下文 seal 又说明它属于这条记录及其工作流状态。它们都不证明外部事实为真，也不是加密。</p>
+</article>
+
+<article class="panel" id="store-write" data-search data-keywords="保存 清洗 锁行 事务 rollback completed paused accepted">
+<h3>4. 保存子过程：认证在清洗之前，提交在完整性刷新之后</h3>
+<ol class="step-list"><li>图调用 <a href="#src-store-graph-save"><code>_save_checkpoint</code></a>，先给当前图状态签图域 seal；缺少 session 或服务时返回失败。</li><li><a href="#src-store-save">业务服务</a>从 state 发现 mode 并验图 seal、验 session 一致，然后把不可序列化内容清理为 JSONB；清理后再验一次图 seal，防止“清洗把攻击输入正常化”。</li><li>事务内锁已有 checkpoint 与 integrity 行。已有行必须先通过旧的完整性对验证；completed 不可改写，failed 可重新进入 running，状态转换也受约束。</li><li>若存在 review claim，普通写入不得越过它：有效 claimed 会阻止改材料，accepted/finalized 只能由最终复核事务改写。</li><li>新行从 revision 1 开始；旧行 revision + 1。更新 <code>state_json</code> 后刷新业务 MAC、key 标识和 context seal，再与 UI/独立报告列一并提交。<code>ui_state_json</code> 与独立 <code>final_report</code> 是同事务写入的列，却不因此成为业务 MAC 的直接签名输入；context seal 则绑定 owner/status 等行上下文。任何异常 rollback，并以 <code>None</code> 表示保存失败给上层。</li></ol>
+<details><summary>反例推演：为什么“保存失败后继续播 SSE”危险？</summary><p>图层会把保存异常记为 warning 并返回 false；这不等于已耐久化。若进程随后断开，内存中的事件可能已经送达而 PG 未提交。调用者应将可恢复性与已完成业务结论分开；尤其不能在复核已 accepted 时用普通 checkpoint 保存覆盖材料或决定。</p></details>
+</article>
+
+<article class="panel" id="store-restore" data-search data-keywords="恢复 优先级 load checkpoint fail closed managed snapshot">
+<h3>5. 恢复子过程：PG 业务记录优先，图位置随后；校验失败不降级</h3>
+<p>恢复路由先按用户授权读取 checkpoint 信息，拒绝不存在和 completed 的会话，再把同一 <code>session_id</code> 交给 V2 图。图的 <a href="#src-store-graph-restore">恢复逻辑</a>从持久化 checkpoint 取得状态，并用外部 integrity mode 与 state 声明交叉核对；受管档案的冻结快照、派生 facts/field checks 也必须重建并再验。业务检查点是“应该恢复什么”的权威记录，LangGraph checkpointer 是“图从哪里继续”的执行记录；<a href="#src-store-graph-provider">默认图提供者</a>为 PostgresSaver，连接失败会降级为全局 <code>_CHECKPOINTER</code> 的 MemorySaver。同一进程内该实例可被后续服务复用；但它不保证跨进程或重启恢复，生产上的持久图检查点仍须修复。两者都不是 Redis 或 Milvus 的替代来源。</p>
+<ol class="step-list"><li>按 session 查 PG；无行是不存在，不构造空 state。</li><li><a href="#src-store-load">读取服务</a>先验证 checkpoint、integrity 的 id/session/mode/revision，图 seal、业务 seal、context seal 和 state 内 session；通过才复制 state 或返回 full checkpoint。</li><li>将受信的外部 mode 写回仅运行时的私有标记，恢复图；针对受管档案校验冻结引用和衍生状态。</li><li>seal 缺失、key 不匹配、状态/归属绑定不一致属于完整性错误，会在这条读取边界抛出，不能降格为“未找到”、空列表或新建运行。普通 <code>load_checkpoint</code>/<code>load_full_checkpoint</code>/<code>get_checkpoint_info</code> 对其他运行时/数据库异常则沿用兼容接口的日志加 <code>None</code> 语义；不能把这条 legacy 行为泛化为复核工作台的错误语义。</li></ol>
+<p>因此普通 <code>/resume</code> 看到 legacy <code>get_checkpoint_info</code> 的空结果会返回 400 的“没有检查点”类提示；它不定义人工复核读取的语义。复核工作台另行严格读取：完整性问题是冲突，数据库不可用是 unavailable，而非空待办或普通不存在。</p>
+<p class="xref">与 <a href="#body-review">人工复核</a> 的交点是 paused：暂停并不表示可被任意恢复写入。已有 accepted 决定时，恢复/重试必须走该决定的最终化路径。</p>
+</article>
+
+<article class="panel" id="store-self-check" data-search data-keywords="自检 存储 一致性 检查">
+<h3>6. 阅读自检与边界</h3>
+<ul><li>能否指出 state 里哪些字段是 runtime 而非“未保护的业务字段”？答案是顶层下划线字段、图 seal 本身以及指定档案授权标记；其余新增业务顶层字段会自动进入投影。</li><li>能否解释为何保存顺序是“验原 state → 清洗 → 再验 → 锁旧行 → 写新行和 integrity → 提交”？任意跳过旧行验证或把 seal 刷新拆成另一事务，都会允许受损/半写记录被掩盖。</li><li>能否区分 Redis 取消 TTL 与断线恢复？前者五分钟的协作标志，后者依赖经认证的 PG checkpoint；Milvus 是材料检索索引，不参与此优先级。</li></ul>
+<p class="muted">本章只依据基线源码的实现边界，未启动 PostgreSQL、Redis、Milvus、LangGraph 或浏览器，也未声称运行了历史测试。关于覆盖证据请看 <a href="#body-tests">测试与验证</a>；关于业务含义请回到 <a href="#body-risk">风险结论</a>。</p>
+</article>
+</section>
+
+<section class="chapter" id="body-review" data-search data-keywords="09 人工复核 review claim lease accepted finalized 自审 最小投影 SSE 恢复">
+<div class="eyebrow">09 / 人工复核与断流恢复</div>
+<h2>复核不是一个 POST：领取、接受、最终化是三段不同的耐久状态</h2>
+<p>人工复核的目标不是把完整图状态交给一个“管理员页面”，而是在独立人员、最小材料包、可重试的决定与最终完成之间维持同一条证据链。服务把研究发起人（owner）、具有角色资格的 reviewer、检查点、冻结的业务 basis 和用户决定分别建模；数据库约束禁止 owner 与 reviewer 相同。前端也不把 HTTP 200 或 SSE EOF 视为完成，而等待明确的 <code>research_complete</code> 事件。</p>
+<div class="callout warn"><strong>关键区分：accepted ≠ completed。</strong>accepted 表示某位合格复核人的同一决定已持久化、仍由其所有，等待短事务最终写入报告和 completed 状态。SSE 断开时它恰恰是恢复锚点；若把 accepted 当 completed，既可能漏掉最终状态，也可能诱导换人或换决定重试。</div>
+
+<article class="panel" id="review-roles" data-search data-keywords="角色 owner reviewer 自审 403 禁止">
+<h3>1. 参与者与准入：角色资格之外，还有独立性</h3>
+<div class="table-wrap"><table><thead><tr><th>参与者/对象</th><th>可做什么</th><th>服务端禁止什么</th></tr></thead><tbody>
+<tr><td>研究发起人 owner</td><td>创建自己的研究、查看其常规 checkpoint。</td><td>不能查看、领取、提交或重试自己的复核；数据库 <code>owner_id &lt;&gt; reviewer_id</code> 也兜底。</td></tr>
+<tr><td>人工复核人 reviewer</td><td>通过 <code>require_human_reviewer</code> 后查看非本人待办、领取、接受及最终化。</td><td>没有角色、任务不再 pending、令牌不匹配或身份不一致都不能推进。</td></tr>
+<tr><td>检查点与 integrity</td><td>提供经认证的 paused 业务 basis。</td><td>缺完整性行、session/状态不一致或 seal 失败不能被解释为空队列或 404。</td></tr>
+<tr><td>claim</td><td>保存 owner/reviewer、token、basis、lease 与决定。</td><td>只有 claimed/released 可以无决定；accepted/finalized 必须同时有 digest、JSON 和相应时间戳。</td></tr>
+</tbody></table></div>
+<p><a href="#src-review-model">模型约束</a>把这些状态形状放进数据库，而 <a href="#src-review-workspace">工作区读取</a>先认证每条候选记录才按 owner/status 筛选。这防止有人把行的 owner 改为自己、把 paused 改 completed 来让待办“自然消失”。</p>
+</article>
+
+<article class="panel" id="review-projection" data-search data-keywords="列表 详情 最小材料包 projection risk completeness evidence">
+<h3>2. 列表与详情不是裸检查点：明确白名单的最小投影</h3>
+<p>队列 API 返回 <code>ReviewTaskSummary</code>：session、企业名、时间、冻结档案引用、风险与完整度。点开后才返回 <code>ReviewTaskPacket</code>，增加报告草稿、critical issues、错误摘要与证据摘要。<a href="#src-review-packet">构建器</a>逐字段校验类型，并只把评分规则转成可读 detail，刻意丢弃内部证据链接、图中的自由推理及随未来 state 新增的键。它与通用 checkpoint 的“完整 state”接口属于不同信任边界。</p>
+<div class="table-wrap"><table><thead><tr><th>投影</th><th>主要字段</th><th>读者得到的业务含义</th></tr></thead><tbody>
+<tr><td>列表</td><td><code>company_name</code>、<code>profile_ref</code>、<code>risk_assessment</code>、<code>completeness</code></td><td>判断是否为非本人、仍待处理的任务，不先泄漏报告正文。</td></tr>
+<tr><td>详情</td><td><code>final_report</code>、critical issues、errors、evidence summary</td><td>作出复核决定所需最小材料，不返回任意内部 state。</td></tr>
+<tr><td>完整度</td><td>必查总数/已核实数/比率、未核实与冲突字段</td><td>完整度是证据条件，不能被“人审通过”悄悄删除。</td></tr>
+<tr><td>风险依据</td><td>规则等级、分数、闸门、触发规则、额度建议</td><td>人工可以覆写最终等级，但仍看得到规则原判及其理由。</td></tr>
+</tbody></table></div>
+</article>
+
+<article class="panel" id="review-claim" data-search data-keywords="claim claimed released lease token basis accept 冲突">
+<h3>3. 领取与接受：短租约保护“下一次决定”，不把决定留在浏览器</h3>
+<ol class="step-list"><li>复核人请求任务时，服务在短 PG 事务中校验角色、锁 checkpoint/integrity/claim，验 sealed pending basis，并检查非自审。</li><li>没有 claim 时创建 <code>claimed</code>：随机 token、当前 business revision/seal、reviewer 与租约；服务内部对已有有效 claimed 核验相同 reviewer/token。</li><li>过期 claimed 或 released 可在未给旧 token 的情况下重领，且重领会换 token、basis 和 reviewer；旧 token 不能复活。accepted 则不因租约到期而转让。</li><li><a href="#src-review-claim">accept</a>校验服务内部 token、身份、basis、租约和稳定的用户决定字段 <code>approved/comment/override_level</code>；通过后写 <code>decision_json</code>、digest、accepted_at，状态变为 accepted。</li></ol>
+<p>这一拆分解决两类并发：两位复核人不能同时对同一有效 basis 作决定；同一复核人的网络重试也不能把已接受决定换成另一个。若提交的是不同原决定，返回 decision conflict，而非以最后一次请求覆盖。claim 的 basis 同时绑定 checkpoint 的业务 revision/seal，若底层材料已换 basis，旧领取不能继续。</p>
+</article>
+
+<article class="panel" id="review-finalize" data-search data-keywords="finalize 两阶段 原决定 幂等 完整性 人工覆写">
+<h3>4. accepted 后的最终化：重放原决定，而不是重新相信客户端</h3>
+<p><a href="#src-review-prepare">prepare_submission</a>先在流开始前领取并接受决定，返回只供服务器使用的 <code>ReviewSubmission</code>，HTTP 客户端不会携带 token。服务从 durable claim 取/复用 token；图据此继续；最终调用 <a href="#src-review-finalize">finalize</a>。该事务重新锁定上下文、验证身份/owner/token/basis、检查 final state 的图 seal、未变业务字段、确定性的风险结果和报告块，再一起更新 <code>state_json</code>、UI、报告、phase/status=completed、integrity revision/seal、claim=finalized 与 finalized_at。</p>
+<p>若客户端在 commit 应答丢失后以<strong>同一登录身份与同一原决定</strong>重试，服务内部重用/核对 durable claim 的 token 和已保存决定；finalized 分支验证原记录后返回同一已完成收据，形成幂等恢复。不同 reviewer、不同决定或损坏 basis 都不会借“重试”改写结论；token 是服务端约束而非客户端重试参数。因为普通 <a href="#src-store-save">checkpoint 保存</a>遇到 accepted/finalized claim 会拒绝写入，两个数据库写路径不会绕过彼此的事务边界。</p>
+<details><summary>人工覆写到底保留了什么？</summary><p><a href="#src-review-apply">风险计分函数</a>将 human review 写进评估，同时保存原先的规则等级、规则来源和人审字段；输出报告会显示“规则初判”和“人工复核”。完整度、未核实字段、冲突与触发闸门仍是原评估的一部分。人审可以改变最终风险等级/意见，不把证据不足改造成“已核实”，也不抹去系统原判。</p></details>
+</article>
+
+<article class="panel" id="review-errors" data-search data-keywords="错误 404 403 409 422 503 SSE 断流 EOF 原决定重试">
+<h3>5. 双持久化故障与 UI 错误语义：不把未知说成空，也不把断流说成完成</h3>
+<p>复核恢复需要核对两套持久化记录：项目业务检查点（含 integrity 与 durable claim）给出经封签的材料 basis；LangGraph checkpointer 给出 interrupt/下一节点。默认图 provider 也是 PostgresSaver，但它和项目 checkpoint/claim 是不同的逻辑存储与写路径，不存在一个跨二者的总事务。真正必须同事务的是业务侧：finalize 同时提交 completed state/report/integrity 与 terminal claim，不能先完成状态后另开事务写 claim。Redis、Milvus 不参与这一原子复核提交：它们出错不能作为“已完成/未完成”的裁决依据。读取工作区时 DB 访问失败是 unavailable，不得转换为空队列；完整性失败是冲突/不可安全解释，也不得伪装为任务不存在。</p>
+<div class="table-wrap"><table><thead><tr><th>可见语义</th><th>典型原因</th><th>UI 应做什么</th></tr></thead><tbody>
+<tr><td>403</td><td>无复核角色、自审、或任务状态/权限已不再允许。</td><td>说明不可复核；不要展示原始 checkpoint。</td></tr>
+<tr><td>404</td><td>确实不存在或已不再可供该详情读取。</td><td>清空详情并刷新队列。</td></tr>
+<tr><td>409</td><td>token、租约、basis、并发或不同决定冲突；含完整性冲突。</td><td>刷新核对；若已 accepted/断流，使用原决定重试。</td></tr>
+<tr><td>422</td><td>批准状态、理由或覆写等级格式不合约。</td><td>留在表单修正，不领取另一份决定来覆盖。</td></tr>
+<tr><td>503 / SSE error</td><td>服务不可用，或 accepted 后的流/图未能确认终局。</td><td>提示“暂未返回/尚未确认完成”，保留原决定作恢复重试。</td></tr>
+</tbody></table></div>
+<p>恢复时，<a href="#src-review-resume">图服务</a>若读到仍在 <code>human_review</code> 的图快照，会先核对它与 sealed DB basis 再用 Command 继续；若图记录已完成，也必须先验证该已执行图状态的原 seal 和完整业务投影与 DB basis/决定相符，才可走确定性最终化。只有图快照确实缺失，才可直接从 sealed DB basis 推导终态并交给 finalizer。非空却损坏的快照、模式/basis 不匹配或读图失败都输出“刷新后重试”，不会当作缺失回退。<a href="#src-review-submit">路由</a>明确在 SSE 异常时返回“复核结果暂未返回，请使用原决定重试”；<a href="#src-review-ui">前端</a>逐帧解析，只有 <code>research_complete</code> 才置完成。收到 <code>[DONE]</code>、连接 EOF、半帧 JSON 或 HTTP 200 都不足以表示 finalized。这避免 accepted 仍待最终化时，页面误报“后续流程已完成”。</p>
+</article>
+
+<article class="panel" id="review-self-check" data-search data-keywords="自检 人审 恢复 accepted completed">
+<h3>6. 阅读自检与反例推演</h3>
+<ul><li>为什么“在页面打开详情”不等于领取？详情只是经过完整性验证的最小投影；领取才会创建/续用带 token 和租约的 durable ownership。</li><li>为什么 accepted 不能被过期租约换人？它已经包含某个确定决定，唯一完成路线是该决定的原子 finalization；否则会形成两位人对同一工作作不同裁决。</li><li>为什么完整度不能随覆写消失？人审处理的是最终风险判断，规则初判、未核实和冲突仍需可审计地保留，报告也必须能分辨规则与人工。</li><li>反例推演：SSE 在 accepted 后但 <code>research_complete</code> 前断开时，不能说“完成”，也不能新建/换决定；应以同一身份和原决定重试，由服务端 finalized 幂等分支或继续最终化处理。</li></ul>
+<p class="muted">本章只解释基线实现和失败分支；没有启动服务、数据库、浏览器或网络，也没有在本次执行旧验收测试。历史测试的范围应在 <a href="#body-tests">测试章节</a> 单独阅读，不应被表述为本次验证结果。</p>
+</article>
+</section>

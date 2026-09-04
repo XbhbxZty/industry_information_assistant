@@ -1,0 +1,146 @@
+<section class="chapter" id="body-agents" data-search data-keywords="多 Agent LangGraph 工作流 规划 搜索 分析 写作 批评 人工复核 checkpoint">
+<div class="eyebrow">06 / 编排而不是角色扮演</div>
+<h2>多 Agent：共享状态上的受控循环</h2>
+<p>本项目的 V2 研究不是几个聊天角色轮流说话，而是一张以 <code>ResearchState</code> 为载体的 LangGraph 状态图。每个节点读取同一轮的查询、冻结企业快照、清单、证据与错误记录，返回被封签的下一份状态；因此“某 Agent 知道什么”应回到状态字段和节点边来判断，不能仅从类名推断。入口、SSE 的展示与检查点恢复见后续<a href="#body-entry">入口</a>、<a href="#body-sse">事件</a>、<a href="#body-persistence">持久化</a>章节；这里先限定图内真实职责。</p>
+
+<div class="callout"><strong>先区分两条语义。</strong>普通研究可让 Agent 依据检索素材写章节；尽调的<strong>裁决性产物</strong>——核验结论、风险评级和授信建议——只能从 <code>field_checks</code>、<code>evidence_store</code>、完整度和规则评级确定性生成。最终报告还可收口一个独立调查层，其中有探索性 LLM 发现；它是供阅读和追问的材料，不是自动裁决输入。Scout 或 LLM 可以提出候选、抽取和解释，却没有把候选直接升级为授信事实的权力。</div>
+
+<div class="flow-grid" aria-label="多 Agent 主流程">
+<a href="#agent-plan"><strong>plan / Architect</strong><small>问题 → 大纲、实体、子问题与假设</small></a>
+<a href="#agent-research"><strong>research / Scout</strong><small>计划 → 检索、抽取、事实与失败留痕</small></a>
+<a href="#agent-analyze"><strong>analyze → visualize</strong><small>规则评级与图表生成刻意拆开</small></a>
+<a href="#agent-write"><strong>write / Writer</strong><small>素材 → 报告；尽调改走确定性渲染</small></a>
+<a href="#agent-critic"><strong>review / Critic</strong><small>报告 → 缺口、问题与三向路由</small></a>
+<a href="#agent-human"><strong>human_review</strong><small>requires_human_review → 暂停、接受决定后恢复</small></a>
+</div>
+
+<details id="agent-state" open data-search data-keywords="ResearchState phase outline facts field_checks evidence_store errors iteration">
+<summary>子过程 A：状态是交接单，不是全局真相</summary>
+<p><code>ResearchState</code> 同时容纳流程相位、迭代次数、动态大纲、问题/实体、普通事实与数据点，以及尽调清单、证据库、完整度、评分视图、风险结论和报告。<code>phase</code> 有 planning、researching、analyzing、writing、reviewing、re_researching、revising、completed 等值；它告诉界面和节点当前在做什么，却不单独证明上一节点的事实可信。章节自身也有 pending、researching、drafted、reviewed、final 等状态，不能与整轮 <code>phase</code> 混为同一个状态机。</p>
+<p>尽调中最重要的输入/输出分层是：冻结档案与查询进入状态；Scout/适配器结果形成 <code>field_checks</code> 与 <code>evidence_store</code>；核验后的 <code>scoring_view</code> 才供规则评分；Writer 输出 <code>final_report</code>。搜索失败、章节抽取失败、检索计划不足、窗口丢弃及跨通道不可判定均另有字段。空数组不天然等于“无风险”：它可能代表没有记录、根本没查到、查到了但抽取失败，必须结合这些留痕解释。</p>
+<p class="xref">回看：<a href="#term-facts">facts</a>、<a href="#term-checks">field_checks</a>、<a href="#term-evidence">evidence_store</a>、<a href="#term-checkpoint">两类检查点</a>。源码：<a href="#src-agent-state">状态定义</a>。</p>
+</details>
+
+<details id="agent-plan" open data-search data-keywords="Architect plan outline questions hypotheses knowledge graph">
+<summary>子过程 B：Architect 规划可查的问题，不直接下结论</summary>
+<p><code>plan</code> 是入口节点，ChiefArchitect 根据原始查询生成章节大纲、关键实体、研究问题、假设和知识图谱等计划性产物。它的价值是将笼统问题拆成可分派的搜索面，而不是对企业事实作认证。节点完成后保存步骤检查点，并沿受取消守卫的边进入 research；如果运行已取消，守卫可终止主干，不能再把半成品当完成报告推送。</p>
+<p>计划也有失败方式：大纲存在不表示每章都被有效搜索。实际状态保留查询计划不足与提取窗口丢弃，以便复核人区分“资料少”与“计划或上下文没有覆盖”。这些属于执行可解释性，不是评分卡字段本身。对于管理员档案，计划还必须遵守已冻结的主体/场景，不能在后续轮次通过同名企业或最新档案偷换研究对象。</p>
+<p class="xref">源码：<a href="#src-agent-architect">Architect</a>、<a href="#src-agent-graph">图拓扑</a>。</p>
+</details>
+
+<details id="agent-research" open data-search data-keywords="Scout 搜索 SearchOutcome failure no result section failure re research">
+<summary>子过程 C：Scout 搜索，失败与“未发现”分列</summary>
+<p>DeepScout 在 <code>research</code> 节点执行；审核要求补资料时，图从 <code>review</code> 走向 <code>re_research</code>，仍复用 Scout，而不是开启一条不受状态约束的聊天支线。它可使用研究问题、章节和反馈构造检索、抽取候选事实、更新引用或证据候选。每次搜索的成功、无结果和异常不是可互换的结果：对“无负面记录”一类字段，成功且无结果可能是有意义的结论；超时、403 或解析失败只能证明本次访问失败。</p>
+<p>所以状态分开保存 <code>search_failures</code> 与 <code>section_failures</code>。后者描述的是“材料已取到但章节抽取崩溃/超时”，也不能被写成“材料未提供”。主研究轮会先等待所有章节的收集结束，再统一执行 <code>finalize_rag_evidence()</code>：它校验原文、主体、字段、数值和日期，并原子写入 <code>evidence_store</code>/<code>field_checks</code>，随后才进入分析，避免并发完成顺序覆盖证据。若审核指出来源缺失、信息不完整或过期等重大问题，Critic 才可能触发补充检索；若只是措辞或逻辑问题，则应去 revise，避免无意义地反复外搜。</p>
+<p class="xref">源码：<a href="#src-agent-scout">Scout 与搜索结果</a>、<a href="#src-agent-state">失败字段</a>、<a href="#src-agent-critic">审核路由</a>。</p>
+</details>
+
+<details id="agent-analyze" open data-search data-keywords="DataAnalyst CodeWizard deterministic risk score visualization LLM">
+<summary>子过程 D：分析与可视化拆节点，避免 LLM 成为评级开关</summary>
+<p>图的 <code>analyze</code> 节点交给 DataAnalyst，<code>visualize</code> 才交给 CodeWizard。这个顺序不是排版偏好：风险评级是纯规则产物；若把可视化或模型调用塞进评分节点，调用失败会把“是否可授信”一起阻断，或反过来让模型成功掩盖评分输入不足。DataAnalyst 的尽调路径负责调用核验、构造评分视图、计算完整度和规则评级。</p>
+<p>CodeWizard 的尽调分支 <code>_build_investigation_layer()</code> 不是“只展示图”：先以已核实字段纯代码生成确定性图表并记录无法产出的原因；若调查层启用，再作一次有上界、可失败的独立 LLM 探索抽取；最后以 <code>judge_findings()</code> 生成 <code>cross_layer_verdict</code>。该分支只写 <code>investigation</code> 与跨层观察结果，不写 <code>field_checks</code>、<code>risk_assessment</code>、完整度或证据库；探索抽取失败也不阻断 A 层额度与等级。</p>
+<p>调查层的图表、发现和关系图也与 A 层普通研究的 <code>charts</code>/<code>references</code> 物理隔离。终局事件会分别给出 <code>investigation</code> 与 <code>cross_layer_verdict</code>，不能看见一张探索图就把它当成评分证据。具体的可采信条件、冲突与评分闸门在<a href="#body-risk">下一章</a>展开。</p>
+<p class="xref">源码：<a href="#src-agent-analyst">DataAnalyst</a>、<a href="#src-agent-wizard">调查层三步</a>、<a href="#src-agent-graph">拆分节点</a>。</p>
+</details>
+
+<details id="agent-write" open data-search data-keywords="Writer structured due diligence deterministic final report risk block appendix">
+<summary>子过程 E：Writer 的语言职责与确定性报告边界</summary>
+<p>普通研究路径中，LeadWriter 可逐章节引用相关事实、数据点和图表，再整合报告。尽调路径不同：Writer 检测到 <code>due_diligence_mode</code> 后，直接按清单状态、来源/日期、完整度和规则评级生成结构化报告，不再让模型新增事实、来源或风险结论。已核实、冲突、未核实和不适用也被分别措辞：未核实是信息缺口，绝不能改写成不存在；冲突列出双方，不自动采信任一方。</p>
+<p>风险评级块与证据附录还有后处理收口：规则块由代码钉入，附录由系统重建，防止模型概括、删节或复制一份漂移版本。收口也会把带独立标识的调查层重新装回报告；因此“确定性报告”只限定裁决/评级/授信结论，没有否认报告可披露探索发现。这里的确定性保证也不等于所有上游数据绝对可信，而是保证裁决没有绕开已保存的核验状态。</p>
+<p class="xref">源码：<a href="#src-agent-writer">尽调报告渲染</a>、<a href="#src-risk-appendix">证据附录</a>。</p>
+</details>
+
+<details id="agent-critic" open data-search data-keywords="Critic review criticism feedback re research revise complete iteration">
+<summary>子过程 F：Critic 批评最终交付文本，并选择下一条边</summary>
+<p>CriticMaster 审核优先读取 <code>final_report</code>，仅在它尚未生成时才回退章节草稿；这是为了防止整合阶段新引入的断言逃过审核。其反馈可标记缺少来源、未核实被当作事实、冲突被静默化解、无依据风险结论、主体归属错误、截止日之后证据、逻辑问题等。批评是另一份结构化状态，而不是在聊天记录里的一句建议。</p>
+<p><code>review</code> 后的条件边只有三类语义：需要新资料则 re_research → rewrite → review；仅需文字修订则 revise → review；阻断问题已解决或无需回环则 complete → human_review → END。若达到迭代上限但仍有阻断问题，图同样走 <code>complete</code>，但 Critic 会把 <code>requires_human_review</code> 置为真，并把“审核未收敛”错误和未解决阻断问题留在状态；这不是审核通过。迭代次数限制和未解决问题共同决定是否继续，不能把“循环结束”自动解读为“审核通过”。</p>
+<p class="xref">源码：<a href="#src-agent-critic">Critic</a>、<a href="#src-agent-graph">审核后三向边</a>。</p>
+</details>
+
+<details id="agent-human" open data-search data-keywords="human review interrupt resume apply human review checkpoint paused">
+<summary>子过程 G：何时暂停给人，恢复时为什么还要验</summary>
+<p>评分结果的 <code>requires_human_review</code> 为真时，且生产配置未关闭卡点，<code>human_review</code> 使用 LangGraph <code>interrupt()</code> 暂停。节点不把“某个普通维度分高”或等级名称泛化为通用暂停条件，而是只读该标志；它可由完整度、来源、冲突、一票否决、Critic 未收敛等多个闸门共同形成。恢复的输入是人工接受的决定，随后才调用 <code>apply_human_review</code> 形成受控结论。卡点配置可为离线批量评测显式关闭，但不应从“测试能跑完”推论生产可以取消复核。</p>
+<p>中断会从节点开头重跑，因此中断前只能读状态，不能写入不可重复副作用；暂停事件由外层检测，不在节点中提前推送。恢复前还要在业务路径验证决定合法性，非法决定必须让检查点继续停留，不能先越过中断再补校验。图检查点负责记住节点断点，业务检查点负责应用状态和界面恢复，两者都存在才谈得上跨请求人机协同。</p>
+<p class="xref">源码：<a href="#src-agent-human">人工中断节点</a>、<a href="#src-risk-human">人工复核应用</a>。边界：本章只记录基线中已有的暂停/恢复设计证据，未在本次文档工作中启动服务、数据库或人工复核流程。</p>
+</details>
+
+<div class="callout warn"><strong>本章自检。</strong>看到“Agent 已写组件”时，先问它是否在当前尽调主图被实际调用；看到“报告完成”时，检查 review 的未解决问题、人审要求和终局事件是否都已处理；看到“无结果”时，检查是成功空集、检索失败还是抽取失败。三者不能用一个空列表代替。</div>
+</section>
+
+<section class="chapter" id="body-risk" data-search data-keywords="核验 风险评分 双轨 facts evidence scoring view unknown 冲突 调查层 授信建议 证据附录">
+<div class="eyebrow">07 / 证据、规则与探索性材料不能混算</div>
+<h2>核验与风险评分：一条裁决链，一条调查链</h2>
+<p>风险结论不是由 <code>facts</code> 名称、模型信心或报告语气直接产生。裁决链以字段清单和证据库为输入，先重放验证，再形成评分视图，最后由无 LLM 的规则评分、闸门和授信建议收口；调查链则保存探索发现、图表及关系材料，供分析和人工追问。两条链可以比较、可以披露不一致，却不能把调查层的候选当评分事实，也不能把评分“未发现”反推成调查层没有线索。</p>
+
+<div class="flow-grid" aria-label="核验与风险双轨">
+<a href="#risk-evidence"><strong>裁决输入</strong><small>field_checks + evidence_store + 冻结档案</small></a>
+<a href="#risk-replay"><strong>重放核验</strong><small>来源、值、时间、raw 与状态一致</small></a>
+<a href="#risk-view"><strong>scoring_view</strong><small>可合并的结构化证据才进入规则</small></a>
+<a href="#risk-score"><strong>规则评分与闸门</strong><small>分数不能覆盖 unknown、冲突或来源降级</small></a>
+<a href="#risk-investigation"><strong>调查层</strong><small>探索发现、图表、关系独立存放</small></a>
+<a href="#risk-report"><strong>双轨报告</strong><small>风险块、额度建议、附录和跨层判定</small></a>
+</div>
+
+<details id="risk-evidence" open data-search data-keywords="facts field_checks evidence store verified conflicting unverified">
+<summary>子过程 A：四种容器回答四个不同问题</summary>
+<div class="table-wrap"><table><thead><tr><th>容器</th><th>回答的问题</th><th>不能据此推出什么</th></tr></thead><tbody>
+<tr><td><code>facts</code></td><td>研究/抽取阶段记录到什么内容与出处。</td><td>名称为事实不等于已经通过字段核验。</td></tr>
+<tr><td><code>field_checks</code></td><td>某字段是 verified、conflicting、unverified 或不适用，以及失败原因。</td><td>verified 状态不自动把外部证据值写入评分档案。</td></tr>
+<tr><td><code>evidence_store</code></td><td>可复放的证据本体、来源适配器、raw、时间、替代关系与可选 patch。</td><td>有 ID 不等于 ID 指向当前、同字段、同来源且可重放的证据。</td></tr>
+<tr><td><code>scoring_view</code></td><td>经验证后供评分函数读取的结构化企业视图。</td><td>它不是自由拼装的“综合事实”，冲突证据不会被折中合并。</td></tr>
+</tbody></table></div>
+<p>状态语义必须保守：<code>verified</code> 可以表示已核实的正值，也可以表示经过有效检索后的“无记录”；<code>unverified</code> 只表示没有取得核验结论；<code>conflicting</code> 保留多源分歧并要求复核。将后两者写成“未发现”，会把系统或数据源失败转译为正面信号。证据更新还有当前有效版本与被替代历史的区分，清单的 <code>evidence_ids</code> 指向本次结论使用的当前证据，而不是无界历史列表。</p>
+<p>清单还分核心与场景扩展：核心 20 项进入 <code>verified_rate</code>、<code>by_category</code>、闸门和评级；例如保理的场景项虽然可被接纳、单独统计和呈现，却不混入这些核心评分口径。两个覆盖率回答不同问题，合成一个数会同时误导主体尽调完整度和交易变量完整度。</p>
+<p class="xref">源码：<a href="#src-risk-verify">核验入口</a>、<a href="#src-risk-scenario">核心/场景清单分层</a>。</p>
+</details>
+
+<details id="risk-replay" open data-search data-keywords="replay provenance retrieved_at as_of_date value conflict raw source">
+<summary>子过程 B：先验证证据链，再允许它影响判断</summary>
+<p><code>verify_evidence_chain()</code> 按 <code>verification_origin</code> 分派。初始档案路径会用生产映射重放清单，核对状态、值和（授权来源链下的）来源元数据；结构化适配器路径必须在证据库找到同字段、同来源的有效证据，核查证据本体的 <code>raw</code>、时间、当前值、冲突细节与清单副本。遇到多条不同有效取值而清单硬写 verified，必须失败，不能任选一条“解决”冲突。</p>
+<p>时间至少有两层：<code>retrieved_at</code> 是何时取得证据，<code>as_of_date</code> 是事实/发布日期，用于研究截止日判断。晚发生的事实不能因较早抓取时间绕过截止日；反过来，晚抓取的早期事实可用于回溯研究。结构化适配器缺少或格式非法的取证时间不予采信；初始档案的历史缺时记录为来源降级并交给下游闸门披露，而不是用程序运行时间伪造。事实日期未知是信息不足，不能假装满足时点条件。</p>
+<p><strong>单位和主体也是证据语义的一部分。</strong>金额、比例、期间和币种若未由适配器/字段映射统一，不能仅因数字可解析就用于比率、趋势或额度；探索材料还须先通过主体归属和原文定位规则。基线中有“用旧财年最后一行算最新营收，导致风险比例和额度失真”的已记录坏例，因此规则消费者使用按期间挑选最新值的逻辑；不能依列表顺序猜最新。</p>
+<p class="xref">源码：<a href="#src-risk-verify">重放核验</a>、<a href="#src-risk-credit">最新期间与额度建议</a>。</p>
+</details>
+
+<details id="risk-view" open data-search data-keywords="build scoring view profile patch unmergeable fail closed structured adapter">
+<summary>子过程 C：评分视图解决“已核实却仍按旧档案算分”</summary>
+<p>评分卡若直接读原始 <code>company</code>，会有一个隐蔽反例：结构化适配器已核实一条负面担保，<code>field_checks</code> 变为 verified，但企业档案的担保字段仍为空，规则会据此写出“未发现对外担保”。完整度看起来也许合格，结论却方向相反。<code>build_scoring_view()</code> 因而从企业快照深拷贝开始，只把受信任、可验证的 <code>profile_patch</code> 合并到评分视图。</p>
+<p>合并不是接受任意字典：对会影响风险分的字段，patch 需要由已登记适配器从 <code>raw</code> 确定性投影，字段形状受限制，还要经生产清单映射重放为同一 verified 值。缺 patch、无法重放、值不一致或越权字段都会进入 <code>unmergeable</code>；调用者必须 fail-closed，输出不予评级，而不是拿旧视图继续算。冲突字段不合并，因为把多方数据混成一份不存在的“平均事实”既不解决冲突，也污染后续追责。</p>
+<p class="xref">源码：<a href="#src-risk-view">评分视图构造</a>、<a href="#src-risk-score">评分字段登记</a>。</p>
+</details>
+
+<details id="risk-score" open data-search data-keywords="risk score rules completeness gate conflict provenance human review credit advice">
+<summary>子过程 D：规则算分之后，闸门仍可推翻“低分”</summary>
+<p>风险评分是纯函数：已核实的结构化字段才参与财务、司法、关联、经营和舆情维度的计算；LLM 可以协助抽取非结构化候选，却不负责给风险等级。输出不只有 <code>composite_score</code>，还包含维度分、触发规则、跳过维度、等级、人工复核要求以及给人读的闸门说明和稳定的 <code>gate_kinds</code>。程序和评测应使用稳定标识，不应用中文说明的子串判断口径。</p>
+<p>加权分不是最终授权。总体核实不足会变成“数据不足，无法评级”；司法必查项缺失、某维度核实不足或系统根本没有该项核查能力，会抬高等级下限并要求复核；必查项冲突会升级；失信或被执行等一票否决类记录也有更严下限。证据来源降级或事实日期未知同样经来源闸门约束，不能因为综合分低而静默落入低风险。具体比例、权重与分段在<a href="#risk-baseline-rules">下一子过程</a>展开；修改策略时须同步对应函数与测试。</p>
+<p>人工可以在受控流程中作出决定，但不是任意改写：<code>apply_human_review()</code> 校验决定；只有 <strong>批准且实际改级</strong>时才以同一份 <code>scoring_view</code>/<code>field_checks</code> 重算授信建议。拒绝会写入拒绝闸门并清空 <code>credit_recommendation</code>，不是保留旧额度；批准但不改级也不会凭空重算。人工批准同样不抹掉触发过的闸门、证据缺口或冲突记录。何时停在图中已在<a href="#agent-human">人工卡点</a>说明。</p>
+<p class="xref">源码：<a href="#src-risk-score">规则评分与闸门</a>、<a href="#src-risk-provenance">来源闸门</a>、<a href="#src-risk-human">人工决定应用</a>。</p>
+</details>
+
+<details id="risk-baseline-rules" open data-search data-keywords="基线规则 完整度 分母 权重 分段 授信额度 营收法 现金流法">
+<summary>子过程 E：基线评分与额度规则（实现口径，不是金融建议）</summary>
+<p>下列数字是当前基线代码的可复现实现口径，供测试、审计和改动评估使用；它不是对任何企业的投资、授信或放款建议。清单完整度的总体分母只取<strong>核心 20 项</strong>中 <code>required</code> 且非 <code>not_applicable</code> 的字段，分子为其中 <code>verified</code> 的字段。总体核实率低于 60% 时直接成为“数据不足，无法评级”；场景扩展项单列统计，仍不改变这个分母、维度核实率或闸门。</p>
+<p>维度核实率不是把总体公式按类别切开：它统计该类别中非 not_applicable 的核心项，包含可选项，但排除当前明确的能力缺失项。能力缺失仍计入总体必查分母，并单独触发能力闸门。所以“总体不足”“这个维度本次没查全”“系统根本没有该能力”是三个不同信号。</p>
+<p>五个维度的原始权重是财务 30%、司法 30%、关联 20%、经营 10%、舆情 10%。某个应评维度的核实率低于 50% 时，它不参加加权、会被列入排除维度并把等级下限抬到中风险；其余可用维度按<strong>可用权重之和重新归一</strong>，而不是把缺维度补零或把其权重送给某一维度。完全不适用、因而不在分类统计中的维度不会凭空触发该闸门。加权分的初始分段依次为 ≤25 低风险、≤50 中风险、≤75 高风险、>75 拒绝；总体完整度、司法必查缺失、能力缺口、必查冲突、一票否决和来源/时点闸门仍可把这个初始等级变严或改为无法评级。</p>
+<p>额度只读最近财务期间中已核实的数：营收法为年营收 ×20%，现金流法为经营性现金流净额 ×3；净资产法设计为净资产 ×0.8，但当前资产总额/负债总额没有清单核验路径时该口径会标为不可测算，不能拿档案里的裸数参与。可测口径取最小值，再乘等级系数（低/中/高风险分别为 1.0/0.70/0.40）；若总体核实率低于 90%，再乘“核实率÷90%”，最后全额扣减已核实的对外担保。低风险的 1.0 是代码中的最高等级系数；没有另一条固定金额硬上限。测算中值的报告区间为上下各 15%，申请额超过区间上沿只提示建议降额，并不改写测算中值。</p>
+<p><strong>实际取值和精度：</strong>“最近”按 period 中能解析出的四位年份排序，不是完整日期比较；同年沿原顺序取最后一项，全部年份不可解析时记录警告并回退列表末项。该模块金额口径是万元；核实率折扣先 round 到三位小数，调整后的中值先 round 到整数万元，再算并舍入区间上下沿。担保扣减直接读取传入评分视图的 guarantee，不在此函数重新验证担保状态，因此安全边界依赖上游核验和视图构造，不应把这个纯函数单独当作完整核验器。</p>
+<p>边界同样是规则的一部分：数据不足、拒绝等级、无任何已核实可测口径、未知等级，或调整后额度 ≤0，都会输出 <code>recommendable=false</code> 且 <code>suggested_amount</code>/<code>range_low</code>/<code>range_high</code> 为 <code>null</code>，而不是给“保守的小数字”。负现金流会形成 0 的现金流口径；若它恰为最小口径，也会走不出具额度的路径。即使不出具，已算出的口径和不可测原因仍会保留供复核。</p>
+<p class="xref">源码：<a href="#src-risk-score">评分权重、完整度、分段和闸门</a>、<a href="#src-risk-credit">额度输入、公式、区间与不出具边界</a>、<a href="#src-risk-scenario">核心/场景完整度隔离</a>。</p>
+</details>
+
+<details id="risk-investigation" open data-search data-keywords="investigation layer exploratory finding chart cross layer verdict contradiction">
+<summary>子过程 F：调查层可探索、可比对，但不成为自动裁决侧门</summary>
+<p>调查层独立保存在 <code>investigation</code> 下，承载趋势图、完整度图、担保关系图、探索发现、原始材料处理故障和语料丢弃等。它可以帮助分析师看到关联、趋势或待追问线索，却不计入评级、额度、完整度或证据附录；终局事件也把它同 A 层 <code>charts</code>/<code>references</code> 分开发送。这样的隔离不是降低调查价值，而是让读者知道哪一条可作为自动裁决依据。</p>
+<p>探索发现进入调查层前要进行格式、来源定位、主体归属、截止日、清单词汇及“是否只是复述已核实字段”等检查。跨层判定会比较调查发现与裁决清单：确有矛盾要导出为 inconsistency；两边看似都有值却因单位、期间、主体或表达无法比较时，应记录为 undecidable，而不是强行判定一致或冲突。跨层不一致是复核工作队列，不是自动修改评分卡的指令。</p>
+<p class="xref">源码：<a href="#src-risk-investigation">调查发现准入</a>、<a href="#src-risk-cross">跨层矛盾检测</a>。</p>
+</details>
+
+<details id="risk-report" open data-search data-keywords="report risk block evidence appendix search failures section failures consistency">
+<summary>子过程 G：报告必须同时披露已知、未知、失败和探索性结论</summary>
+<p>尽调 Writer 的确定性报告按章节列出核查状态：verified 给出值、来源、事实日期和取证时间；conflicting 列出冲突详情并提示人工复核；unverified 写明原因；不适用也保留原因。规则风险块由代码收口，证据溯源附录也由系统生成并在末尾固定，避免模型把“未核实”润色成无风险，或将评分结论改成含混的“总体可控”。授信建议应与经过闸门的风险结论和最新可验证期间相一致，不能从探索性图表直接得出额度。</p>
+<p>附录把已核实/冲突的依据与信息缺口分表，列出研究截止日、来源、事实日期、取证时间和证据编号；它还单列检索失败与章节抽取失败。这样读者能区分“成功检索后无记录”“本次没查成”“查到材料但没有读成”三种含义。若事实日期或取证时间缺失，也应如实披露。报告的证据附录不能证明外部世界绝对真实，但能让复核者定位本次结论采用了什么、何时取得、哪些环节没有完成。</p>
+<p class="xref">源码：<a href="#src-agent-writer">结构化报告及收口</a>、<a href="#src-risk-appendix">附录渲染</a>、<a href="#src-agent-final-event">终局事件分层</a>。</p>
+</details>
+
+<div class="callout warn"><strong>本章自检。</strong>任何“低风险/建议授信”都应向上追到 scoring_view、field_checks、evidence_store、重放结果和闸门；任何“未发现”都应追到成功检索与状态；任何调查发现都应确认它没有绕过准入和跨层判定成为评分输入。基线已有针对证据链、风险评分、调查层、跨层判定、额度建议和附录的测试文件；本次仅整理其既有证据，未重跑业务测试、服务、数据库或浏览器验收。</div>
+</section>

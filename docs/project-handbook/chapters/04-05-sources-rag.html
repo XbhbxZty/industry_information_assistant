@@ -1,0 +1,148 @@
+<section class="chapter" id="body-sources" data-search data-keywords="数据入口 companies.json 静态档案 Adapter mock 查询状态 evidence 案例包 oracle 管理员档案">
+<div class="eyebrow">04 / 数据入口</div>
+<h2>多种数据入口如何共存：先问“它能证明什么”</h2>
+<p>尽调不是把所有看起来像企业信息的东西拼成一份“更全的档案”。同一个名称可能来自演示用的 <code>companies.json</code>、管理员维护的档案、受控的结构化数据源、离线案例包，或者一段待检索材料；它们的授权范围、可复现程度和可以改变的下游状态并不相同。本章的工作目标是建立一张入口地图：先分清数据从何处进入，再判断它可否把某个 <code>field_check</code> 变成 <code>verified</code>，最后才谈评分或报告。</p>
+<div class="callout"><strong>先给结论。</strong>静态企业档案与当前管理员档案是“初始 profile”路径；mock Adapter 是受注册表约束、可重放的结构化补充路径；案例包是评测/离线材料路径，oracle 更是评测器自己的隐藏答案。它们不能因为都含有公司名就相互替代。尤其不能把 Adapter 的空返回、案例 oracle 或管理员的自由文本解释成已核实的外部事实。</div>
+
+<article class="panel" id="dsrc-map" data-search data-keywords="入口地图 profile adapter mock case oracle admin material">
+<h3>一张入口地图：相同字段，不同责任</h3>
+<div class="table-wrap"><table><thead><tr><th>入口</th><th>真正的输入与选择键</th><th>产出给谁</th><th>不能据此声称什么</th></tr></thead><tbody>
+<tr><td>静态企业档案</td><td><code>backend/app/data/companies.json</code>；加载后按名称等规则选主体</td><td>规范 profile、facts、清单的第一轮填充</td><td>不是实时工商/司法查询，也不是管理员最新编辑内容。</td></tr>
+<tr><td>管理员企业档案</td><td>管理员保存的 profile、字段来源、场景与材料；运行时传明确的 <code>company_profile_id</code></td><td>经审计、哈希校验的冻结 profile 快照</td><td>其 <code>materials</code> 正文不会自动进入研究 profile 或向量库。</td></tr>
+<tr><td>结构化 Adapter</td><td>profile 的信用代码等主体键，及 Adapter 自己的受控数据文件/服务</td><td>只覆盖声明过的清单项；写 <code>evidence_store</code> 和清单</td><td>mock 不等于生产外部服务；通用网页搜索/LLM 不能借此身份升级字段。</td></tr>
+<tr><td>离线案例材料</td><td>生产案例 loader 已实体化的包，随后明确 session、case、subject 和截止日</td><td>组件契约内的授权材料确定性召回</td><td>当前只见定义与测试调用，未接入 V2 主研究图；不是管理员材料库或个人文档入口。</td></tr>
+<tr><td>oracle</td><td>案例目录内固定 <code>oracle/expected.json</code>，并对照同一生产案例</td><td>评测答案比对器</td><td>不能给 Agent、生产研究或评分器当输入；否则评测答案泄漏。</td></tr>
+</tbody></table></div>
+<p>这张表故意把“存在哪里”和“业务上是什么”分开。举例说，静态 JSON 与 mock JSON 都是文件，但前者是初始档案，后者由 Adapter 拿到后还要回答覆盖范围、查询时点、原始返回和字段投影；案例材料也可能是文本，但其可检索性被 case/session/主体的绑定限制。阅读下游代码时，应该沿着 <em>选择键 → 状态变化 → 可重放证据</em> 追踪，而不是只搜索某个字段名。</p>
+<p class="xref">源码：<a href="#src-dsrc-static">静态档案文件定位</a> · <a href="#src-dsrc-static-validate">静态条目载入校验</a> · <a href="#src-dsrc-run">运行时优先采用明确管理员快照</a></p>
+</article>
+
+<article class="panel" id="dsrc-static" data-search data-keywords="companies.json static list_companies profile 校验 coverage 空值">
+<h3>静态 <code>companies.json</code>：教学/默认档案，不是兜底真相</h3>
+<p>旧的静态档案加载器把文件路径固定在应用数据目录，<code>list_companies()</code> 逐条调用 profile schema 校验。它不是“读不出来就照样给一个空公司”：未知键、非法词表或不合规结构会使该条被拒绝加载，避免消费者把一个未能识别的字段静默忽略，再把 <code>coverage.queried</code> 误读成“查过且没有”。加载失败时整个原始读取会退回 <code>{"companies": []}</code>，这表达的是没有可用的静态条目，绝不支持把它翻译成“该企业无风险”。</p>
+<p>静态 profile 的典型输出是 <code>name</code>、<code>registration</code>、<code>financials</code>、<code>coverage</code> 等结构，随后由图初始化 facts 和固定清单。这里的空值有严格业务含义：字段根本未出现在 profile、字段存在但值为空、以及 <code>coverage.queried</code> 明确说某项已查询而无记录，不能混成一个空字符串。第三种才可能在某些“事件型”清单项中支撑“经查询无记录”；前两种仍是信息缺口或数据异常。</p>
+<details id="dsrc-static-example"><summary>小例子：为什么空数组不能自动降低风险</summary><p>若一个静态 profile 根本没有 <code>guarantee</code>，并且 coverage 也未声明查询过担保，它只意味着此档案没有担保信息。若 Adapter 成功查询了担保项，原始返回为 <code>guarantee: []</code>，且该字段是“无记录有业务意义”的事件型项，才可由 Adapter 记录一条“经查询，无相关记录”的结构化结论。若信用代码缺失导致 Adapter 找不到主体，则连第二步都没有发生。后两种输出都可能显示为空列表，业务结论却完全不同。</p></details>
+<p class="xref">源码：<a href="#src-dsrc-static">数据文件常量与读取边界</a> · <a href="#src-dsrc-static-validate">拒绝不合格静态条目</a> · <a href="#src-dsrc-contract">查询状态的类型契约</a></p>
+</article>
+
+<article class="panel" id="dsrc-adapter" data-search data-keywords="AdapterResult queried records fetch extract apply evidence 受信任 注册">
+<h3>Adapter 的子过程：登记、查询、抽取、投影、写证据</h3>
+<ol class="step-list"><li id="dsrc-register"><strong>声明能力并登记。</strong>子类必须声明非空 <code>adapter_id</code>、<code>description</code>、<code>covers</code>，实现 <code>fetch</code>、<code>extract</code> 和必要的 <code>project_profile_patch</code>。实例注册时进入 <code>_TRUSTED_ADAPTERS</code>；只有这个注册表内且具确定性投影器的来源才能获得 <code>structured_adapter</code> 身份。</li><li id="dsrc-fetch"><strong>先找主体，再返回查询覆盖。</strong><code>fetch(company)</code> 用信用代码等键找数据。没有主体时返回 <code>None</code>，而不是伪造 <code>queried=[]</code>；找到主体才构造 <code>AdapterResult(queried, raw, retrieved_at, not_queried_reason)</code>。</li><li id="dsrc-apply"><strong>只处理尚未落定且本 Adapter 覆盖的字段。</strong>基类跳过 <code>verified</code>、<code>conflicting</code>、<code>not_applicable</code>。运行顺序不是“后面的更可信”；替换已有结论需要明确的替代证据语义，不能靠后执行覆盖。</li><li id="dsrc-evidence"><strong>把原始返回和清单状态原子地绑定。</strong>抽取到的值、查询时点与 <code>raw</code> 进入 <code>record_structured_evidence</code>。该入口会检查注册身份、时间格式、字段投影和证据替代关系；输出的是 evidence id，并把当前结论绑定到对应 <code>field_check</code>。</li></ol>
+<div class="flow-grid"><a href="#dsrc-register"><strong>声明/注册</strong><small>可重放的结构化来源</small></a><a href="#dsrc-fetch"><strong>主体匹配</strong><small><code>None</code> 与已查询分开</small></a><a href="#dsrc-apply"><strong>逐字段应用</strong><small>只补未落定字段</small></a><a href="#dsrc-evidence"><strong>证据写入</strong><small>raw、时点、投影、状态绑定</small></a></div>
+<p>这个顺序的业务意义是：报告里“已核实”不应该只是一句模型文字，而要能从字段结论回到适配器 ID、原始结构化返回、检索时间和确定性 profile patch。另一方面，注册不是安全魔法。把一个无法等值重放的网页/模型结果注册进去只会把不稳定文本伪装成结构化事实，所以通用网页检索和 LLM 抽取被明确排除在此边界之外。</p>
+<p class="xref">源码：<a href="#src-dsrc-contract">AdapterResult 与抽象契约</a> · <a href="#src-dsrc-apply">字段应用分支</a> · <a href="#src-dsrc-register">受信任注册表</a> · <a href="#src-dsrc-record">结构化证据唯一写入口</a></p>
+</article>
+
+<article class="panel" id="dsrc-status" data-search data-keywords="queried no subject no record not queried failure reason verified 空值">
+<h3>查询状态表：不要把 <code>[]</code> 读成同一个意思</h3>
+<div class="table-wrap"><table><thead><tr><th>代码信号</th><th>清单应保持/变为</th><th>报告可说什么</th><th>反例推演（非本轮事故）</th></tr></thead><tbody>
+<tr><td><code>fetch() is None</code></td><td>不改字段；结果说明 <code>adapter_no_subject</code></td><td>“该结构化源未定位到主体”，需要主体核实</td><td>把它写成“无担保”会把匹配失败洗成正面结论。</td></tr>
+<tr><td>字段不在 <code>result.queried</code></td><td>仍 <code>unverified</code>，写 <code>failure_reason</code> 与尝试来源</td><td>“该源未覆盖/未查询此项”</td><td>不要因为 raw 中没有键就说“无记录”。</td></tr>
+<tr><td>已查询、<code>extract()</code> 返回 <code>None</code>，事件型字段</td><td>写受控的“经查询，无相关记录”并 <code>verified</code></td><td>可披露该源与查询时点下的无记录结论</td><td>这不是“系统所有数据源都没有”。</td></tr>
+<tr><td>已查询、<code>None</code>，属性型字段</td><td>保持未核实，标记属性缺失异常</td><td>“返回缺少必备属性，需人工核验主体”</td><td>把登记状态缺失写成“正常经营”是错误的正面推断。</td></tr>
+<tr><td>已有 <code>verified/conflicting</code></td><td>Adapter 跳过，不按顺序覆盖</td><td>说明存在既有结论；如有新证据须走替代/冲突流程</td><td>后跑 mock 把管理员冻结结论冲掉会破坏可追溯性。</td></tr>
+</tbody></table></div>
+<p>这里的“事件型/属性型”不是数据结构的漂亮分类，而是风险语义。担保、处罚、诉讼常常存在“正式查询无记录”这一信息；统一社会信用代码、企业名称等主体属性的缺失却意味着主体归属或数据质量问题。每增加一个清单项，都要先定义其无记录语义、覆盖责任和失败文案，不能只给前端新增一个空字段。</p>
+<p class="xref">源码：<a href="#src-dsrc-apply">基类的 <code>None</code> 与 <code>queried</code> 分支</a> · <a href="#src-dsrc-relation">关联关系 mock 的主体查找与抽取</a></p>
+</article>
+
+<article class="panel" id="dsrc-mock" data-search data-keywords="mock relation_registry guarantee_circle 数据源边界 production">
+<h3>mock 的位置：用于受控演示与回归，不是假装连了外部库</h3>
+<p>当前启用列表把 <code>RelationRegistryAdapter</code> 与 <code>GuaranteeCircleAdapter</code> 实例化并注册；前者从项目内 <code>data/sources/relation_registry.json</code> 缓存读取，按信用代码取一条记录，覆盖关联方、对外投资、担保。它的 <code>raw</code> 仍会随结构化证据保存，从而测试可验证“某个字段为何变成 verified”。但是文件注释已经说明这是 mock；不要在手册、接口文案或报告里写成已接入工商、法院或担保公司的真实 API。</p>
+<p>注册列表还表达了另一个常被误会的点：Adapter 的数组顺序主要为运行记录的可读性，不是证据优先级。基类在字段已经落定时跳过，因此先后执行并不能获得覆盖权。要真正接入一个生产数据商，除了添加类和列表，还必须定义授权、主体键、覆盖字段、空记录意义、原始响应保留周期、可确定性重放的 patch、失败分类，以及对应的集成测试；付费 Key 的存在本身不等于已完成这些工作。</p>
+<p class="xref">源码：<a href="#src-dsrc-registry">当前启用的 mock 注册列表</a> · <a href="#src-dsrc-relation">RelationRegistryAdapter 的真实 mock 边界</a></p>
+</article>
+
+<article class="panel" id="dsrc-cases" data-search data-keywords="case package oracle isolation evaluator simulation cases expected json">
+<h3>案例包与 oracle：同包相邻，不等于同一条数据流</h3>
+<p>仿真案例的生产输入由案例加载器解析；评测器随后才能加载同目录的 <code>oracle/expected.json</code>。oracle loader 会要求根目录和 <code>oracle/</code> 都是包内真实目录、拒绝软链接逃逸，并校验 schema 版本、case id、claim id 与 source id 必须和传入的生产案例精确对应。这防止“拿 A 案的标准答案评 B 案”或用目录穿越换答案。</p>
+<p>隔离更重要的目的不是文件安全，而是避免评测污染。Agent 应该只看题目、授权材料和正常检索结果；oracle 是评测器用来判断 Agent 输出是否符合预期的隐藏标准。若把 oracle 读进工作流状态，即使答案正确也无法说明模型或规则从材料得出结论。反过来，案例包离线 RAG 只是一个尚未接入 V2 主研究图的组件契约，不能被描述为“管理员上传材料已经自动接入了 RAG”；二者选择的主体、输入对象和生命周期不同，详见<a href="#body-rag">第 05 章</a>。</p>
+<details id="dsrc-case-check"><summary>自检：案例负载失败时可否偷偷换一个 oracle？</summary><p>不可以。oracle 必须针对已经成功加载的明确生产案例校验；生产 case 缺失、UTF-8/JSON/schema 非法、claim/source 集合不一致，都应使该评测失败。换另一套“看起来接近”的 expected.json 会掩盖测试夹具或加载器问题，也会使分数失去解释性。</p></details>
+<p class="xref">源码：<a href="#src-dsrc-case-oracle">oracle 的路径封闭与精确匹配</a></p>
+</article>
+
+<article class="panel" id="dsrc-admin" data-search data-keywords="管理员企业档案 static fallback explicit id snapshot">
+<h3>管理员路径与静态路径的区别：明确 ID 优先，损坏时失败关闭</h3>
+<p>管理员保存的是可审计的企业档案；启动研究时，显式提供的管理员 snapshot 和其 <code>ref</code> 必须同时存在并通过校验。图加载器会先采用它，且拒绝在 snapshot 缺半边时退回到名称匹配或 <code>companies.json</code>。这样做避免“档案 ID 失效后悄悄研究同名静态公司”这一串案风险。没有明确管理员档案时，才会使用静态匹配或为外部资料尽调构造只含主体名的动态 profile；动态 profile 不伪造工商、财务或担保字段。</p>
+<p>因此管理员编辑入口不等同于 Adapter：前者可以携带字段级来源和版本冻结，后者必须输出结构化 raw、受注册表约束、按清单补值。管理员 <code>materials</code> 是另一个更窄的边界：当前认证用户可以调用同一档案内的无分数词法检索，并明确标 <code>eligible_for_structured_evidence: false</code>；它不是现成的组织 RAG。第 05 章会把三类材料的实际接线拆开。</p>
+<p class="xref">源码：<a href="#src-dsrc-run">管理员快照优先与动态主体降级</a> · <a href="#src-rag-admin-materials">管理员材料的当前检索边界</a></p>
+</article>
+
+<article class="panel" id="dsrc-check" data-search data-keywords="自检 bad case source adapter oracle">
+<h3>本章自检：把入口当作证据前，逐项问</h3>
+<ul><li>这个输入的主体键是什么？找不到主体时输出的是失败、未查询，还是“无记录”？</li><li>谁声明它覆盖这个字段？字段已有结论时是否允许覆盖，依据是什么？</li><li>能否从保存的原始数据、时点、来源 ID 和确定性投影重放？若不能，为什么要叫它 verified？</li><li>这是生产输入、管理员快照、模拟 fixture，还是 evaluator-only oracle？数据流中它是否越权？</li><li>“当前组件存在”和“当前用户流程已经接通”是否被混为一谈？</li></ul>
+<div class="callout warn"><strong>本章未验证项。</strong>本次只读取固定基线源码和已存测试/夹具，没有启动任何外部 Adapter、数据库、浏览器或网络服务；mock 文件的业务真实性、生产数据商授权、以及每项外部查询的覆盖率均未在这里验证。</div>
+</article>
+</section>
+
+<section class="chapter" id="body-rag" data-search data-keywords="RAG 知识库 上传 解析 chunk embedding Milvus 授权 Scout bridge 证据 候选 管理员 materials">
+<div class="eyebrow">05 / 材料与 RAG</div>
+<h2>材料命中不是事实：从上传到证据要跨过几道门</h2>
+<p>“RAG 已接入”是最容易造成误解的一句话。本项目里至少并存三类机制：用户个人知识库的上传、解析、切块、向量化和 Milvus 检索；离线尽调案例材料的确定性内存检索；管理员企业档案内 <code>materials</code> 的档案内词法搜索。它们都可能返回文字，但只有少数、经过来源/主体/日期/原文和字段规则验证的候选，才可能影响尽调清单。检索相关性、模型抽取和字段核验必须分开读。</p>
+<div class="callout"><strong>当前边界。</strong>个人知识库链路已经有上传与后台处理实现；研究启动时的本地检索范围从关系库按用户授权解析。管理员档案材料目前并未被接入个人 KB、向量化或证据桥，而是单档案、无分数的关键词检索，且结构化证据资格固定为 false。未来组织级材料库不是当前已接通路径，不能提前写成产品能力。</div>
+
+<article class="panel" id="rag-types" data-search data-keywords="材料分类 personal kb case rag admin materials boundary">
+<h3>先分三类材料，才不会把“可搜索”误读为“可评分”</h3>
+<div class="table-wrap"><table><thead><tr><th>材料系统</th><th>当前输入/存放</th><th>当前召回</th><th>进入结构化证据的情况</th></tr></thead><tbody>
+<tr><td>个人知识库</td><td>认证用户在自己的 KB 上传文档；文档行有 <code>pending/processing/completed/failed</code> 等状态，切片写 Milvus</td><td>Scout 在已解析的授权 KB scope 中做本地向量检索</td><td>命中先是检索结果/事实候选；尽调模式仍需经过证据桥的确定性闸门。</td></tr>
+<tr><td>离线案例材料</td><td>已经由生产案例 loader 实体化的授权材料，按 session/case/subject/cutoff 建内存 corpus</td><td>组件自身的确定性词元排序，结果附 chunk 身份和摘要哈希</td><td>当前只有组件定义与测试调用，未接 V2 主研究、Scout 或证据桥；结果也不属于普通个人 KB 形状。</td></tr>
+<tr><td>管理员档案 materials</td><td>管理员档案行的补充文本/标题/引用</td><td>认证用户可在同一 profile 内以词元子串全命中检索，返回无分数列表</td><td>当前硬编码 <code>eligible_for_structured_evidence: false</code>；不自动拷入研究快照或向量库。</td></tr>
+</tbody></table></div>
+<p>这一区分解决一个实际业务问题：企业提交的一份 PDF 可以是有用线索，也可能是未审计自报；离线评测材料可能是限定语料；管理员的备注可能只是运营补充。若不保留来源和授权范围，系统可能把 A 用户的文档给 B 用户召回，或把一条过期自报直接变成“已核实财务数据”。</p>
+<p class="xref">源码：<a href="#src-rag-worker">个人 KB 上传与后台处理</a> · <a href="#src-rag-case-loader">生产案例材料解析</a> · <a href="#src-rag-case-corpus">离线案例语料构建</a> · <a href="#src-rag-admin-materials">档案材料搜索权限与边界</a></p>
+</article>
+
+<article class="panel" id="rag-ingest" data-search data-keywords="upload pending processing completed failed DocMind chunk embedding milvus">
+<h3>个人知识库上传链路：先有文档状态，后有可检索切片</h3>
+<ol class="step-list"><li id="rag-upload"><strong>认证与落库。</strong>上传接口先把 URL 中的 <code>kb_id</code> 解析为 UUID，并以 <code>KnowledgeBase.id == kb_uuid</code> 且 <code>user_id == current_user.id</code> 查找。文件类型通过白名单后暂存，创建 <code>Document</code> 行，初始 <code>status="pending"</code>，再把后台任务排入队列。</li><li id="rag-process"><strong>后台解析与状态收敛。</strong>后台任务重新读 Document，将状态设为 <code>processing</code>，调用 DocMind。成功后写 <code>completed</code>、<code>chunk_count</code> 并清空错误；解析、嵌入或插入失败则写 <code>failed</code> 和 <code>error_message</code>。无论成功失败都会关闭会话并删除临时文件。</li><li id="rag-chunk"><strong>文本切块。</strong><code>chunk_text</code> 默认每块 500 字符、重叠 50，优先在中文句号、问号、英文句号或换行的后半段边界截断。空文本得到空切片，后续处理必须以“文档内容为空/切分失败”收束，不应标 completed。</li><li id="rag-vector"><strong>嵌入与索引。</strong>每个 chunk 生成 embedding；空返回或嵌入数与切片数不一致都失败。成功时为每段写入 <code>id=&lt;document_uuid&gt;_&lt;index&gt;</code>、<code>doc_id</code>、<code>kb_id</code>、<code>filename</code>、<code>content</code>、<code>chunk_index</code> 和 vector，并插入由 KB UUID 导出的 Milvus collection。</li></ol>
+<p>注意 HTTP 上传成功只表示“已创建待处理任务”，不是“内容已经可召回”。页面或调用方若在 pending/processing 期间读取切片，应按文档状态获得尚未完成的回应；不能因为 <code>document_count</code> 已加一就假定 Milvus 已有向量。反过来，处理失败也不等于“文档没有相关信息”：失败原因可能是解析超时、空文本、向量服务返回空、向量数量不匹配或数据库/Milvus 异常，应保留为可恢复的操作失败。</p>
+<p><strong>已完成也不是读取成功的强保证。</strong>切片查看接口在确认 <code>doc.status == "completed"</code> 后才访问 Milvus，但捕获任意 Milvus 异常并返回 <code>chunk_count: 0, chunks: []</code>。因此这个响应形状目前无法区分“该 completed 文档确实没有切片”和“向量读取失败”；它是当前接口限制，不能拿空数组断言文档没有可检索内容。</p>
+<p class="xref">源码：<a href="#src-rag-worker">上传、后台状态与临时文件清理</a> · <a href="#src-rag-docmind">切块、embedding、UUID 身份与插入</a> · <a href="#src-rag-chunks-read">completed 后的切片读取与空结果降级</a></p>
+</article>
+
+<article class="panel" id="rag-scope" data-search data-keywords="授权 KbScope user_id collection UUID Milvus missing collection">
+<h3>检索授权：Milvus 不知道“谁能看”，范围先在关系库裁决</h3>
+<p>向量记录有 <code>kb_id</code>，但 Milvus schema 本身没有 <code>user_id</code>；因此 Scout 不应凭调用方传来的 collection 名自己决定能搜什么。<code>resolve_kb_scope(db, user_id, kb_name)</code> 从 PostgreSQL 的 <code>KnowledgeBase.user_id</code> 找当前用户可用的 KB，生成 collection、KB UUID、名称和 <code>document_count</code> 的可序列化范围。集合名由 UUID 单点生成，而不是 KB 名称：名称仅在单用户内唯一、可改名、删除后可复用，曾造成同名库互相覆盖/复活的风险。</p>
+<p><code>KbScope</code> 本身要求空范围带 <code>failure_reason</code>，但当前研究路由只记录这段详细原因到日志，随后调用 <code>scope.as_state()</code>，把空列表传给 Scout；这个序列化字段不带 failure_reason。因此端到端不会保留“无用户身份/指定 KB 不存在/数据库异常”的细分原因，Scout 只能按空 scope 形成通用本地检索失败。另一方面，某已授权 KB 的 <code>document_count &gt; 0</code> 但 collection 不存在，Scout 的本地检索可识别为索引缺失；只有 document_count 为 0 才可能是本来没有材料。两者都不应被写成“已搜索且没命中”。</p>
+<div class="callout warn"><strong>反例推演，不是本轮事故记录。</strong>若系统按可变的 KB 名称而非 UUID 拼 collection，用户 A 与 B 各建“财报”时可能落入同一 collection；即便内容很相关，也会造成授权越界。相关性评分不能修复主体或权限错误。</div>
+<p class="xref">源码：<a href="#src-rag-scope-route">路由记录原因后仅传 scope entries</a>。这里的“下游仅能处理空 scope”是对该序列化边界的代码推论，不把日志中的详细原因描述成已端到端传递的字段。</p>
+</article>
+
+<article class="panel" id="rag-scout" data-search data-keywords="Scout SearchOutcome facts candidate extraction window failure">
+<h3>Scout：召回先进入候选视野，不直接翻转清单</h3>
+<p>Scout 对每个研究章节组织 web/local 查询，收集成功结果，并区分 <code>SearchOutcome.ok</code> 与失败原因。它不会仅用一个空数组表示 HTTP/索引/超时故障和“确实 0 条命中”；失败会写入研究 state 与事件，成功的 local 检索结果才加入本节的 <code>all_results</code>。模型基于受限窗口提出 extracted facts 和 <code>field_evidence</code> 候选；窗口上限也会记录被丢弃数量，避免“材料根本没给模型看”被伪装为模型判断失败。</p>
+<p>在尽调模式中，普通模型抽出的事实首先仍是未核实事实；桥接器随后检查其所指向的结果是否属于授权范围、主体是否相符、发布日期/截止日是否合格、字段是否在固定清单、所声称的值和期间能否在连续原文窗口中定位、金额单位和报表口径是否足够。模型自己给出的 <code>exact_quote</code> 会被忽略，由系统从原文重新切出 quote。换句话说，模型的职责是提出“看哪一段、像哪个字段”，不是为自己的文字签发证据。</p>
+<p class="xref">源码：<a href="#src-rag-bridge-collect">候选锚点与原文窗口校验</a>。本地 scope 的路由边界见<a href="#rag-scope">上节</a>。</p>
+</article>
+
+<article class="panel" id="rag-bridge" data-search data-keywords="rag evidence bridge candidate rejection verified conflicting field checks original quote">
+<h3>证据桥：候选 → 拒绝/冲突/已核实，而不是候选 → 真相</h3>
+<div class="flow-grid"><a href="#rag-scout"><strong>召回结果</strong><small>授权范围内的文本候选</small></a><a href="#rag-bridge-collect"><strong>模型锚点</strong><small>source、field、value、period/record</small></a><a href="#rag-bridge-validate"><strong>确定性闸门</strong><small>主体、日期、原文、字段、单位、口径</small></a><a href="#rag-bridge-final"><strong>最终汇总</strong><small>verified / conflicting / rejected</small></a></div>
+<h4 id="rag-bridge-collect">1. 收集而非信任</h4><p><code>collect_analysis_evidence</code> 只接受固定清单字段的候选，并重建引用窗口。候选缺值、字段未知、来源不在本次结果、主体不匹配、找不到连续原文或字段关键词、财务缺少期间/数值/单位等，都会进入 <code>rag_evidence_rejections</code>；它们应在摘要中被计数，而不是从状态里消失。</p>
+<h4 id="rag-bridge-validate">2. 完整度与冲突也是结论</h4><p>一段提到“营收”的原文并不覆盖近三期财务；一行股东姓名不代表完整股权结构。桥接器按字段定义检查完整度。若已有管理员 profile 或结构化 Adapter 的结论，RAG 不按执行顺序覆盖；能正面比出的跨通道矛盾要暴露给人工复核，无法比较则记为 <code>cross_channel_undecidable</code>，不能伪装成一致。</p>
+<h4 id="rag-bridge-final">3. 只有能重放的结果才写回</h4><p><code>finalize_rag_evidence</code> 对接受候选按字段汇总，处理同期间多源异值，构造可被生产 profile 映射重放的 patch，再经 <code>record_structured_evidence</code> 写入 evidence store 和 field check。失败的投影、部分覆盖或冲突不会被降格成 verified；最后仅允许真正 verified 字段关联的原文事实进入“已核实事实”素材池。这样报告中的引用才能回到 source id、locator、原文 quote 与字段状态。</p>
+<p class="xref">源码：<a href="#src-rag-bridge-collect">候选收集的信任边界</a> · <a href="#src-rag-bridge-final">汇总、冲突与写回</a></p>
+</article>
+
+<article class="panel" id="rag-case" data-search data-keywords="offline case material corpus session subject hash retrieve validate">
+<h3>离线案例 RAG：存在组件，不代表它是当前用户上传主路径</h3>
+<p>先看真实输入边界。<code>load_due_diligence_case()</code> 读取 case manifest 所声明的申请、实体、claims、sources 与 materials，逐项作严格 JSON/JSONL schema 校验，并按 descriptor 校验材料路径与 SHA-256。<code>load_due_diligence_case_package()</code> 再只把已验证 descriptor 所指的字节实体化为 <code>LoadedDueDiligenceCasePackage</code>；下游不再接收 case_root。这是离线材料组件唯一的文件系统入口，且该 loader 明确不读取或导入 oracle。</p>
+<p><code>build_case_material_corpus()</code> 只接受这个已封签 package，以明确的 <code>session_id</code>、<code>case_id</code>、<code>subject_entity_id</code>、截止日构造不可变 corpus。每个 chunk 有 document/material 身份、locator、内容 SHA-256、日期及 <code>eligible_for_structured_evidence</code> 等元数据；组件内检索是确定性的 token 频次排序，结果消费时还会拒绝普通 KB 行、别的 session/case/主体的结果或修改过的摘要/哈希。</p>
+<p><strong>接线边界比组件契约更重要。</strong>固定基线中 <code>build_case_material_corpus</code>/<code>retrieve_case_materials</code> 只有定义和测试调用，未见被 V2 图、Scout、个人 KB 或 <code>rag_evidence_bridge</code> 调用。因此不能说它“同样会交给桥接校验”或已构成主研究路径；它当前是受控离线案例材料的可复现组件，不依赖个人 KB/Milvus/embedding，也不是管理员上传入口或组织材料产品。</p>
+<p>未来若要建设组织 RAG，至少要单独设计材料所有者/可见范围、版本/删除、主体绑定、截止日、索引失败恢复、候选核验和审计；把现有离线组件当作“已上线组织库”会遗漏这些关键责任。</p>
+<p class="xref">源码：<a href="#src-rag-case-loader">生产案例输入、材料字节与 SHA-256 解析</a> · <a href="#src-rag-case-corpus">case corpus 的显式 scope 与确定性离线召回</a> · <a href="#src-rag-case-validate">组件结果的跨 session/主体/内容篡改失败关闭</a></p>
+</article>
+
+<article class="panel" id="rag-admin" data-search data-keywords="admin materials lexical profile isolated future organization rag">
+<h3>档案 <code>materials</code>：当前可做什么，尚未接什么</h3>
+<p>当前 <code>search_profile_materials</code> 只先读取一个指定 profile，再将 query 切成词元，在该 profile 自己的 materials 的标题、内容、引用中做“每个词元都是 haystack 子串”的全词元命中；它不是分词边界严格的全词匹配。接口使用一般认证依赖，并非仅管理员可用。结果没有相似度分数，也不枚举其他 profile；每个命中附上来源类型、日期信息，并固定返回 <code>eligible_for_structured_evidence: false</code>。无可检索字符会报验证错误。这是一个隔离的档案查看/检索能力，而不是语义向量检索，更没有自动写入 <code>evidence_store</code>。</p>
+<p>要特别区分两条看似相近的说法：“管理员能给企业添加材料”目前成立；“管理员材料已被个人知识库授权检索，并可自动改变尽调评分”目前不成立。研究快照还刻意不携带 materials 正文，因此运行恢复不会把这些自由文本误当作冻结结构化 profile。未来组织 RAG 如果接入，也应以新边界把材料版本、解析状态、权限、主体和候选确认显式建模，不应通过偷偷扩大这一个函数的返回值实现。</p>
+<p class="xref">源码：<a href="#src-rag-admin-materials">当前档案内词法检索与 false 资格</a></p>
+</article>
+
+<article class="panel" id="rag-check" data-search data-keywords="自检 failed pending rAg evidence scope boundary">
+<h3>本章自检：把“检索到”改写成可审计结论前</h3>
+<ul><li>文档是 pending、processing、completed 还是 failed？失败原因是解析/嵌入/索引故障，还是已检索无命中？</li><li>本次检索范围是否由当前用户和关系库解析，而不是由 collection 名、文件名或模型猜测？</li><li>结果是否属于本 session、case、主体和截止日，且原文/locator/hash 仍与授权 chunk 一致？</li><li>模型提出的值能否被系统从原文连续窗口、字段关键词、期间、单位和口径重新证明？</li><li>它是管理员 materials、个人 KB，还是离线案例材料？如果是管理员 materials，为什么不能直接称为结构化证据？</li></ul>
+<div class="callout warn"><strong>本章未验证项。</strong>没有实际上传文件、启动 DocMind/Milvus、连接数据库或运行浏览器，因此不声称端到端上传、向量召回、权限隔离或视觉交互已在本次验证。这里的“当前”仅对应固定基线中的代码路径；外部模型/解析服务可用性、既有索引迁移状态及未来组织 RAG 均需另行验收。</div>
+</article>
+</section>

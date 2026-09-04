@@ -1,0 +1,65 @@
+<section class="chapter" id="body-business" data-search data-keywords="业务定位 总览 主体 授信 保理 公开数据 私有数据 边界 全流程">
+<div class="eyebrow">Chapter 01 / 先理解系统在解决什么</div><h2>01　业务目标、参与者与系统边界</h2>
+<p>这个项目的主线是贷前企业尽职调查：给定一个企业和调查问题，把已有档案与检索材料变成逐项可核对的判断，生成报告，并在需要时交给独立复核人。这里说明的是<strong>当前代码怎样模拟这一流程</strong>，不是宣称它已经连接银行、税务、征信或能自动批准真实贷款。</p>
+<div class="callout">理解全项目的关键：它不再只是“搜几篇文章，让模型写报告”。固定清单规定要交代什么，来源与证据决定哪些信息可以采用，规则限制最终评级；模型承担规划、阅读、探索和表达。三者各有职责。</div>
+<article class="panel" id="biz-objects" data-search data-keywords="主体 申请 资料 证据 风险 报告 对象 区别"><h3>1.1 先把六类业务对象分开</h3>
+<div class="table-wrap"><table><thead><tr><th>对象</th><th>回答的问题</th><th>当前项目中的形状／去向</th></tr></thead><tbody>
+<tr><td>企业主体</td><td>调查的是谁？</td><td>名称、信用代码、档案 ID；管理员档案明确指定时不以模型猜测替代。</td></tr>
+<tr><td>业务申请</td><td>为什么调查、什么场景、什么时点？</td><td>query、business_type、as_of；档案中的 credit_application、场景数据是另一层。query 提到的金额不能自动算作已验证财务事实。</td></tr>
+<tr><td>原始资料</td><td>别人向我们提供了什么？</td><td>档案内容、来源记录、材料文本、个人知识库文档、Adapter 响应；进入路径不同，可信条件不同。</td></tr>
+<tr><td>事实与证据</td><td>哪一条信息来自哪里，能否重放核对？</td><td>facts、field_checks、evidence_store；不能凭对象名字叫 Fact 就把文字当成事实。</td></tr>
+<tr><td>风险判断</td><td>哪些规则触发，信息够不够？</td><td>scoring_view、risk_assessment、完整度和闸门；不是把模型的一段回答当作唯一评级。</td></tr>
+<tr><td>报告与复核决定</td><td>向人展示什么，谁确认了什么？</td><td>final_report、复核材料投影和持久化决定；有草稿不等于完成，有完成报告不等于实际放款。</td></tr>
+</tbody></table></div><p class="xref"><a href="#src-entry-request">请求字段</a> · <a href="#struct-state">运行容器</a> · <a href="#body-risk">风险判断</a> · <a href="#body-review">复核决定</a></p></article>
+<article class="panel" id="biz-flow" data-search data-keywords="总流程 输入 规划 取证 核验 评分 撰写 人工复核">
+<h3>1.2 一次研究的端到端阅读路线</h3><div class="flow-grid">
+<a href="#body-entry"><strong>① 发起</strong><small>用户身份、问题、档案 ID、检索范围与时点。</small></a>
+<a href="#sample"><strong>② 装载主体</strong><small>读受控档案或其他主体入口，建立清单。</small></a>
+<a href="#body-sources"><strong>③ 收集信息</strong><small>结构化数据源与文本检索采用不同路径。</small></a>
+<a href="#body-rag"><strong>④ 文本成为候选</strong><small>召回、抽取、原文与来源核验，不是命中即采用。</small></a>
+<a href="#body-risk"><strong>⑤ 核验与报告</strong><small>规则评级、探索性调查、撰写与批判检查。</small></a>
+<a href="#body-review"><strong>⑥ 按条件复核</strong><small>暂停、独立裁决、持久化完成或原决定重试。</small></a>
+</div><p>这是一张业务阅读图，不是“每个框都必然执行一次”的代码调用图。检索可以关闭；信息不足会留下缺口；Critic 可能要求补搜或修订；人工复核由条件触发。具体条件边在<a href="#body-agents">第 06 章</a>，跨请求恢复在<a href="#body-persistence">第 08 章</a>。</p></article>
+<article class="panel" id="biz-checklist" data-search data-keywords="固定清单 核心 场景 必查 保理 缺失 无记录"><h3>1.3 为什么先定义问题，再找答案</h3>
+<p>代码的核心清单包含 20 项，其中 15 项必查、5 项选查。它覆盖工商、股权、经营、财务、司法、关联担保和舆情；factoring 场景再追加应收账款等问题。它们是当前代码常量，<strong>不是任何现实尽调场景的完整标准</strong>。场景扩展不能偷偷删除企业主体的基本核查项。</p>
+<div class="callout">当前场景扩展项单独统计和展示，不进入核心 <code>verified_rate</code>、<code>by_category</code>、核心评分或闸门。<strong>清单里能录入／核验某字段，不等于它已经改变自动评级。</strong>见<a href="#src-biz-completeness">完整度实现</a>，以及<a href="#body-risk">评分章的消费边界</a>。</div>
+<ol class="step-list"><li>构造清单骨架：field_id 是机器标识，field_name 是人读的名称，required 表示尽调应交代而非建档必须填满。</li><li>将取得的信息映射到对应项；有依据的值、冲突和未核实分开表达。</li><li>计算完整度，让未取得的信息仍占据应有位置，不因“报告没写”而消失。</li><li>用字段核验结果和规则约束结论；缺口可以导致评级限制或需要人工核查，而不是默认为零风险。</li></ol>
+<details><summary>同样是空结果，为什么含义不同？</summary><p>明确查询过的事件型信息可能合法地没有记录，例如某类事件未查到；登记属性或营业收入为空不能解释成企业没有这些属性。还必须区分“没有启用检索”“服务报错”“能力未实现”和“查询成功但无结果”。项目用 absence_meaningful 等元数据及运行失败信息辅助区分；不能仅凭一个空数组作判断。</p></details>
+<p class="xref"><a href="#src-biz-checklist">清单元数据与空结果语义</a> · <a href="#src-biz-core">核心项</a> · <a href="#body-risk">完整度与闸门</a></p></article>
+<article class="panel" id="biz-data-boundary" data-search data-keywords="公开数据 内部数据 授权 企业自报 天眼查 仿真"><h3>1.4 为什么加入档案和做 RAG 不是重复造轮子</h3>
+<p>两者处理不同问题：结构化档案描述“当前已录入并带来源的字段”；RAG 帮助从大量文档中找到相关原文。材料解析可以产生候选，但是否变为可供规则消费的值，还要经过字段、主体、日期和来源条件。文件存在不等于交易真实；保存了来源也不等于代码访问签发机构核验过。</p>
+<div class="table-wrap"><table><thead><tr><th>本项目的数据边界</th><th>模拟中可以验证什么</th><th>不能由此宣称什么</th></tr></thead><tbody>
+<tr><td>公开信息或年报</td><td>解析、取证、归属和时点处理</td><td>覆盖全部企业内部负债或每笔交易真实性</td></tr><tr><td>企业／管理员录入</td><td>字段来源契约、修订审计与冻结消费</td><td>管理员不会输错，或内部数据已经外部确权</td></tr><tr><td>离线案例和 mock 数据源</td><td>在预设缺口、冲突、风险情形下系统反应是否正确</td><td>已接上真实征信、银行流水或商业数据 API</td></tr><tr><td>人工复核</td><td>谁对哪份固定材料做了何种决定</td><td>把不真实的原始材料自动变真，或代替实际信贷审批</td></tr>
+</tbody></table></div><p>因此，想展示 RAG 能力，重点是<a href="#body-rag">检索候选如何被验证和拒绝</a>，而不仅是展示一个向量库。更深的组织级材料库接入在本基线仍需另做业务实现，不能因为手册补齐就算功能上线。</p></article>
+<article class="panel" id="biz-map" data-search data-keywords="项目目录 历史模块 聊天 新闻 招投标 数据库 记忆 知识库"><h3>1.5 原项目其余页面放在哪里理解</h3><p>仓库还保留聊天、知识库、记忆、数据库探索、新闻、招投标等页面和服务。它们不是一次 V2 尽调必经的连续节点。前端路由存在、后端注册路由、以及实际研究调用了某个服务，是三种不同证据。</p><ul><li><strong>聊天与 V1 研究：</strong>属于兼容/其他交互入口；不要用聊天逐 token 的逻辑解释尽调结构化事件。</li><li><strong>知识库：</strong>作为尽调可以选择的个人材料入口，本书展开其上传到证据链。</li><li><strong>数据库探索、记忆、新闻等：</strong>属于外围业务功能。数据库页面受管理员守卫控制；本书不把它们冒充当前尽调的实时数据提供者。</li><li><strong>后台调度：</strong>应用启动会尝试初始化调度和数据检查，不等于所有数据都是请求时实时采集。</li></ul><p class="xref"><a href="#src-entry-routes">实际页面路由</a> · <a href="#src-entry-app">后端启动与路由</a></p></article>
+<details><summary>本章自检：为什么一份完整流畅的报告仍可能不可放行？</summary><p>报告流畅只说明表达效果。主体是否正确、依据是否有效、清单是否仍有缺口、规则是否触发、复核是否真正完成，都需要各自验证。继续<a href="#body-entry">请求入口</a>，不要跳过这些边界。</p></details>
+<div class="jump-row"><a href="#roadmap">返回总目录</a><a href="#body-entry">下一章：操作如何到达后端 →</a></div></section>
+
+<section class="chapter" id="body-entry" data-search data-keywords="入口 React FastAPI HTTP JWT Pydantic 权限 Axios API 请求">
+<div class="eyebrow">Chapter 02 / 从点击到服务</div><h2>02　用户操作如何到达后端</h2>
+<p>初学时很容易把“前端已经显示成功”和“服务端完成了一次合法写入”当成同一件事。本章按一条请求穿过的边界解释：组件收集输入，API 函数确定协议，请求插件处理通用行为，后端依赖确认身份，Schema 与服务校验数据，然后才执行业务。</p>
+<article class="panel" id="entry-layers" data-search data-keywords="React 组件 hook API 插件 请求 pipeline"><h3>2.1 六层分别做什么</h3><div class="table-wrap"><table><thead><tr><th>层</th><th>输入 → 输出</th><th>出问题先查什么</th></tr></thead><tbody>
+<tr><td>页面／表单</td><td>选择、输入 → 表单对象或查询选项</td><td>输入被清空？当前场景？选的是档案还是知识库？</td></tr>
+<tr><td>Hook</td><td>页面动作 → 请求与页面状态变更</td><td>running、awaiting_review、completed 是否被混用？</td></tr>
+<tr><td>API 模块</td><td>业务参数 → HTTP 地址、正文、响应类型</td><td>资源接口还是 SSE？是否强制 version=v2、due_diligence=true？</td></tr>
+<tr><td>通用请求插件</td><td>请求配置／响应 → Bearer 令牌、提示和成功失败处理</td><td>HTTP 已成功，是否却被 envelope 规则误判？</td></tr>
+<tr><td>FastAPI 路由与依赖</td><td>请求／令牌 → 真实用户、数据库 Session、已解析参数</td><td>401、403、422 发生于哪个责任边界？</td></tr>
+<tr><td>业务服务与工作流</td><td>被允许的数据 → 数据库事务或执行事件</td><td>来源校验、审计、冻结与规则，不是页面自己决定。</td></tr>
+</tbody></table></div><p class="xref"><a href="#src-entry-http">请求实例及插件组装</a> · <a href="#src-entry-token">令牌添加</a> · <a href="#src-entry-ddapi">尽调 API</a></p></article>
+<article class="panel" id="entry-auth" data-search data-keywords="登录 Token JWT 用户 is_superuser reviewer can_human_review 权限">
+<h3>2.2 身份不是前端传一个“我是管理员”</h3><ol class="step-list"><li>前端认证插件从本地 auth 存储读 token，存在时加入 Authorization: Bearer 请求头。该存储帮助保持登录，不是权限真相来源。</li><li>后端解码令牌，按用户 ID 查实际用户；受保护入口拒绝缺失或无效身份，也检查账号是否启用。</li><li>写档案入口继续依赖 require_superuser，判断数据库用户的 is_superuser。隐藏按钮只是用户体验，不能代替这一层。</li><li>复核入口继续依赖独立复核能力策略；can_human_review 是服务端投影给前端的能力，不是任意用户提交的权限字段。</li><li>检查目标资源：研究 owner 与当前用户、复核者与发起人是否相同、知识库是否属于当前用户。角色允许某类动作，不等于可访问所有资源。</li></ol>
+<div class="table-wrap"><table><thead><tr><th>角色／身份</th><th>档案写入</th><th>独立人工复核</th><th>个人知识库研究检索</th></tr></thead><tbody>
+<tr><td>普通登录用户</td><td>不允许；可读活动档案</td><td>无额外能力时不允许</td><td>按本人的授权范围解析</td></tr><tr><td>额外授权复核人</td><td>不因复核身份获得管理员权限</td><td>允许处理符合条件的非本人任务</td><td>不因跨用户看复核材料而获别人的知识库</td></tr><tr><td>超级用户</td><td>允许</td><td>仍不能审核自己发起的研究</td><td>该研究检索入口仍不放宽到别人的资料库</td></tr>
+</tbody></table></div><p>额外复核人目前由 <code>DD_HUMAN_REVIEWER_USER_IDS</code> 的 UUID 白名单配置，不是新增了一个通用角色管理平台。策略在进程导入时冻结；配置变化需重启。非法列表会禁用额外授权而非只挑出看起来合法的部分。</p><p class="xref"><a href="#src-auth">身份与超级用户</a> · <a href="#src-entry-reviewer">复核能力策略</a> · <a href="#src-entry-access">目标资源与禁自审</a> · <a href="#src-entry-scope">KB 范围</a></p></article>
+<article class="panel" id="entry-request" data-search data-keywords="ResearchRequest query search_modes as_of due_diligence 默认值 输入"><h3>2.3 同一个后端接口，调用方默认值也可能不同</h3>
+<p><code>ResearchRequest</code> 是后端接收的请求对象；前端 <code>startDueDiligence</code> 会额外设置尽调模式和 V2。不能只看后端字段默认值，猜用户点击按钮后的实际行为。</p>
+<div class="table-wrap"><table><thead><tr><th>字段</th><th>代码语义</th><th>当前尽调页面</th></tr></thead><tbody>
+<tr><td>query</td><td>研究问题，不是经过验证的企业事实</td><td>非空才允许开始</td></tr><tr><td>company_profile_id</td><td>可选；服务端按 ID 读取内容并冻结</td><td>可选档案；不直接提交 profile/ref 正文</td></tr><tr><td>search_modes</td><td>只要不是 null，就优先于旧 search_web/search_local 标志</td><td>不选知识库为 []，选知识库为 ["local"]，无网页搜索开关</td></tr><tr><td>as_of</td><td>研究时点，空表示不设置该时点过滤条件</td><td>用户可选择；不是数据抓取时间或当前电脑日期</td></tr><tr><td>version / due_diligence</td><td>版本与业务模式</td><td>API 模块固定为 v2 / true</td></tr><tr><td>session_id</td><td>研究身份；已存在的任务不能用新建入口覆盖</td><td>Hook 生成 dd-时间戳；省略时服务也可生成 UUID</td></tr>
+</tbody></table></div><details><summary>特别容易误读的例子：省略 search_modes 和传 []</summary><p>后端在 search_modes 不为 null 时直接判断其中是否含 web/local；空数组使二者都 false。省略该字段且不提供旧开关时，后端默认允许 web、不启用 local。但当前尽调前端显式传数组，所以不继承那个 web 默认值。复现问题时应查看实际请求体，而不是只比较界面上有没有选项。</p></details>
+<p class="xref"><a href="#src-entry-request">完整字段及默认值</a> · <a href="#src-entry-search-flags">搜索标志优先级</a> · <a href="#src-entry-ddapi">前端实际强制参数</a></p></article>
+<article class="panel" id="entry-responses" data-search data-keywords="响应 JSON envelope HTTP SSE status error 401 403 409 422"><h3>2.4 两类响应和三类错误，不混着解释</h3>
+<p>建档通常返回普通 JSON 资源；尽调成功建立后持续返回 SSE 事件。<code>status="active"</code> 是档案状态，<code>phase="running"</code> 是界面状态，HTTP 201/409 是协议结果——这些字段名字相近，含义并不相同。</p>
+<ol><li><strong>流开始前错误：</strong>鉴权、输入、档案不存在等可用正常 HTTP 错误响应拒绝，页面尚未开始消费研究事件。</li><li><strong>流内执行错误：</strong>连接已建立，服务发送 error 事件；不能只看最初 HTTP 200 断定整次研究成功。</li><li><strong>连接自身结束／断开：</strong>可能是暂停、取消、正常完成，也可能是中途失败；需要看明确的业务终态。</li></ol>
+<details><summary>从一次异常建立排查顺序</summary><p>先确认 URL 和 HTTP 状态，再确认请求类型。403 检查实际用户与资源归属；422 看字段与领域约束；409 分清版本竞争、已接受另一决定和完整性失败。不要遇到任何 409 都让用户重签，也不要遇到任何 200 都显示完成。具体事件如何落到界面见<a href="#body-sse">第 10 章</a>。</p></details><p class="xref"><a href="#src-interceptor">资源响应曾被误判的地方</a> · <a href="#src-entry-review-errors">复核错误响应保留</a> · <a href="#failures">档案失败矩阵</a></p></article>
+<details><summary>本章自检：给前端用户对象加 is_superuser=true 能取得权限吗？</summary><p>不能。它最多影响界面展示；后端还要验证 token、真实数据库用户和具体资源条件。若界面误显示入口，正确的后端仍应拒绝请求。相反，合法复核人能看最小复核包，也不能据此读取别人的完整检查点。</p></details>
+<div class="jump-row"><a href="#body-business">← 上一章</a><a href="#sample">下一章：档案完整生命周期 →</a><a href="#roadmap">总目录</a></div></section>

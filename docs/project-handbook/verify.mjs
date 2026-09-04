@@ -60,13 +60,27 @@ check('offline artifact without network code or runtime dependencies', () => {
   assert.doesNotMatch(script, /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource|eval)\s*\(/)
   assert.doesNotMatch(html, /@@[A-Z_]+@@/, 'unexpanded build token')
 })
-check('12 chapters, 7 detailed steps, 5 structures, 20 glossary entries, 37 sources', () => {
+check('12 full chapter targets, preserved sample, glossary and all declared sources', () => {
   const count = prefix => ids.filter(id => id.startsWith(prefix)).length
   assert.equal(count('chapter-'), 12)
+  const chapterNames = ['business', 'entry', 'profile', 'sources', 'rag', 'agents', 'risk', 'persistence', 'review', 'sse', 'run', 'tests']
+  for (const name of chapterNames) assert.ok(idSet.has(`body-${name}`), `missing chapter body: ${name}`)
   assert.equal(count('step-'), 7)
   assert.equal(count('struct-'), 5)
-  assert.equal(count('term-'), 20)
-  assert.equal(tags.filter(tag => tag[1] === 'details' && /class="source"/.test(tag[2])).length, 37)
+  assert.equal(count('term-'), 34)
+  const fragmentNames = ['01-02-business-entry', '04-05-sources-rag', '06-07-agents-risk', '08-09-storage-review', '10-12-interface-runtime-tests']
+  let sourceCount = 37 // The original sample's complete set is also checked below.
+  for (const name of fragmentNames) {
+    const refs = JSON.parse(readFileSync(path.join(folder, 'chapters', `${name}.refs.json`), 'utf8'))
+    sourceCount += refs.length
+    for (const [id] of refs) assert.ok(idSet.has(id), `missing declared source ${id}`)
+  }
+  assert.equal(tags.filter(tag => tag[1] === 'details' && /class="source"/.test(tag[2])).length, sourceCount)
+})
+check('every link target from the delivered sample remains available', () => {
+  const previous = execFileSync('git', ['show', '7b4c66e:docs/project-handbook/index.html'], { cwd: path.resolve(folder, '../..'), encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 })
+  const allCurrentIds = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]))
+  for (const match of previous.matchAll(/\bid="([^"]+)"/g)) assert.ok(allCurrentIds.has(match[1]), `removed sample target ${match[1]}`)
 })
 check('script targets exist and inline JavaScript parses', () => {
   for (const match of script.matchAll(/byId\('([^']+)'\)/g)) assert.ok(idSet.has(match[1]), `missing JS target ${match[1]}`)

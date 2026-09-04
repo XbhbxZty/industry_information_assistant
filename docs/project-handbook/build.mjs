@@ -53,6 +53,25 @@ const refs = [
   ['src-scope', '阶段验收范围与下一步', 'docs/ADMIN_COMPANY_PROFILE_PLAN.md', '#### 2026-09-02 3.5 交付与恢复点', 30],
 ]
 
+// Chapter authors own separate fragments. The deliverable stays one offline file.
+const chapterFiles = [
+  ['01-02-business-entry', 'intro'],
+  ['04-05-sources-rag', 'remaining'],
+  ['06-07-agents-risk', 'remaining'],
+  ['08-09-storage-review', 'remaining'],
+  ['10-12-interface-runtime-tests', 'remaining'],
+]
+const fragments = { intro: [], remaining: [] }
+for (const [name, position] of chapterFiles) {
+  const content = readFileSync(path.join(folder, 'chapters', `${name}.html`), 'utf8').replaceAll('\r\n', '\n')
+  if (/<(?:script|style|html|head|body)\b/i.test(content)) throw new Error(`${name}: expected content fragment only`)
+  fragments[position].push(content)
+  const extraRefs = JSON.parse(readFileSync(path.join(folder, 'chapters', `${name}.refs.json`), 'utf8'))
+  if (!Array.isArray(extraRefs)) throw new Error(`${name}: references must be an array`)
+  refs.push(...extraRefs)
+}
+if (new Set(refs.map(ref => ref[0])).size !== refs.length) throw new Error('duplicate source reference ID')
+
 const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
 const files = new Map()
 const sources = refs.map(([id, title, file, needle, count, before = 0]) => {
@@ -74,7 +93,7 @@ const snippets = sources.map(source => `<details class="source" id="${source.id}
 // Git on Windows may check these text artifacts out as CRLF. Only EOLs differ;
 // normalize them without relaxing the content/source reproducibility check.
 let result = readFileSync(path.join(folder, 'handbook.template.html'), 'utf8').replaceAll('\r\n', '\n')
-for (const [token, replacement] of [['@@REVISION@@', revision], ['@@SHORT_REVISION@@', revision.slice(0, 7)], ['@@SOURCE_COUNT@@', String(sources.length)], ['@@SOURCES@@', snippets]]) {
+for (const [token, replacement] of [['@@REVISION@@', revision], ['@@SHORT_REVISION@@', revision.slice(0, 7)], ['@@SOURCE_COUNT@@', String(sources.length)], ['@@INTRO_CHAPTERS@@', fragments.intro.join('\n')], ['@@REMAINING_CHAPTERS@@', fragments.remaining.join('\n')], ['@@SOURCES@@', snippets]]) {
   if (!result.includes(token)) throw new Error(`missing template token ${token}`)
   result = result.replaceAll(token, replacement)
 }

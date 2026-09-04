@@ -1,0 +1,22 @@
+[
+  ["src-agent-graph", "LangGraph 节点、主干、审核回环与人工复核边", "backend/app/service/deep_research_v2/graph.py", "    def _build_langgraph(self):", 78, 22],
+  ["src-agent-human", "人工复核中断与恢复后的规则应用", "backend/app/service/deep_research_v2/graph.py", "    async def _human_review_node(self, state: ResearchState):", 76, 12],
+  ["src-agent-state", "共享研究状态、清单和失败留痕", "backend/app/service/deep_research_v2/state.py", "class ResearchState(TypedDict):", 143, 28],
+  ["src-agent-architect", "ChiefArchitect 的规划处理入口", "backend/app/service/deep_research_v2/agents/architect.py", "    async def process(self, state: ResearchState) -> ResearchState:", 55, 10],
+  ["src-agent-scout", "DeepScout 章节并发后统一收口 RAG 证据", "backend/app/service/deep_research_v2/agents/scout.py", "        evidence_counts = finalize_rag_evidence(state)", 44, 15],
+  ["src-agent-analyst", "DataAnalyst 的尽调分析与规则评分入口", "backend/app/service/deep_research_v2/agents/data_analyst.py", "    def assess_risk(self, state: ResearchState) -> Optional[Dict[str, Any]]:", 95, 12],
+  ["src-agent-wizard", "CodeWizard 调查层：图表、探索抽取与跨层判定", "backend/app/service/deep_research_v2/agents/wizard.py", "    async def _build_investigation_layer(self, state: ResearchState) -> ResearchState:", 72, 12],
+  ["src-agent-critic", "CriticMaster 迭代上限与未收敛阻断处理", "backend/app/service/deep_research_v2/agents/critic.py", "    async def process(self, state: ResearchState) -> ResearchState:", 125, 12],
+  ["src-agent-writer", "尽调报告和调查层/附录的代码收口", "backend/app/service/deep_research_v2/agents/writer.py", "    def _finalize_report(self, state: ResearchState) -> None:", 93, 12],
+  ["src-agent-final-event", "research_complete 终局事件的双轨载荷", "backend/app/service/deep_research_v2/graph.py", "def build_complete_event(state: Dict[str, Any], references: List[Dict[str, Any]]) -> Dict[str, Any]:", 90, 8],
+  ["src-risk-verify", "证据链来源分派与重放校验", "backend/app/service/verification.py", "def verify_evidence_chain(", 180, 14],
+  ["src-risk-view", "结构化证据合并为评分视图", "backend/app/service/verification.py", "def build_scoring_view(", 116, 20],
+  ["src-risk-score", "评分权重、完整度、分段与风险闸门", "backend/app/service/risk_scorecard.py", "WEIGHTS = {", 430, 12],
+  ["src-risk-provenance", "来源降级与事实日期闸门", "backend/app/service/risk_scorecard.py", "def apply_provenance_gate(", 72, 13],
+  ["src-risk-human", "人工复核决定的受控应用", "backend/app/service/risk_scorecard.py", "def apply_human_review(", 82, 10],
+  ["src-risk-investigation", "探索性调查发现的准入规则", "backend/app/service/investigation_layer.py", "def admit_finding(", 86, 12],
+  ["src-risk-cross", "跨层矛盾识别与不可判定边界", "backend/app/service/cross_layer_verdict.py", "def detect_contradiction(", 82, 13],
+  ["src-risk-credit", "额度建议的已核实输入、公式、区间与不出具边界", "backend/app/service/credit_advice.py", "REVENUE_RATIO = 0.20", 330, 8],
+  ["src-risk-appendix", "证据附录、缺口与失败披露", "backend/app/service/evidence_appendix.py", "def render_appendix(", 200, 14]
+  ,["src-risk-scenario", "核心二十项与保理场景扩展的评分隔离", "backend/app/config/dd_checklist.py", "def compute_completeness(field_checks: List[Dict]) -> Dict:", 82, 12]
+]

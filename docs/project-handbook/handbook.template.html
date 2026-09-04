@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="尽调项目学习手册：完整目录与管理员档案数据链路样章，附版本化源码快照。">
-<title>尽调项目学习手册 · 目录与样章</title>
+<meta name="description" content="尽调项目十二章学习手册：业务、RAG、多 Agent、核验、复核、存储与界面链路，附版本化源码快照。">
+<title>尽调项目学习手册 · 十二章详解</title>
 <style>
 :root{color-scheme:light;--paper:#f7f6f2;--card:#fff;--ink:#233349;--muted:#52647a;--line:#d3dce4;--accent:#155e80;--soft:#e9f2f6;--warning:#80501a;--warn-bg:#fff5e6;--nav:#152c3d;--nav-ink:#e8f0f5;--code:#f2f5f7;--ok:#236649;--shadow:0 5px 24px #142d3b09}
 :root[data-theme=dark]{color-scheme:dark;--paper:#131d28;--card:#1c2937;--ink:#e0e8f1;--muted:#b2c1d0;--line:#405163;--accent:#8ed1ef;--soft:#233e50;--warning:#f0c17d;--warn-bg:#392e21;--nav:#0e1822;--nav-ink:#e8f0f5;--code:#15212e;--ok:#95d8b8;--shadow:none}
@@ -20,41 +20,50 @@
 <header class="topbar"><div class="brand">尽调智核 <span class="muted">/ 项目学习手册</span></div><div class="top-actions"><a href="#search">查词与定位</a><button id="back-button" type="button" class="small">返回上一处</button><button id="theme-button" type="button" class="small" aria-pressed="false">深色阅读</button></div></header>
 <div class="layout">
 <aside class="sidebar"><nav aria-label="文档导航"><details open id="navigation"><summary>阅读导航</summary>
-<a href="#overview">00　这份手册怎么读</a><a href="#roadmap">01　全项目学习目录</a><a href="#sample">02　样章 · 档案进入尽调</a>
-<a class="sub" href="#step-ui">① 表单与请求</a><a class="sub" href="#step-gates">② 权限与输入校验</a><a class="sub" href="#step-save">③ 同事务保存与审计</a><a class="sub" href="#step-read">④ 发起尽调前读取</a><a class="sub" href="#step-freeze">⑤ 冻结与共享状态</a><a class="sub" href="#step-consume">⑥ 事实、清单与 Adapter</a><a class="sub" href="#step-recover">⑦ 修改后为什么不串案</a>
-<a href="#structures">03　数据结构与生命周期</a><a href="#failures">04　失败路径与排查</a><a href="#glossary">05　关键词索引</a><a href="#evidence">06　测试依据与自检</a><a href="#sources">07　版本化源码快照</a>
-<p>本期：完整目录＋一条详细样章。<br>其余章节明确列为待编写。</p></details></nav></aside>
+<a href="#overview">阅读方式与版本</a><a href="#roadmap">全书目录</a>
+<a href="#body-business">01　业务目标与系统边界</a>
+<a href="#body-entry">02　操作如何到达后端</a>
+<a href="#body-profile">03　企业档案从输入到冻结</a>
+<a href="#body-sources">04　多种数据入口如何共存</a>
+<a href="#body-rag">05　材料、RAG 与证据</a>
+<a href="#body-agents">06　工作流与多 Agent</a>
+<a href="#body-risk">07　核验、风险与双轨报告</a>
+<a href="#body-persistence">08　存储与状态一致性</a>
+<a href="#body-review">09　人工复核与断流恢复</a>
+<a href="#body-sse">10　执行如何出现在界面上</a>
+<a href="#body-run">11　运行、配置与安全回退</a>
+<a href="#body-tests">12　验证、排查和继续开发</a>
+<p>附录与查阅</p><a href="#structures">档案数据结构</a><a href="#failures">档案失败矩阵</a><a href="#glossary">关键词索引</a><a href="#evidence">样章自检与历史验收</a><a href="#sources">版本化源码快照</a><p>固定代码基线，全部核心链接留在本文件内。</p></details></nav></aside>
 <main class="content" id="main">
 <section class="hero" id="overview" data-search data-keywords="学习手册 阅读 总览 版本 范围">
-<div class="eyebrow">Learning edition · 01 / 2026-09-03</div>
-<h1>从一次建档，<br>读懂数据如何进入尽调。</h1>
+<div class="eyebrow">Learning edition · 02 / 2026-09-03</div>
+<h1>从业务问题，<br>读懂一份尽调结论的来路。</h1>
 <p class="lede">给自己读的项目手册。沿着业务、数据变化和真实代码逐层下钻：不仅知道系统做了什么，也知道在哪里做、为什么这样做，以及失败后会怎样。</p>
-<div class="meta"><span class="pill">完整目录＋详细样章</span><span class="pill">源码基线 @@SHORT_REVISION@@</span><span class="pill">@@SOURCE_COUNT@@ 个内嵌源码片段</span></div>
-<div class="callout"><strong>先说明范围。</strong>这里不是“全项目已经写完”的文档。本期完整展开管理员建档 → 读取 → 研究版本冻结；评分、RAG、完整人工复核等给出学习目录与边界，不冒充已完成的深度章节。</div>
-<div class="columns"><div><h3>第一次阅读</h3><p>先看<a href="#roadmap">项目目录</a>，再从<a href="#sample">样章总图</a>顺序读七步。遇到概念先点词条，按“返回上一处”回到原位置；所有核心链接均在这个文件内。</p></div><div><h3>带着问题来查</h3><p>从<a href="#search">搜索</a>输入“来源”“revision”“快照”“未核实”等词。解释旁的源码链接会展开带行号的代码。<strong>源码是基线快照，不是对当前仓库的实时读取。</strong></p></div></div>
-<p class="muted">标记约定：<span class="pill">源码核对</span> 表示可从本页代码片段核对；<span class="pill test">已有测试依据</span> 指仓库已有测试及已记录执行结果，不表示本次重新跑了全部业务测试；<span class="pill pending">待编写／未接线</span> 不是当前可用能力。所有示例企业、标识和金额均为合成说明。</p>
+<div class="meta"><span class="pill">十二章主线详解</span><span class="pill">源码基线 @@SHORT_REVISION@@</span><span class="pill">@@SOURCE_COUNT@@ 个内嵌源码片段</span></div>
+<div class="callout"><strong>先说明范围。</strong>十二章均已展开：从业务、输入和材料，走到 Agent、核验、报告、复核与恢复。原档案样章保留。它是主线学习手册，不是逐函数 API 全集；历史聊天、新闻等外围功能在业务地图中定位，未接线的组织级 RAG 明确标为后续能力。</div>
+<div class="columns"><div><h3>第一次阅读</h3><p>先看<a href="#body-business">业务总览</a>，沿<a href="#roadmap">十二章目录</a>顺序读；也可从<a href="#sample">档案样章总图</a>进入七步实例。遇到概念先点词条，按“返回上一处”回到原位置；所有核心链接均在这个文件内。</p></div><div><h3>带着问题来查</h3><p>从<a href="#search">搜索</a>输入“来源”“revision”“快照”“未核实”等词。解释旁的源码链接会展开带行号的代码。<strong>源码是基线快照，不是对当前仓库的实时读取。</strong></p></div></div>
+<p class="muted">标记约定：<span class="pill">源码核对</span> 表示可从本页代码片段核对；<span class="pill test">已有测试依据</span> 指仓库已有测试及已记录执行结果，不表示本次重新跑了全部业务测试；<span class="pill pending">未接线／后续能力</span> 不表示当前可用；写完讲解也不等于未来功能已经实现。所有示例企业、标识和金额均为合成说明。</p>
 </section>
 <section class="panel search-panel" id="search"><h2>查词与定位</h2><div class="search-box"><label for="search-input">关键词</label><input id="search-input" type="search" placeholder="例如：coverage、材料、事务、冻结" autocomplete="off"><button id="clear-search" type="button">清空</button></div><p id="search-status" class="status-line" aria-live="polite">搜索讲解标题、关键词和源码路径；不会连接业务服务。</p><ul id="search-results" class="search-results"></ul><noscript><p>脚本未启用：请使用浏览器查找和左侧目录。正文、术语及源码折叠仍可阅读。</p></noscript></section>
 
 <section class="chapter" id="roadmap" data-search data-keywords="完整目录 架构 全项目 阅读路线 章节">
-<div class="eyebrow">01 / 全项目地图</div><h2>后续整本手册怎样展开</h2><p>以下是学习内容的覆盖计划，不是开发阶段进度。每章都将讲输入、子过程、输出、持久化、失败分支与测试；本期只有第 03 章的样章展开。不要把“待编写”误读为对应业务代码不存在。</p>
-<div class="toc-grid">
-<article class="toc-card" id="chapter-business" data-search data-keywords="业务 贷前 尽调 授信 保理 边界"><span class="pill pending">待编写</span><h3>01　业务目标与系统边界</h3><p>主体、申请、材料、事实、风险和最终建议分别是什么？公开信息、授权数据和企业提交内容如何分工？为什么缺数据不能推出无风险？</p><details><summary>将继续展开</summary><ul><li>一笔尽调的参与者与业务对象。</li><li>通用主体清单与保理场景项。</li><li>哪些结论由规则决定，哪些需要人判断。</li><li>系统模拟能力与真实业务数据的差距。</li></ul></details></article>
-<article class="toc-card" id="chapter-entry" data-search data-keywords="React API FastAPI JWT 登录 权限 前端"><span class="pill pending">完整章节待编写</span><h3>02　用户操作如何到达后端</h3><p>React 表单 → API 模块 → 请求插件 → FastAPI 依赖 → 服务。菜单权限和后端授权为什么不是同一层？</p><details><summary>将继续展开</summary><ul><li>路由、用户状态和鉴权。</li><li>Pydantic 请求与响应契约。</li><li>普通 JSON 与 SSE 的差异。</li><li>错误怎样进入前端状态。</li></ul></details><a href="#step-ui">先读本期相关样章 →</a></article>
-<article class="toc-card" id="chapter-profile" data-search data-keywords="管理员 档案 输入 冻结"><span class="pill">本期详细样章</span><h3>03　企业档案从输入到冻结</h3><p>最小创建、字段来源、事务审计、档案选择、研究快照、数据投影与恢复边界。</p><a href="#sample">进入完整样章 →</a></article>
-<article class="toc-card" id="chapter-sources" data-search data-keywords="company companies.json Adapter 数据源 仿真 oracle"><span class="pill pending">待编写</span><h3>04　多种数据入口如何共存</h3><p>静态企业档案、结构化 Adapter、管理档案、案例包和资料检索各自提供什么？谁可以补值，谁不能覆盖已有结论？</p><details><summary>将继续展开</summary><ul><li>来源注册、查询结果与失败类型。</li><li>案例 loader 的主体、路径、日期与摘要边界。</li><li>评测答案 oracle 与 Agent 输入隔离。</li><li>组件已实现与主路径已接通的区别。</li></ul></details></article>
-<article class="toc-card" id="chapter-rag" data-search data-keywords="RAG 知识库 Milvus PDF 材料 召回 切分 向量 证据桥"><span class="pill pending">待编写；组织级材料库另属后续能力</span><h3>05　材料、RAG 与证据之间的距离</h3><p>上传、解析、切分、索引、权限范围、召回、候选抽取、原文核验，以及为什么检索命中不自动等于事实。</p><details><summary>将继续展开</summary><ul><li>个人知识库当前链路及 Milvus 边界。</li><li>固定清单抽取与证据桥接。</li><li>离线案例检索和当前管理档案关键词检索。</li><li>未来组织级材料库的未实现边界，单独标注。</li></ul></details><a href="#material-boundary">本期先分清三类材料 →</a></article>
-<article class="toc-card" id="chapter-agents" data-search data-keywords="LangGraph Agent Architect Scout DataAnalyst Wizard Writer Critic 节点 循环"><span class="pill pending">待编写</span><h3>06　工作流与多 Agent</h3><p>每个节点读取和写入哪些状态？哪些节点调用模型，哪些判断由代码完成？条件边、循环与暂停在哪里？</p><details><summary>将继续展开</summary><ul><li>编排图与实际运行入口。</li><li>规划、搜索、分析、图表、写作、批判的内部步骤。</li><li>状态合并、消息队列与输出事件。</li><li>V1 历史路径与 V2 当前尽调路径分开展示。</li></ul></details></article>
-<article class="toc-card" id="chapter-risk" data-search data-keywords="verification scoring_view 风险 评分 完整度 冲突 双轨 报告"><span class="pill pending">待编写</span><h3>07　核查状态如何变成风险结论</h3><p>证据重放、时点和单位、核心完整度、场景完整度、评分输入、闸门、调查层与报告措辞。</p><details><summary>将继续展开</summary><ul><li>facts / field_checks / evidence_store / scoring_view 的转换。</li><li>未核实、冲突与已核实无记录。</li><li>规则层与探索性调查层如何比较。</li><li>报告风险块与证据附录如何保持一致。</li></ul></details></article>
-<article class="toc-card" id="chapter-persistence" data-search data-keywords="数据库 PostgreSQL SQLAlchemy 事务 HMAC 存储 checkpoint Redis"><span class="pill pending">待编写</span><h3>08　状态存在哪里，如何保持一致</h3><p>内存、关系库、图检查点、向量索引和文件分别承担什么？以实际使用路径核对，旧文档的表数量不能直接照抄。</p><details><summary>将继续展开</summary><ul><li>当前 ORM 模型与关键关系。</li><li>两类检查点、序列化与运行时字段剔除。</li><li>事务、版本比较和完整性校验。</li><li>仅历史路径使用的组件与主路径分离。</li></ul></details><a href="#hashes">本期：六项完整性机制 →</a></article>
-<article class="toc-card" id="chapter-review" data-search data-keywords="人工复核 reviewer claim lease CAS accepted finalized 幂等 恢复"><span class="pill pending">完整章节待编写</span><h3>09　人工复核、断流与恢复</h3><p>谁能看材料、谁能裁决、如何禁止自审？领取、接受决定和最终保存为什么是不同阶段？</p><details><summary>将继续展开</summary><ul><li>最小材料包与权限投影。</li><li>claim → accepted → finalized 的真实状态变换。</li><li>租约、原决定重试与最终事务。</li><li>图已完成但响应丢失的恢复分支。</li></ul></details><a href="#step-recover">本期只读档案冻结相关部分 →</a></article>
-<article class="toc-card" id="chapter-sse" data-search data-keywords="SSE stream 事件 前端 状态机 报告 progress UI"><span class="pill pending">待编写</span><h3>10　后端执行如何出现在界面上</h3><p>字节流如何被拆成事件，事件怎样更新卡片、报告和等待状态？连接结束为什么不一定表示任务完成？</p><details><summary>将继续展开</summary><ul><li>流前 HTTP 错误与流内 error 事件。</li><li>事件名与前端状态字段逐一映射。</li><li>profile_ref 的保留与校验。</li><li>取消、刷新、页面切换和恢复边界。</li></ul></details></article>
-<article class="toc-card" id="chapter-run" data-search data-keywords="运行 部署 配置 Alembic 迁移 密钥 Docker 数据库"><span class="pill pending">待编写</span><h3>11　如何安全运行这个版本</h3><p>依赖和服务、唯一数据库连接配置、迁移与启动检查、旧库识别、密钥配置和轮换。</p><details><summary>将继续展开</summary><ul><li>只读环境检查与应用启动。</li><li>空库升级和已有业务库准入不能混用。</li><li>测试环境与业务环境隔离。</li><li>Git 回退不等于数据库回退。</li></ul></details></article>
-<article class="toc-card" id="chapter-tests" data-search data-keywords="测试 pytest 评测 oracle Bad Case 回归 调试"><span class="pill pending">完整章节待编写</span><h3>12　怎样验证、排查和继续开发</h3><p>单元、接口、真实 PG、独立进程和模型评测各自证明什么？用真实 Bad Case 反向理解设计。</p><details><summary>将继续展开</summary><ul><li>从异常定位请求、状态和数据库层。</li><li>新增字段的变更影响清单。</li><li>仿真输入与隐藏答案防泄漏。</li><li>已知限制、未验证项与维护文档的方法。</li></ul></details><a href="#evidence">本期测试索引与自检 →</a></article>
-</div></section>
+<div class="eyebrow">全书地图 / 十二章正文均已展开</div><h2>沿着数据的来路，按问题深入</h2><p>每章解释业务含义、输入输出、关键子过程、失败边界和源码依据。目录不是开发里程碑；写明“未接线”的功能仍未实现。点击章节进入正文，旧档案样章及其锚点仍可直接访问。</p>
+<div class="toc-grid"><article class="toc-card" id="chapter-business" data-search data-keywords="01　业务目标与系统边界"><span class="pill">本次补齐</span><h3>01　业务目标与系统边界</h3><p>主体、申请、资料、证据和结论分别是什么；固定清单为什么不能把缺失项藏掉。</p><a href="#body-business">进入逐层详解 →</a></article>
+<article class="toc-card" id="chapter-entry" data-search data-keywords="02　操作如何到达后端"><span class="pill">本次补齐</span><h3>02　操作如何到达后端</h3><p>页面、Hook、API 插件、鉴权与 Schema；角色、资源授权、请求默认值和流前错误。</p><a href="#body-entry">进入逐层详解 →</a></article>
+<article class="toc-card" id="chapter-profile" data-search data-keywords="03　企业档案从输入到冻结"><span class="pill">原样章保留</span><h3>03　企业档案从输入到冻结</h3><p>保留原七步样章：表单、来源、事务审计、档案选择、快照、下游消费与修改恢复。</p><a href="#body-profile">进入逐层详解 →</a></article>
+<article class="toc-card" id="chapter-sources" data-search data-keywords="04　多种数据入口如何共存"><span class="pill">本次补齐</span><h3>04　多种数据入口如何共存</h3><p>静态 company、结构化 Adapter、mock、管理员档案和案例包；查询状态与 oracle 隔离。</p><a href="#body-sources">进入逐层详解 →</a></article>
+<article class="toc-card" id="chapter-rag" data-search data-keywords="05　材料、RAG 与证据"><span class="pill">本次补齐</span><h3>05　材料、RAG 与证据</h3><p>上传、解析、切分、嵌入、权限召回、候选抽取、原文校验和写回；三类材料边界。</p><a href="#body-rag">进入逐层详解 →</a></article>
+<article class="toc-card" id="chapter-agents" data-search data-keywords="06　工作流与多 Agent"><span class="pill">本次补齐</span><h3>06　工作流与多 Agent</h3><p>节点职责、共享状态、实际条件边、重搜与修订；模型、规则和人分别决定什么。</p><a href="#body-agents">进入逐层详解 →</a></article>
+<article class="toc-card" id="chapter-risk" data-search data-keywords="07　核验、风险与双轨报告"><span class="pill">本次补齐</span><h3>07　核验、风险与双轨报告</h3><p>证据重放、评分视图、时点与单位、完整度闸门、调查层及报告一致性。</p><a href="#body-risk">进入逐层详解 →</a></article>
+<article class="toc-card" id="chapter-persistence" data-search data-keywords="08　存储与状态一致性"><span class="pill">本次补齐</span><h3>08　存储与状态一致性</h3><p>内存、业务库、图检查点、向量索引与取消标志；清洗、封签、事务和恢复顺序。</p><a href="#body-persistence">进入逐层详解 →</a></article>
+<article class="toc-card" id="chapter-review" data-search data-keywords="09　人工复核与断流恢复"><span class="pill">本次补齐</span><h3>09　人工复核与断流恢复</h3><p>独立复核、最小材料包、领取、接受、最终提交、原决定重试和双存储故障分支。</p><a href="#body-review">进入逐层详解 →</a></article>
+<article class="toc-card" id="chapter-sse" data-search data-keywords="10　执行如何出现在界面上"><span class="pill">本次补齐</span><h3>10　执行如何出现在界面上</h3><p>字节分帧、事件字段映射、页面状态机、引用保留与实际恢复限制。</p><a href="#body-sse">进入逐层详解 →</a></article>
+<article class="toc-card" id="chapter-run" data-search data-keywords="11　运行、配置与安全回退"><span class="pill">本次补齐</span><h3>11　运行、配置与安全回退</h3><p>共同数据库目标、空库与旧库、迁移 head、密钥轮换、依赖与代码数据回退差异。</p><a href="#body-run">进入逐层详解 →</a></article>
+<article class="toc-card" id="chapter-tests" data-search data-keywords="12　验证、排查和继续开发"><span class="pill">本次补齐</span><h3>12　验证、排查和继续开发</h3><p>各层测试证明什么、oracle 防泄漏、真实 Bad Case、新增字段的影响链与文档维护。</p><a href="#body-tests">进入逐层详解 →</a></article></div></section>
+@@INTRO_CHAPTERS@@
 
 <section class="chapter" id="sample" data-search data-keywords="样章 总图 档案 生命周期 建档 版本冻结">
-<div class="eyebrow">02 / 深入一条真实链路</div><h2>样章：一份管理员档案，如何成为固定的尽调输入</h2>
+<span id="body-profile"></span><div class="eyebrow">Chapter 03 / 保留原七步样章</div><h2>样章：一份管理员档案，如何成为固定的尽调输入</h2>
 <p>这条链路有两个不同的请求：管理员先保存档案；普通用户随后选择档案发起研究。<strong>保存档案本身不会启动尽调，读取档案也不等于已经得出风险结论。</strong></p>
 <svg class="diagram" viewBox="0 0 900 295" role="img" aria-labelledby="flow-title flow-desc">
 <title id="flow-title">建档与发起尽调是两个请求</title><desc id="flow-desc">第一行：管理员表单经过后端权限和校验，同一事务保存当前档案与审计。第二行：用户选择档案，后端在流前读取校验，产生冻结研究状态。数据库向读取步骤提供档案。</desc>
@@ -188,7 +197,7 @@
 <article class="panel" id="step-consume" data-search data-keywords="facts field_checks evidence_store Adapter 投影 风险评分 company_profile 来源">
 <p class="crumb"><a href="#sample">样章</a> / 6　进入现有尽调机制</p><h2>6. 冻结内容如何变成事实和核查项</h2>
 <p><code>_load_company_profile</code> 优先检查显式管理档案快照。必须同时有 profile 与 ref；验证后才把它认作本次主体。源码顶部有历史版本说明，不能据此断言今天只会读取硬编码 JSON。</p>
-<ol class="step-list"><li><strong>校验投影及引用。</strong>核对 ref 形状、摘要、内嵌 _admin_profile_ref 一致性，以及场景和来源附加字段。通过后重新签发进程内授权标记；不能仅凭客户端或存储中的一个布尔标志信任内容。</li><li><strong>写入可消费档案。</strong>设置主体名、company_profile 与 credit_context。company_profile 是用于后续确定性投影的结构化对象，不是最终报告。</li><li><strong>转换事实。</strong><code>profile_to_facts</code> 将已有结构化信息转换为 facts 记录。不会因为模板要求某项就替缺失信息编造值。</li><li><strong>构建并填充清单。</strong>确定业务场景，生成固定核心清单和场景项，调用 fill_field_checks 填值、状态及逐字段来源，再统计完整度。</li><li><strong>接入结构化 Adapter。</strong>复用原 apply_all 路径补充档案未覆盖的项；代码注释和实现边界强调不能仅凭“后执行”覆盖已经核实的结论。此处的每个 Adapter 内部过程留给第 04 章展开。</li><li><strong>交给后续分析。</strong>事实、清单、证据及后续构造的评分视图被后续节点使用。这里不是直接把整个原始档案交给模型“自由决定风险等级”。</li></ol>
+<ol class="step-list"><li><strong>校验投影及引用。</strong>核对 ref 形状、摘要、内嵌 _admin_profile_ref 一致性，以及场景和来源附加字段。通过后重新签发进程内授权标记；不能仅凭客户端或存储中的一个布尔标志信任内容。</li><li><strong>写入可消费档案。</strong>设置主体名、company_profile 与 credit_context。company_profile 是用于后续确定性投影的结构化对象，不是最终报告。</li><li><strong>转换事实。</strong><code>profile_to_facts</code> 将已有结构化信息转换为 facts 记录。不会因为模板要求某项就替缺失信息编造值。</li><li><strong>构建并填充清单。</strong>确定业务场景，生成固定核心清单和场景项，调用 fill_field_checks 填值、状态及逐字段来源，再统计完整度。</li><li><strong>接入结构化 Adapter。</strong>复用原 apply_all 路径补充档案未覆盖的项；代码注释和实现边界强调不能仅凭“后执行”覆盖已经核实的结论。Adapter 内部过程见<a href="#body-sources">第 04 章</a>。</li><li><strong>交给后续分析。</strong>事实、清单、证据及后续构造的评分视图被后续节点使用。这里不是直接把整个原始档案交给模型“自由决定风险等级”。</li></ol>
 <div class="columns"><div class="tile"><h3>facts：表达“有哪条信息”</h3><p>内容、来源与事实 ID 等帮助叙述和引用。一段自然语言本身无法替代所有可重放的数值和核验状态。</p><a href="#term-facts">词条 →</a></div><div class="tile"><h3>field_checks：表达“每项查得怎么样”</h3><p>固定字段、状态、值、来源、失败原因等。即使没有事实，也应能看到该项缺口，避免从报告里消失。</p><a href="#struct-check">字段与消费者 →</a></div></div>
 <div class="callout">“与 company / adapter 同等效力”指进入同一套尽调消费与验证机制，不是来源形式完全相同。管理档案可保留字段级 profile_sources；Adapter 证据有 evidence_ids 等自己的路径。不能要求所有来源都长成同一个字典，也不能允许一种来源绕过判断边界。</div>
 <details id="material-boundary" open data-search data-keywords="materials RAG 个人知识库 组织级 离线 材料 不评分"><summary>必须分清：三类材料能力目前没有自动合为一体</summary>
@@ -210,14 +219,16 @@ name: 示例澄川设备有限公司</code></pre></div><div class="demo-state"><
 admin_profile_ref.revision: 1
 name: 示例澄川设备有限公司</code></pre></div></div>
 <p id="demo-note" class="status-line" aria-live="polite">研究开始时保存内容副本与 ref；此刻当前档案与研究输入都对应修订 1。</p>
-<details id="recover-substeps" open><summary>恢复不是无条件相信已保存的 JSON</summary><ol><li>先确认检查点完整性模式；管理档案痕迹不能被当作普通旧静态任务绕过检查。</li><li>按恢复路径要求校验图状态封签；确认当前 session_id 与保存的任务一致。</li><li>校验冻结 profile/ref/scenario 与 HMAC 绑定；缺失或不一致就拒绝，不读取最新档案“自动补好”。</li><li>重新验证管理档案投影、重建授权标记，并核对已保存 company_profile 与已验证的规范对象一致。</li><li>继续重建/核验清单、证据与评分输入，只有通过后才继续恢复执行。完整人审 claim、最终事务和幂等回放将在第 09 章单独拆解。</li></ol></details>
+<details id="recover-substeps" open><summary>恢复不是无条件相信已保存的 JSON</summary><ol><li>先确认检查点完整性模式；管理档案痕迹不能被当作普通旧静态任务绕过检查。</li><li>按恢复路径要求校验图状态封签；确认当前 session_id 与保存的任务一致。</li><li>校验冻结 profile/ref/scenario 与 HMAC 绑定；缺失或不一致就拒绝，不读取最新档案“自动补好”。</li><li>重新验证管理档案投影、重建授权标记，并核对已保存 company_profile 与已验证的规范对象一致。</li><li>继续重建/核验清单、证据与评分输入，只有通过后才继续恢复执行。完整人审 claim、最终事务和幂等回放见<a href="#body-review">第 09 章</a>。</li></ol></details>
 <p>跨重启成立还依赖后续图检查点和业务检查点实际持久化。<code>_save_checkpoint</code> 在交给业务保存服务前刷新图状态封签。最近的独立进程验收使用真实 PG 图检查点，验证了更新当前档案后重启，复核包仍引用旧版本；这不等同浏览器交互已测。</p>
 <p class="xref">依据：<a href="#src-update">条件更新</a> · <a href="#src-graph-restore">恢复校验</a> · <a href="#src-checkpoint-save">图保存边界</a> · <a href="#src-process-test">真实进程测试</a></p>
 <div class="jump-row"><a href="#step-consume">← 上一步</a><a href="#structures">接着查数据结构 →</a><a href="#evidence">直接做自检 →</a></div>
 </article>
 
+@@REMAINING_CHAPTERS@@
+
 <section class="chapter" id="structures" data-search data-keywords="数据结构 生命周期 字段 输入 输出 模型 Schema">
-<div class="eyebrow">03 / 数据字典</div><h2>同一份内容，为什么会有不同的数据形状</h2><p>表单对象、API 请求、ORM 当前行、研究快照和运行状态不是同一个对象的不同名字。每次转换都有保留、补充或舍弃的信息。下面按这条样章的生命周期解释；全量字段字典留给后续章节继续扩充。</p>
+<div class="eyebrow">附录 A / 数据字典</div><h2>同一份内容，为什么会有不同的数据形状</h2><p>表单对象、API 请求、ORM 当前行、研究快照和运行状态不是同一个对象的不同名字。每次转换都有保留、补充或舍弃的信息。下面集中解释档案生命周期的五种形状；其他运行、证据、持久化及事件结构在对应章节就地讲解，不要求先记住全量字段。</p>
 <article class="panel" id="struct-write" data-search data-keywords="CompanyProfileWrite CompanyProfileCreate CompanyProfileUpdate profile field_sources materials scenario"><h3>① 写入契约：CompanyProfileCreate / Update</h3><p>由前端生成，Pydantic 接收，再由内容准备函数规范化。创建与修改共用核心内容；修改是整份替换，不是随意发送一个字段的 PATCH。</p><div class="table-wrap"><table><thead><tr><th>字段</th><th>类型／缺省</th><th>含义与去向</th></tr></thead><tbody><tr><td>profile</td><td>对象；name 必须非空</td><td>主体结构化字段，后续成为 profile_json 与研究投影基础。</td></tr><tr><td>scenario</td><td>"" 或 "factoring"</td><td>选择清单扩展；不是由模型自由创建场景。</td></tr><tr><td>scenario_data</td><td>对象，默认空</td><td>仅所选场景键；填值需有对应字段来源。数值单位需按具体字段解释，不能把所有金额默认当同一单位。</td></tr><tr><td>field_sources</td><td>来源数组，默认空</td><td>来源 ID、类型、覆盖 field_ids、日期与引用。</td></tr><tr><td>materials</td><td>补充材料数组，默认空</td><td>正文与材料日期；不自动进入结构化核验。</td></tr><tr><td>expected_revision</td><td>仅修改要求，整数 ≥1</td><td>声明你编辑的是哪个版本；服务器做并发比较。</td></tr><tr><td>change_reason</td><td>创建有默认；修改必填</td><td>进入审计记录，不是事实字段。</td></tr></tbody></table></div><p class="xref"><a href="#src-schema">Pydantic 定义</a> · <a href="#src-source-schema">来源与材料子结构</a> · <a href="#step-ui">创建者：表单</a> · <a href="#step-gates">消费者：服务校验</a></p></article>
 <article class="panel" id="struct-row" data-search data-keywords="AdminCompanyProfile ORM PostgreSQL profile_json audit current revision"><h3>② 持久化当前行：AdminCompanyProfile</h3><p>create/update 服务写入，档案详情与研究快照服务读取。profile_json、scenario_data、field_sources、materials 为 JSON 列；name/credit_code 另有查询列。这里不能用旧说明里的数据库表总数推断现有模型。</p><ul><li><code>id</code>：档案身份；改版本不换 ID。</li><li><code>revision</code>：本档案修订号；创建为 1，修改/归档递增。</li><li><code>status</code>：active/archived。归档不是物理删除，旧审计仍保留；但它是本档案审计链的终态，不能再修改，当前没有取消归档接口。本章“恢复”指研究检查点恢复，不是重新激活档案。</li><li><code>content_sha256</code>：五块规范化业务内容摘要；这些内容变化时重算。状态与修订号不在其覆盖内，归档通常不改变此摘要。</li><li><code>audit_head_mac / audit_head_snapshot_sha256</code>：对照审计链的当前头，不是对外材料的真实性证明。</li><li><code>created_by / updated_by</code> 与时间：服务端记录操作者和时间；普通读取会按响应投影限制操作者信息。</li></ul><p class="xref"><a href="#src-model">模型定义</a> · <a href="#src-archive">归档终态</a> · <a href="#step-save">创建过程</a> · <a href="#step-recover">修改过程</a> · <a href="#src-profile-route">响应投影入口</a></p></article>
 <article class="panel" id="struct-snapshot" data-search data-keywords="快照 ref profile _admin_profile_ref _scenario_data _admin_field_sources"><h3>③ 读取投影：{ profile, ref, scenario }</h3><p>由 get_active_profile_snapshot 创建，路由复制，状态初始化和图加载消费。以下是结构示意，不是可提交请求；尖括号内容表示运行时值。</p><pre><code>{
@@ -234,7 +245,7 @@ name: 示例澄川设备有限公司</code></pre></div></div>
   "scenario": ""
 }</code></pre><p>内外 ref 必须一致；附加字段让既有档案消费逻辑获得管理来源和场景信息。<strong>materials 正文不在这里。</strong>公开 ref 只是身份摘要，不包含整份档案或签名密钥。</p><p class="xref"><a href="#src-snapshot">生产者</a> · <a href="#src-snapshot-route">路由复制</a> · <a href="#src-profile-check">消费者验证</a></p></article>
 <article class="panel" id="struct-state" data-search data-keywords="ResearchState TypedDict provided_company_profile company_profile facts scoring_view evidence_store"><h3>④ 运行容器：ResearchState 的相关部分</h3><div class="table-wrap"><table><thead><tr><th>状态字段</th><th>谁创建／修改</th><th>为什么存在</th></tr></thead><tbody><tr><td>provided_company_profile</td><td>初始化深拷贝；作为冻结输入核对</td><td>保留服务端读到的实际投影。</td></tr><tr><td><code>admin_profile_ref / admin_profile_scenario</code></td><td>初始化复制</td><td>绑定来源版本与场景；SSE/复核材料可展示公开引用。</td></tr><tr><td><code>admin_profile_payload_sha256 / admin_profile_snapshot_binding</code></td><td>初始化计算／签发</td><td>支持之后检查投影和任务绑定。</td></tr><tr><td>company_profile</td><td>图加载校验后填充</td><td>供生产映射、证据重放等消费的规范化档案。</td></tr><tr><td>facts</td><td>档案投影和后续相关节点生成</td><td>事实条目集合，不替代固定清单。</td></tr><tr><td>field_checks / completeness</td><td>清单构建、填充、核验和统计</td><td>把已知、未知、冲突显式表达。</td></tr><tr><td>evidence_store / scoring_view</td><td>证据处理与验证层逐步构建</td><td>支撑可追溯判断与受控评分输入；不是原始文本直接打分。</td></tr></tbody></table></div><p class="muted">表中是相关字段的责任概览，不是完整 ResearchState。TypedDict 用于表达预期字典形状，本身不是自动运行时验证器。</p><p class="xref"><a href="#src-initial">初始化时的实际值</a> · <a href="#step-consume">下游怎样填充</a> · <a href="#step-recover">恢复时怎样复核</a></p></article>
-<article class="panel" id="struct-check" data-search data-keywords="FieldCheck field_checks verified unverified conflicting required profile_sources"><h3>⑤ 单个核查项：FieldCheck</h3><p>清单先创建骨架，再由档案、Adapter 或合格证据填充。DataAnalyst 的判断、完整度统计、前端清单和人工复核都需要理解它。相关字段：</p><ul><li><code>field_id / field_name / required</code>：检查什么、叫什么、是否属于尽调必查。</li><li><code>status / value</code>：本项核实状态和相应值。unverified 不表示业务事实不存在；不要仅凭这一状态反推具体是否查询过，应再看 attempted_sources 和 failure_reason。</li><li><code>sources</code>：关联事实 ID；不等于整个证据正文。</li><li><code>verification_origin / evidence_ids / source_adapter</code>：核实来源和证据索引，按实际来源路径使用。</li><li><code>profile_sources</code>：管理档案逐字段来源投影；只带覆盖这一字段的来源身份与时点，不带另一层的 field_ids 声明列表。</li><li><code>retrieved_at / as_of_date</code>：取证时间与事实日期，不能互换。</li></ul><p><strong>空值、零值、已核实无记录是三回事。</strong>空值可能是缺资料；零可以是一个有来源的真实数值；无记录必须来自明确查过的结果。当前哪些字段允许哪些状态，以各字段映射和核验规则为准。</p><p class="xref"><a href="#src-fieldcheck">类型与注释</a> · <a href="#src-provenance-test">来源与空结果测试</a> · <a href="#step-consume">字段从哪里来</a> · <a href="#chapter-risk">完整评分章待展开</a></p></article>
+<article class="panel" id="struct-check" data-search data-keywords="FieldCheck field_checks verified unverified conflicting required profile_sources"><h3>⑤ 单个核查项：FieldCheck</h3><p>清单先创建骨架，再由档案、Adapter 或合格证据填充。DataAnalyst 的判断、完整度统计、前端清单和人工复核都需要理解它。相关字段：</p><ul><li><code>field_id / field_name / required</code>：检查什么、叫什么、是否属于尽调必查。</li><li><code>status / value</code>：本项核实状态和相应值。unverified 不表示业务事实不存在；不要仅凭这一状态反推具体是否查询过，应再看 attempted_sources 和 failure_reason。</li><li><code>sources</code>：关联事实 ID；不等于整个证据正文。</li><li><code>verification_origin / evidence_ids / source_adapter</code>：核实来源和证据索引，按实际来源路径使用。</li><li><code>profile_sources</code>：管理档案逐字段来源投影；只带覆盖这一字段的来源身份与时点，不带另一层的 field_ids 声明列表。</li><li><code>retrieved_at / as_of_date</code>：取证时间与事实日期，不能互换。</li></ul><p><strong>空值、零值、已核实无记录是三回事。</strong>空值可能是缺资料；零可以是一个有来源的真实数值；无记录必须来自明确查过的结果。当前哪些字段允许哪些状态，以各字段映射和核验规则为准。</p><p class="xref"><a href="#src-fieldcheck">类型与注释</a> · <a href="#src-provenance-test">来源与空结果测试</a> · <a href="#step-consume">字段从哪里来</a> · <a href="#chapter-risk">完整核验与评分章</a></p></article>
 </section>
 
 <section class="chapter" id="failures" data-search data-keywords="错误 401 403 404 409 422 503 排查 异常 失败">
@@ -269,12 +280,26 @@ name: 示例澄川设备有限公司</code></pre></div></div>
 <details id="term-hmac" data-search data-keywords="HMAC seal MAC 签名 keyring key_id"><summary>HMAC、封签与 keyring</summary><p>HMAC 用秘密密钥验证内容未被无密钥者任意改写。keyring 管理签发/历史验证用的密钥与 key ID。它不是内容加密，不证明外部事实真实，也不抵御同时拿到数据库和签名密钥的攻击者。</p><a href="#hashes">分别保护什么 →</a></details>
 <details id="term-facts" data-search data-keywords="facts Fact 事实"><summary>facts：事实条目集合</summary><p>描述所得到的信息、来源和引用身份。不要仅凭它叫 Fact 就认为任何检索文本都已通过核验；还要看进入路径和清单/证据层的验证结果。</p><a href="#step-consume">看它如何产生 →</a></details>
 <details id="term-checks" data-search data-keywords="field_checks FieldCheck verified unverified conflicting"><summary>field_checks：核实清单</summary><p>为每项问题显式保存状态、值和依据。unverified 不能翻译成不存在；具体为何未知要看失败原因和尝试记录。</p><a href="#struct-check">看字段及生命周期 →</a></details>
-<details id="term-evidence" data-search data-keywords="evidence_store evidence_ids 证据 仓库"><summary>evidence_store：证据索引容器</summary><p>供核验/重放使用的证据集合，与 facts 的自然语言记录和 RAG 的原始命中不是同一层。来源路径不同，对应引用字段也不同。</p><a href="#step-consume">本章消费位置 →</a> · <a href="#chapter-risk">后续深讲 →</a></details>
-<details id="term-scoring" data-search data-keywords="scoring_view 评分视图 风险"><summary>scoring_view：受控评分输入</summary><p>评分需要经过验证的字段视图，不是任意模型文字或材料正文。它如何构建、如何处理不足和冲突，将在核验与风险章详细拆解。</p><a href="#chapter-risk">进入章节目录 →</a></details>
+<details id="term-evidence" data-search data-keywords="evidence_store evidence_ids 证据 仓库"><summary>evidence_store：证据索引容器</summary><p>供核验/重放使用的证据集合，与 facts 的自然语言记录和 RAG 的原始命中不是同一层。来源路径不同，对应引用字段也不同。</p><a href="#step-consume">档案消费位置 →</a> · <a href="#body-risk">证据核验详解 →</a></details>
+<details id="term-scoring" data-search data-keywords="scoring_view 评分视图 风险"><summary>scoring_view：受控评分输入</summary><p>评分需要经过验证的字段视图，不是任意模型文字或材料正文。它如何构建、如何处理不足和冲突，见<a href="#body-risk">核验与风险章</a>。</p><a href="#risk-view">进入视图转换子过程 →</a></details>
 <details id="term-sse" data-search data-keywords="SSE stream HTTP 流"><summary>SSE：持续返回事件</summary><p>一次 HTTP 响应可以持续发送事件。流前失败可返回普通错误状态；流打开后则要看事件。连接结束不自动等于研究完成。</p><a href="#step-read">流前快照读取 →</a> · <a href="#chapter-sse">前端消费章 →</a></details>
-<details id="term-checkpoint" data-search data-keywords="checkpoint 检查点 LangGraph PostgresSaver"><summary>两类检查点</summary><p>工作流检查点保存图执行所需状态；业务检查点保存应用读取、报告和权限等业务状态。不是同一张表，也不能只保存其中一处就声称所有恢复场景都成立。</p><a href="#step-recover">本章恢复边界 →</a> · <a href="#chapter-persistence">后续存储章 →</a></details>
+<details id="term-checkpoint" data-search data-keywords="checkpoint 检查点 LangGraph PostgresSaver"><summary>两类检查点</summary><p>工作流检查点保存图执行所需状态；业务检查点保存应用读取、报告和权限等业务状态。不是同一张表，也不能只保存其中一处就声称所有恢复场景都成立。</p><a href="#step-recover">档案恢复边界 →</a> · <a href="#body-persistence">存储详解 →</a></details>
 <details id="term-rag" data-search data-keywords="RAG 召回 检索增强生成 embedding 向量"><summary>RAG：检索增强生成</summary><p>先检索相关材料，再让后续处理利用它。检索相关性不等于真实性；本项目还需要主体、日期、字段和证据条件。当前关键词检索与未来组织级向量库不要混称。</p><a href="#material-boundary">本章实际边界 →</a></details>
 <details id="term-failclosed" data-search data-keywords="fail-closed 失败关闭 拒绝降级"><summary>fail-closed：验证失败就拒绝</summary><p>发现指定档案损坏时停止使用，不偷偷换最新版本、同名公司或无签名旧状态。它保护判断依据，但不等于系统永不出错或能够自动修复数据。</p><a href="#failures">错误矩阵 →</a></details>
+<details id="term-adapter" data-search data-keywords="adapter 适配器 数据源"><summary>Adapter：外部数据的翻译层</summary><p>把不同来源的数据整理成系统能消费的形状，同时说明本次覆盖了什么。适配器可以连接真实接口，也可以使用测试替身；有同一种接口，不代表有同样的真实性或覆盖范围。</p><a href="#dsrc-adapter">来源如何进入清单 →</a></details>
+<details id="term-chunk" data-search data-keywords="chunk 分块 切片"><summary>chunk：文档中的一个片段</summary><p>长文档切成可检索的小段，保留所属文档和片段位置。命中片段只是找到相关文字；脱离主体、期间和上下文，仍可能用错证据。</p><a href="#rag-ingest">从文件到分块 →</a></details>
+<details id="term-embedding" data-search data-keywords="embedding 向量 Milvus"><summary>embedding：用于检索的数字表示</summary><p>把文本转换为向量，帮助系统找到语义相关片段。相似度不是事实可信度，也不是风险分；文件状态和访问范围仍由其他层控制。</p><a href="#rag-ingest">向量入库的子过程 →</a></details>
+<details id="term-kbscope" data-search data-keywords="KbScope scope entries 知识库 范围"><summary>KbScope：这次允许检索的范围</summary><p>依据用户身份和可用文档解析检索边界，再传给后续节点。没有解析到可用范围，不应该变成搜索所有人的文档；详细失败原因与下游收到的空范围也不是同一对象。</p><a href="#rag-scope">范围怎样解析与传递 →</a></details>
+<details id="term-candidate" data-search data-keywords="candidate 候选 RAG evidence"><summary>候选证据：等待验证的提议</summary><p>检索或抽取找到一个可能支持字段的内容，先作为候选。它必须通过字段、主体、期间与引用等检查，不能因为模型提取出来就直接成为 verified。</p><a href="#rag-bridge">候选如何过证据桥 →</a></details>
+<details id="term-patch" data-search data-keywords="patch profile_patch 字段 投影 更新"><summary>profile_patch：可合并的档案片段</summary><p>由受信适配器从原始返回确定性投影，表示该字段在评分档案中应采用的结构化内容。它不是模型任意提交的更新指令；还须通过形状、值与生产清单映射的重放核验，才能合并到评分视图。</p><a href="#risk-view">从清单到评分视图 →</a></details>
+<details id="term-oracle" data-search data-keywords="oracle 标准答案 评测 泄漏"><summary>Oracle：测试使用的参考答案</summary><p>用于事后比较系统输出，不是给研究过程看的资料。把答案喂给检索或 Agent，会让测试看似准确，却无法检验真实推理和核验能力。</p><a href="#test-oracle">输入与答案如何隔离 →</a></details>
+<details id="term-basis" data-search data-keywords="basis 复核 依据 digest"><summary>复核 basis：你正在审核哪份依据</summary><p>把复核操作绑定到具体检查点版本及其依据，避免材料已经变化，仍按旧页面作出决定。它不是档案 revision，也不能用最新数据静默替代。</p><a href="#review-claim">复核提交前的核对 →</a></details>
+<details id="term-claim" data-search data-keywords="claim 抢占 token 并发"><summary>claim：服务端占用一次执行机会</summary><p>复核决定被接受后，服务端用持久化占用记录协调恢复执行，防止同一决定被并发执行。客户端提交决定与身份，不自行生成服务端的 claim token。</p><a href="#review-claim">占用与执行边界 →</a></details>
+<details id="term-lease" data-search data-keywords="lease 租约 超时"><summary>lease：占用的有效时间</summary><p>执行者不能无限期占住任务；租约帮助识别中断或超时。但超时本身不能证明前一次执行毫无结果，恢复仍须检查已经保存的状态。</p><a href="#review-claim">为什么超时不能直接重做 →</a></details>
+<details id="term-finalize" data-search data-keywords="finalize 终结 幂等"><summary>finalize：把终局结果正式落定</summary><p>图执行完成与业务报告保存成功之间还有收尾边界。系统核对已执行结果并完成持久化；重试不能因此再次自由执行人工决定。</p><a href="#review-finalize">终局保存与重试 →</a></details>
+<details id="term-gate" data-search data-keywords="gate 闸门 requires_human_review"><summary>闸门：满足条件才能继续</summary><p>例如证据不足、冲突或特定风险条件，会阻止直接给出通常的自动结论。它不同于单个风险维度的分数；是否暂停复核，要看实际标志和路由。</p><a href="#risk-score">评分与闸门的区别 →</a></details>
+<details id="term-statement-scope" data-search data-keywords="statement_scope 主体 期间 口径"><summary>statement scope：这句话到底适用于谁、何时</summary><p>同一个数字可能属于母公司、集团或不同会计期间。核验不只比较文字和数值，还必须保持主体、期间与统计口径一致，否则会把相关材料当成不相干字段的依据。</p><a href="#rag-bridge">证据桥中的适用范围 →</a></details>
+<details id="term-langgraph" data-search data-keywords="LangGraph graph node edge 状态图"><summary>LangGraph：按状态和条件组织执行</summary><p>节点读取状态并产生更新，边决定下一步去哪里；条件边可以补查、暂停或结束。它负责流程组织，不自动保证证据正确、数据持久化或权限安全。</p><a href="#body-agents">沿着本项目的图走一遍 →</a></details>
 </div></section>
 
 <section class="chapter" id="evidence" data-search data-keywords="测试 自检 验收 102 8 练习 Bad Case 已实现 未测">
@@ -288,8 +313,8 @@ name: 示例澄川设备有限公司</code></pre></div></div>
 <details><summary>3. 如果管理员在研究途中更新了档案，旧研究恢复时应读哪里？</summary><p>使用原研究保存并通过完整性检查的冻结内容，不重新查询最新档案替换。深拷贝避免内存引用污染，持久化与验签支持跨进程恢复。看<a href="#step-recover">时间线与恢复</a>。</p></details>
 <details><summary>4. 页面隐藏编辑按钮后，为什么还需要 require_superuser？</summary><p>用户可以绕过页面直接发 HTTP 请求。菜单是体验层，后端用户依赖才是接口权限边界。看<a href="#src-auth">实际用户验证</a>。</p></details>
 <details><summary>5. 给企业添加一条补充说明，为什么不能说“它已经进入 RAG 风险评分”？</summary><p>当前材料保存在独立档案字段，提供档案级关键词检索，结构化资格固定 false，研究快照不携带它的正文。组织级材料检索与候选确认尚未接通。看<a href="#material-boundary">材料边界</a>。</p></details>
-<details><summary>6. 我要新增一个可用于尽调判断的字段，应该检查哪些位置？</summary><p>先确定业务语义、单位和空值含义；检查清单定义、输入 Schema/模板、表单、来源覆盖、档案映射、证据验证、评分消费者、状态与响应、测试。哪些需要实际修改必须依据该字段的职责核对，不能只在页面加一个输入框。后续<a href="#chapter-tests">开发与验证章</a>会给完整案例。</p></details>
-<div class="callout"><strong>样章反馈重点：</strong>哪一步你仍无法从输入推导输出？哪个词条解释不够？源码片段是否足以找到逻辑？这些反馈用于调整全书深度，而不是先把十二章都写成同一种不合适的密度。</div>
+<details><summary>6. 我要新增一个可用于尽调判断的字段，应该检查哪些位置？</summary><p>先确定业务语义、单位和空值含义；检查清单定义、输入 Schema/模板、表单、来源覆盖、档案映射、证据验证、评分消费者、状态与响应、测试。哪些需要实际修改必须依据该字段的职责核对，不能只在页面加一个输入框。<a href="#body-tests">开发与验证章</a>展开了这条改动影响链。</p></details>
+<div class="callout"><strong>阅读反馈重点：</strong>哪一步你仍无法从输入推导输出？哪个词条解释不够？源码片段是否足以找到逻辑？十二章覆盖的是当前主线；仍有不清楚的子过程，可以依据对应函数继续加深，不必重写已读懂的部分。</div>
 </section>
 
 <section class="chapter" id="sources"><div class="eyebrow">07 / 可核对的依据</div><h2>源码快照</h2><p>全部取自已提交版本 <code>@@REVISION@@</code>，不是运行时猜测的行号。每个片段保留原行号和整文件摘要；点击行号可以定位或分享文档内部位置。片段是局部摘录，边界可能位于函数中间；阅读解释时不要把被省略的后半段当作不存在。</p><p class="muted">仅内嵌讲解所需的一方仓库代码和记录；没有读取 .env、密钥值、数据库内容或用户材料。复制路径需要浏览器剪贴板支持；不支持时页面会提供可手动复制的文本。无需后端与联网。</p>

@@ -1,0 +1,22 @@
+[
+  ["src-store-model", "业务检查点与完整性元数据的关系模型", "backend/app/models/research.py", "class ResearchCheckpointIntegrity(Base):", 31],
+  ["src-store-projection", "封签投影：排除运行时字段而不是业务字段白名单", "backend/app/service/checkpoint_integrity.py", "def _state_projection(state: Any) -> Dict[str, Any]:", 37],
+  ["src-store-context", "业务封签之外的行上下文绑定", "backend/app/service/checkpoint_integrity.py", "def issue_checkpoint_context_seal(", 49],
+  ["src-store-save", "保存：先验图封签、清洗、锁行、再同事务刷新业务完整性", "backend/app/service/checkpoint_service.py", "    def save_checkpoint(", 151],
+  ["src-store-load", "完整恢复在返回前验证完整性对", "backend/app/service/checkpoint_service.py", "    def load_full_checkpoint(self, session_id: str) -> Optional[Dict[str, Any]]:", 51],
+  ["src-store-graph-save", "图节点边界先签图状态、再写业务检查点", "backend/app/service/deep_research_v2/graph.py", "    def _save_checkpoint(", 34],
+  ["src-store-graph-restore", "恢复受管档案快照时的 fail-closed 校验", "backend/app/service/deep_research_v2/graph.py", "    def _restore_managed_profile_snapshot(", 90],
+  ["src-store-graph-provider", "图检查点采用 PostgresSaver，失败降级 MemorySaver 并告警", "backend/app/service/deep_research_v2/graph.py", "def _get_graph_checkpointer():", 33],
+  ["src-store-redis", "Redis 取消标志的实际写入与 300 秒 TTL", "backend/app/router/research_router.py", "cache.set(cancel_key, {\"cancelled\": True}, expire=300)", 7, 3],
+  ["src-store-milvus", "Milvus 集合的文档写入与 flush", "backend/app/service/milvus_service.py", "    def insert_documents(", 42],
+  ["src-review-model", "领取状态、禁止自审和 accepted/finalized 形状约束", "backend/app/models/research.py", "class ResearchReviewClaim(Base):", 79],
+  ["src-review-workspace", "队列先验证再筛选，避免篡改任务静默消失", "backend/app/service/review_workspace_service.py", "    def list_pending(self, reviewer_id: object, *, limit: int = 100) -> List[ReviewTaskSummary]:", 72],
+  ["src-review-packet", "最小复核材料包的白名单投影", "backend/app/service/review_workspace_service.py", "    def _build_packet(", 36],
+  ["src-review-claim", "领取、租约、重领与 accepted 决定的分支", "backend/app/service/review_claim_service.py", "    def _claim_pending(", 67],
+  ["src-review-prepare", "提交前在短事务中领取并接受决定", "backend/app/service/review_claim_service.py", "    def prepare_submission(self, session_id: object, reviewer_id: object, decision: object) -> ReviewSubmission:", 67],
+  ["src-review-finalize", "完成：检查图、业务、报告并与终态 claim 同事务提交", "backend/app/service/review_claim_service.py", "    def finalize(", 105],
+  ["src-review-apply", "人工覆写保留规则原判并重算最终结论", "backend/app/service/risk_scorecard.py", "def apply_human_review(", 61],
+  ["src-review-resume", "两套持久化记录的核对与确定性最终化回退", "backend/app/service/deep_research_v2/graph.py", "    async def resume_claimed_review(", 205],
+  ["src-review-submit", "SSE 断流后提示以原决定重试", "backend/app/router/research_router.py", "async def submit_human_review(", 65],
+  ["src-review-ui", "前端以 research_complete 为完成确认，不能以 EOF 代替", "frontend/src/pages/risk-reviews/index.tsx", "async function consumeReviewStream(body: ReadableStream<Uint8Array>) {", 42]
+]

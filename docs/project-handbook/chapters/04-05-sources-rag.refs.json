@@ -1,0 +1,22 @@
+[
+  ["src-dsrc-static","静态企业档案的数据文件与读取边界","backend/app/service/company_profile.py","_DATA_FILE = Path(__file__).resolve().parent.parent / \"data\" / \"companies.json\"",42],
+  ["src-dsrc-static-validate","静态档案逐条 schema 校验","backend/app/service/company_profile.py","def list_companies() -> List[Dict[str, Any]]:",42],
+  ["src-dsrc-contract","AdapterResult 与结构化 Adapter 契约","backend/app/service/datasource/base.py","class AdapterResult:",107],
+  ["src-dsrc-apply","Adapter 对查询状态和已落定字段的处理","backend/app/service/datasource/base.py","    def apply(",90],
+  ["src-dsrc-registry","当前启用 Adapter 的注册与应用顺序","backend/app/service/datasource/__init__.py","_ADAPTERS = [RelationRegistryAdapter, GuaranteeCircleAdapter]",43],
+  ["src-dsrc-relation","关联关系 mock 的主体定位与原始返回","backend/app/service/datasource/mock/relation_registry.py","class RelationRegistryAdapter(DataSourceAdapter):",90],
+  ["src-dsrc-register","受信任 Adapter 注册表与确定性投影器","backend/app/service/verification.py","def register_adapter(",58],
+  ["src-dsrc-record","结构化证据的原子写入入口","backend/app/service/verification.py","def record_structured_evidence(",185],
+  ["src-dsrc-run","运行图中的管理员快照优先与静态/动态降级","backend/app/service/deep_research_v2/graph.py","        provided_profile = state.get(\"provided_company_profile\") or {}",121,8],
+  ["src-dsrc-case-oracle","评测 oracle 的包内路径与案例精确匹配","backend/eval/due_diligence_oracle.py","def _resolve_oracle_path(case_root: str | Path) -> Path:",54],
+  ["src-rag-worker","个人知识库上传、后台 processing/completed/failed 与临时文件清理","backend/app/router/knowledge_router.py","async def process_document(document_id: str, file_path: str, kb_id: str, db_session_factory):",365],
+  ["src-rag-docmind","切块、解析、embedding 与 Milvus 切片身份写入","backend/app/service/docmind_service.py","def process_document_with_docmind(",155],
+  ["src-rag-chunks-read","completed 文档读取 Milvus 失败时返回空切片","backend/app/router/knowledge_router.py","async def get_document_chunks(",80],
+  ["src-rag-scope-route","研究路由记录 KbScope 原因后传入 entries","backend/app/router/research_router.py","def _resolve_scope(",36],
+  ["src-rag-bridge-collect","RAG 候选的原文锚点与字段闸门","backend/app/service/rag_evidence_bridge.py","def collect_analysis_evidence(",250],
+  ["src-rag-bridge-final","RAG 候选汇总、冲突披露和证据写回","backend/app/service/rag_evidence_bridge.py","def finalize_rag_evidence(state: Dict[str, Any]) -> Dict[str, Any]:",210],
+  ["src-rag-case-loader","生产案例 loader 的严格输入与授权材料字节实体化","backend/app/service/due_diligence_case.py","def load_due_diligence_case(case_root: str | Path) -> DueDiligenceCase:",170],
+  ["src-rag-case-corpus","离线案例材料语料的显式 session/subject scope","backend/app/service/due_diligence_case_rag.py","def build_case_material_corpus(",132],
+  ["src-rag-case-validate","离线材料结果的跨主体/篡改失败关闭","backend/app/service/due_diligence_case_rag.py","def validate_case_material_result(",83],
+  ["src-rag-admin-materials","管理员档案 materials 的隔离词法检索","backend/app/service/admin_company_profile_service.py","def search_profile_materials(",33]
+]
