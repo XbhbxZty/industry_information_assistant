@@ -1,7 +1,7 @@
 // Copyright © 2026 XbhbxZty
 // 本文件为「尽调智核」迭代中新增，不含原课程项目代码。
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Card, Col, Empty, Input, Row, Select, Space, Spin, Tag, Tooltip, Typography } from 'antd'
+import { Alert, Button, Card, Checkbox, Col, Empty, Input, Row, Select, Space, Spin, Tag, Tooltip, Typography } from 'antd'
 import Markdown from '@/components/markdown'
 import { getKnowledgeBases, type KnowledgeBase } from '@/api/knowledge'
 import { getCompanyProfiles, type CompanyProfileSummary } from '@/api/company-profiles'
@@ -28,6 +28,8 @@ export default function DueDiligencePage() {
   const [companyProfileId, setCompanyProfileId] = useState(() => new URLSearchParams(location.search).get('company_profile_id') || undefined)
   const [kbName, setKbName] = useState<string>()
   const [asOf, setAsOf] = useState('')
+  const [researchStrategy, setResearchStrategy] = useState<'workflow' | 'agent'>('workflow')
+  const [searchWeb, setSearchWeb] = useState(false)
 
   useEffect(() => {
     getKnowledgeBases()
@@ -53,6 +55,8 @@ export default function DueDiligencePage() {
     companyProfileId,
     subjectName: selectedProfile?.name,
     businessType: selectedProfile?.scenario || undefined,
+    researchStrategy,
+    searchWeb,
   })
 
   const running = state.phase === 'running'
@@ -68,6 +72,30 @@ export default function DueDiligencePage() {
       </div>
 
       <Card size="small" className={styles.launcher}>
+        <Space wrap style={{ marginBottom: 12 }}>
+          <Select
+            aria-label="调查模式"
+            value={researchStrategy}
+            disabled={running}
+            onChange={setResearchStrategy}
+            style={{ width: 220 }}
+            options={[
+              { value: 'workflow', label: '标准尽调流程' },
+              { value: 'agent', label: '自主调查（实验）' },
+            ]}
+          />
+          <Checkbox checked={searchWeb} disabled={running} onChange={e => setSearchWeb(e.target.checked)}>
+            启用公开网页检索
+          </Checkbox>
+          <Text type="secondary">
+            本次来源：{[kbName ? '所选资料库' : '', searchWeb ? '公开网页' : '', '已有企业档案'].filter(Boolean).join('、')}
+          </Text>
+        </Space>
+        {researchStrategy === 'agent' && (
+          <Alert type="info" showIcon style={{ marginBottom: 12 }}
+            message="AI 将根据新发现继续阅读、追查和检查替代解释，最后列出证据与补件要求。"
+            description={!kbName && !searchWeb ? '尚未选择资料库或网页来源；本次只能分析已有档案并提出信息缺口。' : '调查循环最多 12 步、4 分钟；后续评分与报告阶段另计。'} />
+        )}
         <Space.Compact style={{ width: '100%' }}>
           <Select
             allowClear
@@ -194,13 +222,32 @@ export default function DueDiligencePage() {
                   A 层裁决 → B 层调查 → 证据附录。两处顺序必须相同，
                   否则同一份结论在界面上与在报告里读起来是两个东西 */}
               <InvestigationPanel data={state.investigation} />
+              {state.agentNotebook && (
+                <Card size="small" title="AI 调查发现与补件">
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    <Text type="secondary">以下是带原文依据的 AI 分析，不等于事实已独立核实，也不替代规则评级。</Text>
+                    <Tag>{({ running: '调查中', completed: '调查结束', step_limit: '已达步骤上限', time_limit: '已达时间上限', stalled: '连续未取得进展' } as Record<string, string>)[state.agentNotebook.status] || state.agentNotebook.status}</Tag>
+                    {state.agentNotebook.findings.map((finding, i) => (
+                      <div key={`${finding.source_id}-${i}`}>
+                        <Text strong>{({ support: '支持线索', counter: '反证 / 替代解释', gap: '信息缺口' } as Record<string, string>)[finding.kind] || '调查发现'}：{finding.claim}</Text>
+                        <div><Text>原文：{finding.quote}</Text></div>
+                        <Text type="secondary">{finding.title} · {finding.source_id}</Text>
+                      </div>
+                    ))}
+                    {state.agentNotebook.summary && <Text>{state.agentNotebook.summary}</Text>}
+                    {(state.agentNotebook.missing_materials.length > 0 ? state.agentNotebook.missing_materials : state.agentNotebook.questions).map((item, i) => (
+                      <div key={i}><Text type="warning">待解决：{item}</Text></div>
+                    ))}
+                  </Space>
+                </Card>
+              )}
               {state.report && (
                 <Card size="small" title="尽职调查报告" className={styles.report}>
                   {/* gfm 必须开启：报告里的评级块、额度测算与溯源附录都是表格 */}
                   <Markdown className={styles.markdown} value={state.report} gfm />
                 </Card>
               )}
-              {running && !state.risk && (
+              {state.steps.length > 0 && (
                 <Card size="small" title="执行过程">
                   {state.steps.length === 0
                     ? <Text type="secondary">等待首个步骤…</Text>

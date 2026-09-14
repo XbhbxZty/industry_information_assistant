@@ -346,6 +346,8 @@ class ResearchState(TypedDict):
     # 搜索模式配置
     search_web: bool                        # 是否启用网络搜索
     search_local: bool                      # 是否启用本地知识库搜索
+    research_strategy: str                  # workflow (default) / agent (experimental)
+    agent_investigation: Dict[str, Any]      # bounded notebook, protected by existing checkpoint seals
 
     # 本地知识库检索范围（P0-1）——[{collection, kb_id, kb_name, document_count}]
     #
@@ -546,6 +548,7 @@ def create_initial_state(
     provided_company_profile: Optional[Dict[str, Any]] = None,
     admin_profile_ref: Optional[Dict[str, Any]] = None,
     admin_profile_scenario: str = "",
+    research_strategy: str = "workflow",
 ) -> ResearchState:
     """创建初始状态
 
@@ -557,6 +560,8 @@ def create_initial_state(
         as_of: 研究截止日（ISO 日期）。默认空 = 不设时点闸门
         kb_scope: 本地知识库检索范围，由服务端按用户授权解析
     """
+    if research_strategy not in ("workflow", "agent"):
+        raise ValueError("未知调查策略")
     dd_markers = ("尽职调查", "尽调", "贷前", "授信", "保理")
     dd_mode = bool(due_diligence) if due_diligence is not None else bool(
         subject_name or business_type or any(marker in query for marker in dd_markers)
@@ -586,6 +591,8 @@ def create_initial_state(
         max_iterations=3,
         search_web=search_web,
         search_local=search_local,
+        research_strategy=research_strategy,
+        agent_investigation={},
         kb_scope=list(kb_scope or []),
         as_of=as_of,
         subject_name=subject_name.strip(),

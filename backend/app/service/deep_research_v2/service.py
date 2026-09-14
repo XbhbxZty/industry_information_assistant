@@ -103,6 +103,7 @@ class DeepResearchV2Service:
         provided_company_profile: Optional[Dict[str, Any]] = None,
         admin_profile_ref: Optional[Dict[str, Any]] = None,
         admin_profile_scenario: str = "",
+        research_strategy: str = "workflow",
     ) -> AsyncGenerator[str, None]:
         """
         执行深度研究（SSE 流式输出）
@@ -161,6 +162,7 @@ class DeepResearchV2Service:
                 provided_company_profile=provided_company_profile,
                 admin_profile_ref=admin_profile_ref,
                 admin_profile_scenario=admin_profile_scenario,
+                research_strategy=research_strategy,
             ):
                 # 转换为 SSE 格式
                 yield self._format_sse(event)

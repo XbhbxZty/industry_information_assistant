@@ -446,6 +446,13 @@ URL: {url}
 
     async def process(self, state: ResearchState) -> ResearchState:
         """处理入口"""
+        if state.get("research_strategy") == "agent" and state["phase"] in (
+            ResearchPhase.PLANNING.value, ResearchPhase.RESEARCHING.value,
+            ResearchPhase.RE_RESEARCHING.value,
+        ):
+            from ..investigation_tools import InvestigationTools
+            # Source switches are explicit: the experiment never silently enables web search.
+            return await InvestigationTools(self, state).run()
         # 处理补充搜索阶段（审核后回退）
         if state["phase"] == ResearchPhase.RE_RESEARCHING.value:
             return await self._supplementary_research(state)
@@ -2057,6 +2064,7 @@ URL: {url}
         subject_name: str = "",
         due_diligence_mode: bool = False,
         active_field_ids: Optional[List[str]] = None,
+        all_active_fields: bool = False,
     ) -> Optional[Dict]:
         """分析搜索结果
 
@@ -2126,14 +2134,14 @@ KB ID: {r.get('kb_id', '')}
             relevant_items = [
                 CHECKLIST_BY_ID[field_id] for field_id in active_field_ids
                 if field_id in CHECKLIST_BY_ID
-                and (not due_diligence_mode
+                and (all_active_fields or not due_diligence_mode
                      or CHECKLIST_BY_ID[field_id].section_id == section_id)
             ]
         else:
             # 非尽调路径与单测直接调用时的兜底：静态核心清单。
             relevant_items = [
                 item for item in CHECKLIST
-                if not due_diligence_mode or item.section_id == section_id
+                if all_active_fields or not due_diligence_mode or item.section_id == section_id
             ]
         # 风险汇总章节消费前七章的核查结果，不应再次让模型从检索片段
         # 自由抽取事实。直接返回稳定空结构，省掉一次高成本且无字段归属的调用。

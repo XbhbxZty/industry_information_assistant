@@ -1,6 +1,7 @@
 // Copyright © 2026 XbhbxZty
 // 本文件为「尽调智核」迭代中新增，不含原课程项目代码。
 import { useCallback, useRef, useState } from 'react'
+import { parseAgentNotebook, type AgentNotebook } from './agent-notebook'
 import {
   startDueDiligence,
   submitReview,
@@ -43,6 +44,7 @@ export interface DDState {
    *  复核人不会知道这份结论建立在来源不明的数据上 */
   errors: string[]
   errorMessage: string
+  agentNotebook: AgentNotebook | null
 }
 
 const EMPTY: DDState = {
@@ -50,6 +52,7 @@ const EMPTY: DDState = {
   steps: [], fieldChecks: [], completeness: null, risk: null,
   reviewRequest: null, profileRef: null, report: '', investigation: null,
   errors: [], errorMessage: '',
+  agentNotebook: null,
 }
 
 interface DDStreamEvent {
@@ -74,6 +77,7 @@ interface DDStreamEvent {
   errors?: string[]
   /** SSE 公开的冻结档案审计引用。 */
   profile_ref?: unknown
+  agent_investigation?: unknown
 }
 
 function asEvent(value: unknown): DDStreamEvent {
@@ -199,6 +203,12 @@ export function useDDStream() {
         }
         break
 
+      case 'agent_investigation': {
+        const notebook = parseAgentNotebook(eventPayload(json))
+        if (notebook) patch({ agentNotebook: notebook })
+        break
+      }
+
       case 'research_step':
       case 'action': {
         const c = eventPayload(json)
@@ -314,6 +324,7 @@ export function useDDStream() {
           completeness: json.completeness || prev.completeness,
           risk: json.risk_assessment || prev.risk,
           investigation: json.investigation || prev.investigation,
+          agentNotebook: parseAgentNotebook(json.agent_investigation) || prev.agentNotebook,
           // 必须与已累积的 warning 合并。终局事件只带 state["errors"]，
           // 流式过程中推来的告警不在其中，直接覆盖会让它们凭空消失。
           errors: Array.from(new Set([...prev.errors, ...(json.errors || [])])),
@@ -370,6 +381,8 @@ export function useDDStream() {
       subjectName?: string
       businessType?: string
       companyProfileId?: string
+      researchStrategy?: 'workflow' | 'agent'
+      searchWeb?: boolean
     },
   ) => {
     const sessionId = `dd-${Date.now()}`
@@ -385,7 +398,11 @@ export function useDDStream() {
         business_type: options?.businessType,
         kb_name: options?.kbName,
         as_of: options?.asOf,
-        search_modes: options?.kbName ? ['local'] : [],
+        research_strategy: options?.researchStrategy ?? 'workflow',
+        search_modes: [
+          ...(options?.kbName ? ['local' as const] : []),
+          ...(options?.searchWeb ? ['web' as const] : []),
+        ],
       },
         { signal: abortRef.current.signal })
       await consume(res.data)

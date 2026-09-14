@@ -80,6 +80,7 @@ class ResearchRequest(BaseModel):
     # 它只控制**探索性**抽取；确定性图表来自已核实字段，不受此开关影响，
     # 也不该受——那些图与证据附录同源，关掉它们等于让报告少说已核实的事。
     investigation: Optional[bool] = None
+    research_strategy: Literal["workflow", "agent"] = "workflow"
 
     class Config:
         json_schema_extra = {
@@ -338,6 +339,8 @@ async def stream_research(
     Returns:
         流式响应，包含研究过程和结果的 SSE 格式数据
     """
+    if request.research_strategy == "agent" and (request.version != "v2" or request.due_diligence is not True):
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="自主调查实验仅支持显式尽调的 v2 流程")
     # 根据版本选择服务
     if request.version == "v2":
         if request.session_id:
@@ -382,6 +385,7 @@ async def stream_research(
                     provided_company_profile=(admin_snapshot or {}).get("profile"),
                     admin_profile_ref=(admin_snapshot or {}).get("ref"),
                     admin_profile_scenario=(admin_snapshot or {}).get("scenario", ""),
+                    research_strategy=request.research_strategy,
                 ):
                     yield event
             except Exception as e:

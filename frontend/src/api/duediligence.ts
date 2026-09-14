@@ -278,6 +278,7 @@ export function startDueDiligence(
     kb_name?: string
     as_of?: string
     search_modes?: ('web' | 'local')[]
+    research_strategy?: 'workflow' | 'agent'
     /** 调查层探索性抽取。留空 = 随尽调模式默认开启 */
     investigation?: boolean
   },

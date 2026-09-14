@@ -7,6 +7,7 @@ Only execution receipts enter the journal; model text cannot mark a tool run.
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass
 from time import monotonic
 from typing import Any, Awaitable, Callable
@@ -64,6 +65,8 @@ async def investigate(
     notebook.setdefault("questions", [])
     notebook["brief"] = brief
     notebook["status"] = "running"
+    notebook.pop("summary", None)
+    notebook.pop("missing_materials", None)
     stalled = 0
     reviewed = False
     seen: set[str] = set()
@@ -73,7 +76,9 @@ async def investigate(
         remaining = max(0.001, budget.max_seconds - (monotonic() - started))
         return await asyncio.wait_for(awaitable, min(budget.call_timeout, remaining))
 
-    for step in range(budget.max_steps):
+    prior_steps = int(notebook.get("steps_used", 0))
+    for step in range(prior_steps, budget.max_steps):
+        notebook["steps_used"] = step + 1
         if monotonic() - started >= budget.max_seconds:
             notebook["status"] = "time_limit"
             break
@@ -117,7 +122,6 @@ async def investigate(
 
             if action not in tools:
                 raise ValueError("工具不可用，请使用 tools 中列出的工具")
-            import json
             key = json.dumps([action, arguments], sort_keys=True, ensure_ascii=False)
             if key in seen:
                 raise ValueError("该行动已执行，请改变查询、读取其他位置或结束调查")
@@ -139,11 +143,17 @@ async def investigate(
             observation = {"ok": False, "error": str(exc)[:400]}
             notebook["actions"].append({"action": "invalid_action", "result": observation})
             stalled += 1
+        except Exception as exc:
+            # Provider/tool failures must stay visible; do not let the downstream
+            # report present a failed investigation as a successfully empty one.
+            observation = {"ok": False, "error": f"调用失败：{type(exc).__name__}"}
+            notebook["actions"].append({"action": "failed_call", "result": observation})
+            stalled += 1
         if stalled >= budget.max_stalled_steps:
             notebook["status"] = "stalled"
             break
     else:
         notebook["status"] = "step_limit"
-    notebook["elapsed_seconds"] = round(monotonic() - started, 2)
+    notebook["elapsed_seconds"] = round(monotonic() - started + notebook.get("elapsed_seconds", 0), 2)
     emit({"title": "调查循环结束", "subtitle": notebook["status"]})
     return notebook

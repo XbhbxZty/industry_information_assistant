@@ -142,8 +142,10 @@ def build_complete_event(state: Dict[str, Any], references: List[Dict[str, Any]]
     评级只推在中途的流式事件里是不够的，调用方若只等最终结果就会拿不到，
     而"拿不到评级"在这个业务里不能表现为"没有风险"。
     """
+    from .investigation_tools import public_notebook
     return {
         "type": "research_complete",
+        "agent_investigation": public_notebook(state.get("agent_investigation") or {}),
         "final_report": state.get("final_report", ""),
         "quality_score": state.get("quality_score", 0.0),
         "facts_count": len(state.get("facts", [])),
@@ -1290,6 +1292,7 @@ class DeepResearchGraph:
         provided_company_profile: Optional[Dict[str, Any]] = None,
         admin_profile_ref: Optional[Dict[str, Any]] = None,
         admin_profile_scenario: str = "",
+        research_strategy: str = "workflow",
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         执行研究流程（流式输出）
@@ -1365,6 +1368,7 @@ class DeepResearchGraph:
                 provided_company_profile=provided_company_profile,
                 admin_profile_ref=admin_profile_ref,
                 admin_profile_scenario=admin_profile_scenario,
+                research_strategy=research_strategy,
             )
             state["max_iterations"] = self.max_iterations
 

@@ -817,6 +817,11 @@ class LeadWriter(BaseAgent):
         self._ensure_risk_block(state)
         self._ensure_investigation_section(state)
         self._ensure_evidence_appendix(state)
+        if state.get("research_strategy") == "agent":
+            from ..investigation_report import append_investigation_report
+            state["final_report"] = append_investigation_report(
+                state.get("final_report") or "", state.get("agent_investigation") or {},
+            )
 
     def _ensure_investigation_section(self, state: ResearchState) -> bool:
         """

@@ -226,6 +226,22 @@ class ChiefArchitect(BaseAgent):
         根据当前阶段执行不同的规划任务
         """
         if state["phase"] == ResearchPhase.INIT.value:
+            if state.get("research_strategy") == "agent":
+                # Layout only: research questions and actions are selected inside
+                # the loop, without paying for a fixed eight-chapter search plan.
+                titles = ("企业基本情况", "股权结构与实际控制人", "经营状况", "财务分析",
+                          "司法与合规风险", "关联关系与对外担保", "舆情扫描", "风险汇总与授信建议")
+                state["outline"] = [
+                    {"id": f"sec_{i}", "title": title, "description": title,
+                     "status": "pending", "search_queries": [], "requires_chart": False,
+                     "requires_data": False, "section_type": "mixed", "priority": i}
+                    for i, title in enumerate(titles, 1)
+                ]
+                state["phase"] = ResearchPhase.PLANNING.value
+                self.add_message(state, "research_step", {
+                    "title": "自主调查准备完成", "subtitle": "根据材料发现动态选择下一步问题",
+                })
+                return state
             return await self._initial_planning(state)
         elif state["phase"] == ResearchPhase.REVIEWING.value:
             return await self._check_revision(state)
