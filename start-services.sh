@@ -44,11 +44,9 @@ check_docker() {
 # 启动中间件服务
 start_services() {
     log_info "正在启动中间件服务 (PostgreSQL, Redis, Milvus, Elasticsearch)..."
-    docker-compose up -d
+    docker compose up -d --wait
 
     log_info "等待服务启动完成..."
-    sleep 10
-
     # 检查服务状态
     check_service_health
 
@@ -57,9 +55,9 @@ start_services() {
     echo "服务访问地址:"
     echo "  - PostgreSQL: localhost:5432"
     echo "  - Redis: localhost:6379"
-    echo "  - Milvus: localhost:29530"
+    echo "  - Milvus: localhost:${MILVUS_PORT:-40030}"
     echo "  - Elasticsearch: localhost:1200"
-    echo "  - MinIO Console: localhost:29001 (admin/minioadmin)"
+    echo "  - MinIO Console: localhost:${MINIO_CONSOLE_PORT:-40001} (admin/minioadmin)"
     echo ""
     log_info "现在可以升级 schema 并启动前后端服务了"
     echo "  - 后端: cd backend && python -m alembic upgrade head && python app/app_main.py"
@@ -69,7 +67,7 @@ start_services() {
 # 停止服务
 stop_services() {
     log_info "正在停止所有中间件服务..."
-    docker-compose down
+    docker compose down
     log_success "所有服务已停止"
 }
 
@@ -99,7 +97,7 @@ check_service_health() {
     fi
 
     # Milvus
-    if curl -s http://localhost:29091/healthz > /dev/null 2>&1; then
+    if curl -s "http://localhost:${MILVUS_HEALTH_PORT:-40091}/healthz" > /dev/null 2>&1; then
         log_success "Milvus: 运行中"
     else
         log_warning "Milvus: 启动中..."
@@ -116,7 +114,7 @@ check_service_health() {
 # 查看服务状态
 show_status() {
     log_info "服务状态:"
-    docker-compose ps
+    docker compose ps
     echo ""
     check_service_health
 }
@@ -124,9 +122,9 @@ show_status() {
 # 查看日志
 show_logs() {
     if [ -z "$2" ]; then
-        docker-compose logs -f --tail=100
+        docker compose logs -f --tail=100
     else
-        docker-compose logs -f --tail=100 "$2"
+        docker compose logs -f --tail=100 "$2"
     fi
 }
 
@@ -136,7 +134,7 @@ clean_data() {
     read -p "确定要继续吗? (yes/no): " confirm
     if [ "$confirm" = "yes" ]; then
         stop_services
-        docker-compose down -v
+        docker compose down -v
         log_success "所有数据已清理"
     else
         log_info "操作已取消"

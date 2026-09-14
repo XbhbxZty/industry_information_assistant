@@ -21,7 +21,7 @@ class MilvusService:
 
     def __init__(self):
         self.host = os.getenv("MILVUS_HOST", "localhost")
-        self.port = int(os.getenv("MILVUS_PORT", "29530"))
+        self.port = int(os.getenv("MILVUS_PORT", "40030"))
         self.vector_dim = 1024  # text-embedding-v4 维度
         self._connect()
 

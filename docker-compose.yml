@@ -65,14 +65,13 @@ services:
     container_name: industry_minio
     restart: unless-stopped
     environment:
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      # Windows/Hyper-V may reserve the 8145-9144 host port block
-      # (netsh interface ipv4 show excludedportrange protocol=tcp).
-      # Keep container ports as-is; publish outside the reserved range.
-      - "29001:9001"
-      - "29000:9000"
+      # Keep host ports configurable: Hyper-V/WSL exclusion ranges can move
+      # between Windows boots. Use a high, non-ephemeral range by default.
+      - "${MINIO_CONSOLE_PORT:-40001}:9001"
+      - "${MINIO_API_PORT:-40000}:9000"
     volumes:
       - minio_data:/minio_data
     command: minio server /minio_data --console-address ":9001"
@@ -95,16 +94,19 @@ services:
     volumes:
       - milvus_data:/var/lib/milvus
     ports:
-      # Windows/Hyper-V may reserve the standard host port 19530.
-      # Keep Milvus on 19530 inside the container and expose 29530 by default.
-      - "${MILVUS_PORT:-29530}:19530"
-      - "29091:9091"
+      # Keep Milvus on 19530 inside the container. The host-side default stays
+      # clear of both Hyper-V's moving exclusions and Windows' ephemeral range.
+      - "${MILVUS_PORT:-40030}:19530"
+      - "${MILVUS_HEALTH_PORT:-40091}:9091"
     depends_on:
-      - etcd
-      - minio
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
       interval: 30s
+      start_period: 90s
       timeout: 20s
       retries: 3
     networks:

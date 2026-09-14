@@ -23,7 +23,7 @@ class PolicySearchService:
     def __init__(self, collection_name: str = "policy_documents"):
         """初始化 Milvus 连接"""
         self.host = os.getenv("MILVUS_HOST", "localhost")
-        self.port = int(os.getenv("MILVUS_PORT", "29530"))
+        self.port = int(os.getenv("MILVUS_PORT", "40030"))
         self.collection_name = collection_name
         self.vector_dim = 1024
         self._connect()

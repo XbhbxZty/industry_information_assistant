@@ -8,7 +8,7 @@ docker compose -f docker-compose-base.yml up -d
 $ docker ps
 CONTAINER ID   IMAGE                                    COMMAND                  CREATED          STATUS                             PORTS                              NAMES
 ...            redis:7-alpine                           "docker-entrypoint.s…"   ...              Up                                 0.0.0.0:6379->6379/tcp             document-redis
-...            milvusdb/milvus:v2.3.3                   "milvus run standalo…"   ...              Up                                 0.0.0.0:29530->19530/tcp           milvus-standalone
+...            milvusdb/milvus:v2.3.3                   "milvus run standalo…"   ...              Up                                 0.0.0.0:40030->19530/tcp           milvus-standalone
 ...            minio/minio:RELEASE.2023-03-20T20-16-18Z "minio server /minio…"   ...              Up                                 0.0.0.0:9000-9001->9000-9001/tcp   milvus-minio
 ...            quay.io/coreos/etcd:v3.5.5               "etcd -advertise-cli…"   ...              Up                                                                    milvus-etcd
 ```
@@ -20,10 +20,10 @@ pip install -r requirements.txt
 填入个人的DASHSCOPE_API_KEY，SERPER_API_KEY
 SERPER_API_KEY获取方法参考：https://serper.dev/
 
-配置 Milvus 连接（可选，默认 localhost:29530）：
+配置 Milvus 连接（可选，默认 localhost:40030）：
 ```
 MILVUS_HOST=localhost
-MILVUS_PORT=29530
+MILVUS_PORT=40030
 ```
 
 配置 DocMind 文档解析服务：
