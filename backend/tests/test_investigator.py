@@ -99,3 +99,21 @@ def test_exhausted_time_budget_does_not_call_model():
     result = asyncio.run(investigate(brief={}, tools={}, choose=choose, execute=execute,
                                     notebook={}, budget=InvestigationBudget(max_seconds=0)))
     assert result["status"] == "time_limit"
+
+
+def test_stalled_run_closes_out_existing_findings_without_claiming_completion():
+    choices = 0
+    async def choose(prompt, context):
+        nonlocal choices
+        choices += 1
+        if "调查工具已停止" in prompt:
+            return {"summary": "已有材料只支持识别疑点", "missing_materials": ["银行流水，用于核对回款"]}
+        return {"action": "search", "arguments": {"query": str(choices)}}
+    async def execute(action, args):
+        return {"ok": False, "progress": False, "error": "没有新来源"}
+    result = asyncio.run(investigate(brief={}, tools={"search": ""}, choose=choose,
+                                    execute=execute,
+                                    notebook={"findings": [{"claim": "已有发现"}]}))
+    assert result["status"] == "stalled"
+    assert result["summary"] == "已有材料只支持识别疑点"
+    assert "银行流水" in result["missing_materials"][0]

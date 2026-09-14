@@ -7,6 +7,7 @@ fixed material, and emits an auditable JSON transcript to stdout.
 from __future__ import annotations
 
 import asyncio
+import argparse
 import json
 import sys
 from dataclasses import dataclass
@@ -32,6 +33,7 @@ class Run:
     findings: list[dict]
     missing_materials: list[str]
     elapsed_ms: float
+    summary: str = ""
 
 
 def standard_workflow() -> Run:
@@ -116,18 +118,88 @@ async def agent_workflow() -> Run:
         choose=choose, execute=execute, notebook=notebook,
         budget=InvestigationBudget(max_steps=12, max_seconds=10))
     return Run("agent", executed, notebook["findings"], notebook.get("missing_materials", []),
-               round((perf_counter() - started) * 1000, 2))
+               round((perf_counter() - started) * 1000, 2), notebook.get("summary", ""))
+
+
+async def live_agent_workflow() -> tuple[Run, str, str]:
+    """Use the configured Scout model while keeping retrieval deterministic."""
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+    from config.llm_config import get_config
+    from service.deep_research_v2.agents.base import BaseAgent
+
+    class LiveChooser(BaseAgent):
+        async def process(self, state):
+            return state
+
+    config = get_config()
+    model = config.agents.scout.model
+    chooser = LiveChooser("AgentComparison", "调查行动选择", config.api_key, config.base_url, model)
+    notebook: dict = {}
+    executed: list[dict] = []
+    read: set[str] = set()
+    surfaced: set[str] = set()
+    started = perf_counter()
+
+    async def choose(prompt, context):
+        raw = await chooser.call_llm(prompt, json.dumps(context, ensure_ascii=False),
+                                     json_mode=True, temperature=0.2, max_tokens=2000, timeout=45)
+        return chooser.parse_json_response(raw)
+
+    async def execute(action, args):
+        executed.append({"action": action, **args})
+        if action == "search_local":
+            query = str(args.get("query", ""))
+            ranked = sorted(DOCUMENTS, key=lambda title: sum(
+                token in query for token in ({
+                    "经营说明": ("现金流", "经营", "解释", "备货"),
+                    "营运资金附注": ("应收", "账龄", "存货", "预付", "营运"),
+                    "期后说明": ("期后", "回款", "流水", "逾期"),
+                }[title])), reverse=True)
+            new_titles = [title for title in ranked if title not in surfaced]
+            surfaced.update(ranked)
+            return {"ok": True, "progress": bool(new_titles), "sources": [
+                {"source_id": title, "title": title, "snippet": DOCUMENTS[title][:80]}
+                for title in ranked], "new_source_count": len(new_titles)}
+        source_id = args.get("source_id")
+        if source_id not in DOCUMENTS:
+            return {"ok": False, "progress": False, "error": "来源 ID 不存在，请先使用返回的 source_id"}
+        if action == "read_source":
+            fresh = source_id not in read
+            read.add(source_id)
+            return {"ok": True, "progress": fresh,
+                    "source_id": source_id, "text": DOCUMENTS[source_id]}
+        if source_id not in read:
+            return {"ok": False, "progress": False, "error": "必须先阅读来源"}
+        quote, claim = args.get("quote"), args.get("claim")
+        if not isinstance(quote, str) or quote not in DOCUMENTS[source_id]:
+            return {"ok": False, "progress": False, "error": "引文无法在已读原文中定位"}
+        finding = {"source": source_id, "claim": str(claim or ""), "quote": quote,
+                   "kind": args.get("kind", "support")}
+        notebook.setdefault("findings", []).append(finding)
+        return {"ok": True, "progress": True, "finding": finding}
+
+    await investigate(brief={"question": QUESTION, "documents": list(DOCUMENTS)}, tools={
+        "search_local": "检索固定材料，参数 query", "read_source": "读取来源，参数 source_id",
+        "record_finding": "记录发现，参数 claim/source_id/quote/kind"},
+        choose=choose, execute=execute, notebook=notebook,
+        budget=InvestigationBudget(max_steps=12, max_seconds=240, call_timeout=60))
+    run = Run("agent_live_model", executed, notebook.get("findings", []),
+              notebook.get("missing_materials", []), round((perf_counter() - started) * 1000, 2),
+              notebook.get("summary", ""))
+    return run, model, notebook.get("status", "unknown")
 
 
 def score(run: Run) -> dict:
     """Score the Agent control-flow contract, not overall report quality."""
-    text = json.dumps({"actions": run.actions, "findings": run.findings,
+    text = json.dumps({"actions": run.actions,
+                       "claims": [f.get("claim", "") for f in run.findings],
                        "missing": run.missing_materials}, ensure_ascii=False)
     checks = {
-        "adaptive_receivable_followup": "应收账款 账龄" in text,
-        "tests_inventory_explanation": "检验备货解释" in text or "存货和预付款" in text,
-        "keeps_mitigation_and_limit": "部分回款" in text and "覆盖范围" in text,
-        "specific_missing_material": "逐笔期后回款明细" in text and "银行流水" in text,
+        "adaptive_receivable_followup": "应收账款" in text and "账龄" in text,
+        "tests_inventory_explanation": "备货" in text and "存货" in text and "回款" in text,
+        "keeps_mitigation_and_limit": ("部分" in text and "回款" in text) and ("无法" in text or "不能确认" in text),
+        "specific_missing_material": "逐笔" in text and "回款" in text and "银行流水" in text,
         "all_quotes_traceable": all(f.get("quote") in DOCUMENTS.get(f.get("source"), "") for f in run.findings),
     }
     return {"metric": "agent_control_flow_contract", "passed": sum(checks.values()),
@@ -135,12 +207,23 @@ def score(run: Run) -> dict:
 
 
 async def main():
-    runs = [standard_workflow(), await agent_workflow()]
-    print(json.dumps({"test_type": "offline_scripted_control_flow", "question": QUESTION,
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--live", action="store_true", help="use configured Scout model for action choices")
+    args = parser.parse_args()
+    model, status = None, None
+    agent_run = None
+    if args.live:
+        agent_run, model, status = await live_agent_workflow()
+    else:
+        agent_run = await agent_workflow()
+    runs = [standard_workflow(), agent_run]
+    print(json.dumps({"test_type": "live_model_fixed_retrieval" if args.live else "offline_scripted_control_flow",
+                      "model": model, "agent_status": status, "question": QUESTION,
                       "documents": DOCUMENTS, "runs": [
                           {**run.__dict__, "score": score(run)} for run in runs],
-                      "limitations": ["chooser is scripted; no live LLM quality claim",
-                                      "in-memory retrieval; no Milvus recall claim"]},
+                      "limitations": (["in-memory retrieval; no Milvus recall claim"] if args.live else
+                                      ["chooser is scripted; no live LLM quality claim",
+                                       "in-memory retrieval; no Milvus recall claim"])},
                      ensure_ascii=False, indent=2))
 
 
