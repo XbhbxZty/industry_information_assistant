@@ -78,3 +78,24 @@ def test_timeout_is_a_failure_not_an_empty_search():
                                     notebook={}, budget=InvestigationBudget(call_timeout=.001, max_steps=1)))
     assert result["status"] == "step_limit"
     assert result["actions"][0]["result"]["ok"] is False
+
+
+def test_followup_pass_cannot_reset_step_budget():
+    async def choose(*args):
+        pytest.fail("exhausted budget called model")
+    async def execute(*args):
+        pytest.fail("exhausted budget called tool")
+    result = asyncio.run(investigate(brief={}, tools={}, choose=choose, execute=execute,
+                                    notebook={"steps_used": 12}))
+    assert result["status"] == "step_limit"
+    assert result["steps_used"] == 12
+
+
+def test_exhausted_time_budget_does_not_call_model():
+    async def choose(*args):
+        pytest.fail("exhausted time called model")
+    async def execute(*args):
+        pytest.fail("exhausted time called tool")
+    result = asyncio.run(investigate(brief={}, tools={}, choose=choose, execute=execute,
+                                    notebook={}, budget=InvestigationBudget(max_seconds=0)))
+    assert result["status"] == "time_limit"

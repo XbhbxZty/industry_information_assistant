@@ -39,7 +39,8 @@ class InvestigationTools:
         fresh = sid not in self.sources
         if fresh and len(self.sources) >= 40:
             return None, False
-        self.sources.setdefault(sid, {**row, "summary": str(row.get("summary") or "")[:6000], "read": False})
+        self.sources.setdefault(sid, {**row, "summary": str(row.get("summary") or "")[:6000],
+                                     "read": False, "read_texts": []})
         return sid, fresh
 
     async def choose(self, prompt, context):
@@ -168,20 +169,26 @@ class InvestigationTools:
         feedback = {}
         if source.get("is_local"):
             before = len(self.state.get("rag_evidence_rejections", []))
-            analysis = await self.scout._analyze_search_results(
-                self.state["query"], section, [source], hypotheses=[],
-                subject_name=self.state.get("company_name") or self.state.get("subject_name") or "",
-                due_diligence_mode=True,
-                active_field_ids=[c.get("field_id", "") for c in self.state.get("field_checks", [])],
-                all_active_fields=True,
-            )
-            if not isinstance(analysis, dict):
-                raise ValueError("证据抽取未返回有效对象，请重试或记录缺口")
-            collect_analysis_evidence(self.state, analysis, [source], section["id"])
+            try:
+                analysis = await asyncio.wait_for(self.scout._analyze_search_results(
+                    self.state["query"], section, [source], hypotheses=[],
+                    subject_name=self.state.get("company_name") or self.state.get("subject_name") or "",
+                    due_diligence_mode=True,
+                    active_field_ids=[c.get("field_id", "") for c in self.state.get("field_checks", [])],
+                    all_active_fields=True,
+                ), timeout=30)
+                if not isinstance(analysis, dict):
+                    raise ValueError("invalid extraction result")
+                collect_analysis_evidence(self.state, analysis, [source], section["id"])
+            except Exception as exc:
+                # Reading succeeded independently of extraction. Preserve the
+                # original text, but never silently turn an extraction outage
+                # into a successful empty result. Cancellation still propagates.
+                feedback["error"] = f"证据抽取失败：{type(exc).__name__}；原文可读，未因此核实任何字段"
             # Final aggregation stays at the research node boundary. Return
             # candidate/rejection feedback immediately so the agent can re-read.
-            feedback = {"candidate_count": len(self.state.get("rag_evidence_candidates", [])),
-                        "rejections": [r.get("reason") for r in self.state.get("rag_evidence_rejections", [])[before:]][:8]}
+            feedback.update(candidate_count=len(self.state.get("rag_evidence_candidates", [])),
+                            rejections=[r.get("reason") for r in self.state.get("rag_evidence_rejections", [])[before:]][:8])
         return {"ok": True, "progress": fresh_read, "source_id": sid,
                 "title": source.get("title"), "chunk_index": source.get("chunk_index"),
                 "text": text[:6000], "evidence_feedback": feedback,

@@ -48,10 +48,33 @@ def test_read_and_record_does_not_change_rating_or_checks():
 
 def test_adjacent_chunk_is_read_only_from_authorized_document():
     tools, sid = setup_tools()
+    asyncio.run(tools.execute("read_source", {"source_id": sid}))
     result = asyncio.run(tools.execute("read_source", {"source_id": sid, "chunk_index": 2}))
     assert "账龄" in result["text"]
     assert result["source_id"] != sid
     assert tools.sources[result["source_id"]]["doc_id"] == DOC
+    with pytest.raises(ValueError, match="引文"):
+        asyncio.run(tools.execute("record_finding", {
+            "source_id": result["source_id"], "claim": "不能将前一片段冒充当前来源",
+            "quote": "企业现金流下降，需要调查回款情况。"}))
+
+
+def test_extraction_failure_preserves_readable_text_without_verification():
+    tools, sid = setup_tools()
+    original = copy.deepcopy(tools.state["field_checks"])
+    tools.scout._analyze_search_results.side_effect = RuntimeError("provider unavailable")
+    result = asyncio.run(tools.execute("read_source", {"source_id": sid}))
+    assert result["ok"] and "现金流" in result["text"]
+    assert "RuntimeError" in result["evidence_feedback"]["error"]
+    assert tools.state["field_checks"] == original
+    assert not tools.state.get("rag_evidence_candidates")
+
+
+def test_extraction_cancellation_propagates():
+    tools, sid = setup_tools()
+    tools.scout._analyze_search_results.side_effect = asyncio.CancelledError()
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(tools.execute("read_source", {"source_id": sid}))
 
 
 @pytest.mark.parametrize("invalid", ["unknown", None, []])
