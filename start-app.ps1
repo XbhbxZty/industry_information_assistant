@@ -40,6 +40,24 @@ function Test-Tcp($targetHost, $port, $timeoutMs = 6000) {
     } catch { return $false } finally { $client.Close() }
 }
 
+function Test-HttpsEndpoint($uri, $timeoutSec = 12) {
+    # Clash/mihomo fake-IP mode intentionally resolves domains to 198.18/15.
+    # A raw TCP probe does not follow the same route as the real HTTP client and
+    # can therefore report a false outage. Any HTTP response (including 4xx)
+    # proves DNS, proxy routing and TLS reached the service.
+    try {
+        $response = Invoke-WebRequest -Uri $uri -Method Head -UseBasicParsing `
+            -TimeoutSec $timeoutSec -Headers @{ "User-Agent" = "industry-assistant-preflight/1.0" }
+        return @{ Reachable = $true; Status = [int]$response.StatusCode; Error = "" }
+    } catch {
+        if ($_.Exception.Response) {
+            $status = try { [int]$_.Exception.Response.StatusCode } catch { 0 }
+            return @{ Reachable = $true; Status = $status; Error = "" }
+        }
+        return @{ Reachable = $false; Status = 0; Error = $_.Exception.Message }
+    }
+}
+
 function Read-DotEnv($path) {
     $map = @{}
     if (-not (Test-Path $path)) { return $map }
@@ -67,7 +85,7 @@ function Invoke-Preflight {
     else { Fail "PostgreSQL ${pgHost}:${pgPort} 不可达 —— 人机协同的暂停/恢复依赖它；先起 Docker" }
 
     $mvHost = if ($env_.MILVUS_HOST) { $env_.MILVUS_HOST } else { "localhost" }
-    $mvPort = if ($env_.MILVUS_PORT) { [int]$env_.MILVUS_PORT } else { 29530 }
+    $mvPort = if ($env_.MILVUS_PORT) { [int]$env_.MILVUS_PORT } else { 40030 }
     if (Test-Tcp $mvHost $mvPort) { Pass "Milvus ${mvHost}:${mvPort}" }
     else { Fail "Milvus ${mvHost}:${mvPort} 不可达 —— 本地知识库检索会整条失效（且表现为『没搜到』而非报错）" }
 
@@ -75,17 +93,19 @@ function Invoke-Preflight {
     # 系统各处报出来的都是含糊的下游错误（"文档提交失败"之类），
     # 唯独不会告诉你真实原因是网络不通。
     Write-Host "`n[3/4] 模型与文档服务端点" -ForegroundColor Cyan
-    $llmBase = if ($env_.LLM_BASE_URL) { $env_.LLM_BASE_URL } else { "https://dashscope.aliyuncs.com/compatible-mode/v1" }
-    $llmHost = ([System.Uri]$llmBase).Host
-    foreach ($h in @($llmHost, "openplatform.aliyuncs.com")) {
-        if (Test-Tcp $h 443) { Pass "$h : 443" }
+    $llmBase = if ($env_.LLM_BASE_URL) { $env_.LLM_BASE_URL } elseif ($env_.DASHSCOPE_BASE_URL) { $env_.DASHSCOPE_BASE_URL } else { "https://dashscope.aliyuncs.com/compatible-mode/v1" }
+    $serviceEndpoints = @(
+        "$($llmBase.TrimEnd('/'))/models"
+        "https://openplatform.aliyuncs.com/"
+    )
+    foreach ($uri in $serviceEndpoints) {
+        $probe = Test-HttpsEndpoint $uri
+        $h = ([System.Uri]$uri).Host
+        if ($probe.Reachable) { Pass "$h HTTPS 可达（HTTP $($probe.Status)，4xx 也表示代理/TLS 链路正常）" }
         else {
             $ip = try { [System.Net.Dns]::GetHostAddresses($h)[0].IPAddressToString } catch { "解析失败" }
-            if ($ip -like "198.18.*") {
-                Fail "$h 不可达（解析到 $ip）—— 这是代理 fake-IP 段，通常意味着**代理客户端已停止**但 DNS 仍指向它。重启代理后再试，必要时 ipconfig /flushdns"
-            } else {
-                Fail "$h 不可达（解析到 $ip）—— 模型调用与文档解析都会失败"
-            }
+            $hint = if ($ip -like "198.18.*") { "当前为代理 fake-IP；请检查代理核心是否正在转发，而不是刷新 DNS" } else { "请检查网络、代理或证书配置" }
+            Fail "$h HTTPS 不可达（解析到 $ip）：$($probe.Error)；$hint"
         }
     }
 
