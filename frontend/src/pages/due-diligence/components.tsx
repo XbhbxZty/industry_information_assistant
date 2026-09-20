@@ -97,12 +97,13 @@ function ChecklistTableSection({ title, checks, scenario = false }: { title: str
         rowKey="field_id"
         dataSource={checks}
         pagination={false}
-        scroll={{ y: 420 }}
+        scroll={{ x: 850 }}
+        tableLayout="fixed"
         columns={[
           {
             title: '核查项', dataIndex: 'field_name', width: 150,
             render: (v, r) => (
-              <Space size={4}>
+              <Space size={4} wrap>
                 <Text>{v}</Text>
                 {scenario ? <Tag color="purple">场景项</Tag> : r.required && <Tag color="blue">尽调必查</Tag>}
               </Space>
@@ -323,7 +324,7 @@ export function ReviewCard({
         description="系统判定该笔业务需人工确认。未提交复核结论前，本报告不得作为授信依据。"
       />
 
-      <Descriptions size="small" column={2} bordered style={{ marginBottom: 12 }}>
+      <Descriptions size="small" column={{ xs: 1, sm: 2 }} bordered style={{ marginBottom: 12 }}>
         <Descriptions.Item label="尽调对象">{req.company_name || '—'}</Descriptions.Item>
         <Descriptions.Item label="必查项核实率">
           {typeof req.verified_rate === 'number' ? `${Math.round(req.verified_rate * 100)}%` : '—'}
@@ -334,20 +335,18 @@ export function ReviewCard({
       </Descriptions>
 
       {req.gates_applied?.length > 0 && (
-        <Alert
-          type="info" style={{ marginBottom: 12 }}
-          message="等级由以下闸门决定（不是由分数决定）"
-          description={<ul style={{ margin: 0, paddingLeft: 18 }}>
+        <details style={{ marginBottom: 12 }}>
+          <summary style={{ cursor: 'pointer' }}>查看评级规则与触发原因（{req.gates_applied.length}项）</summary>
+          <ul style={{ margin: '8px 0', paddingLeft: 18 }}>
             {req.gates_applied.map((g, i) => <li key={i}>{g}</li>)}
-          </ul>}
-        />
+          </ul>
+        </details>
       )}
 
       {(req.unverified_fields?.length > 0 || req.conflicting_fields?.length > 0) && (
-        <Space wrap style={{ marginBottom: 12 }}>
-          {req.unverified_fields?.map(f => <Tag key={f} color="orange">未核实：{f}</Tag>)}
-          {req.conflicting_fields?.map(f => <Tag key={f} color="red">冲突：{f}</Tag>)}
-        </Space>
+        <div style={{ marginBottom: 12 }}>
+          <Text type="warning">未核实 {req.unverified_fields?.length || 0} 项，冲突 {req.conflicting_fields?.length || 0} 项。请查看下方核查清单中的具体原因，并结合补件要求处理。</Text>
+        </div>
       )}
 
       {!canSubmit ? (

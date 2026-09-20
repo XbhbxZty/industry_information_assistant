@@ -24,3 +24,12 @@ def test_required_inputs_and_explicit_submission():
     assert 'disabled={!canLaunch}' in PAGE
     assert 'onPressEnter' not in PAGE
     assert 'asOf: asOf.trim() || undefined' in PAGE
+
+
+def test_result_layout_does_not_squeeze_checklist_into_fixed_columns():
+    assert '<Col span={10}>' not in PAGE and '<Col span={14}>' not in PAGE
+    assert PAGE.index('title="AI 调查发现与补件"') < PAGE.index('<ChecklistTable checks=')
+    components = (Path(__file__).resolve().parents[2] / 'frontend/src/pages/due-diligence/components.tsx').read_text(encoding='utf-8')
+    assert 'scroll={{ x: 850 }}' in components
+    assert 'scroll={{ y: 420 }}' not in components
+    assert 'req.unverified_fields?.map' not in components

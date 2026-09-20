@@ -3,7 +3,9 @@
   flex-direction: column;
   height: 100%;
   padding: 16px;
-  overflow: hidden;
+  overflow-y: auto;
+  min-width: 0;
+  gap: 4px;
 }
 
 .header {
@@ -20,17 +22,34 @@
 }
 
 .body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+  flex: 0 0 auto;
+  min-width: 0;
   align-items: flex-start;
+  row-gap: 12px;
+
+  :global(.ant-col), :global(.ant-space-item) {
+    min-width: 0;
+  }
+
+  :global(.ant-table-cell) {
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+
+  :global(.ant-card-body) {
+    overflow-wrap: anywhere;
+  }
 }
 
 .report {
   :global(.ant-card-body) {
-    max-height: 620px;
-    overflow-y: auto;
+    min-width: 0;
+    overflow-x: auto;
   }
+}
+
+@media (max-width: 600px) {
+  .page { padding: 8px; }
 }
 
 // 报告里全是表格（评级块、额度测算、证据溯源附录），必须给它们可读的样式

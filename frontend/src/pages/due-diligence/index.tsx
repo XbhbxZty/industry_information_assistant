@@ -224,7 +224,7 @@ export default function DueDiligencePage() {
         />
       ) : (
         <Row gutter={12} className={styles.body}>
-          <Col span={10}>
+          <Col span={24}>
             <Space direction="vertical" size={12} style={{ width: '100%' }}>
               {running && (
                 <Card size="small">
@@ -244,12 +244,10 @@ export default function DueDiligencePage() {
                   </Tag>
                 </Tooltip>
               )}
-              <CompletenessBar data={state.completeness} />
-              <ChecklistTable checks={state.fieldChecks} />
             </Space>
           </Col>
 
-          <Col span={14}>
+          <Col span={24}>
             <Space direction="vertical" size={12} style={{ width: '100%' }}>
               {state.phase === 'awaiting_review' && state.reviewRequest && (
                 <ReviewCard req={state.reviewRequest} onSubmit={review} submitting={false} />
@@ -278,6 +276,8 @@ export default function DueDiligencePage() {
                   </Space>
                 </Card>
               )}
+              <CompletenessBar data={state.completeness} />
+              <ChecklistTable checks={state.fieldChecks} />
               {state.report && (
                 <Card size="small" title="尽职调查报告" className={styles.report}>
                   {/* gfm 必须开启：报告里的评级块、额度测算与溯源附录都是表格 */}
