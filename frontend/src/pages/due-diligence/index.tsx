@@ -22,7 +22,8 @@ const SAMPLES = [
 export default function DueDiligencePage() {
   const { state, start, review, reset } = useDDStream()
   const location = useLocation()
-  const [query, setQuery] = useState(SAMPLES[0])
+  const [query, setQuery] = useState('')
+  const [subjectName, setSubjectName] = useState('')
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([])
   const [companyProfiles, setCompanyProfiles] = useState<CompanyProfileSummary[]>([])
   const [companyProfileId, setCompanyProfileId] = useState(() => new URLSearchParams(location.search).get('company_profile_id') || undefined)
@@ -46,14 +47,15 @@ export default function DueDiligencePage() {
   )
 
   useEffect(() => {
-    if (selectedProfile) setQuery(`请对${selectedProfile.name}做贷前尽职调查`)
+    if (selectedProfile) setSubjectName(selectedProfile.name)
   }, [selectedProfile])
 
-  const launch = () => start(query, {
+  const canLaunch = Boolean(query.trim() && subjectName.trim() && (!companyProfileId || selectedProfile))
+  const launch = () => canLaunch && start(query.trim(), {
     kbName,
     asOf: asOf.trim() || undefined,
     companyProfileId,
-    subjectName: selectedProfile?.name,
+    subjectName: selectedProfile?.name || subjectName.trim(),
     businessType: selectedProfile?.scenario || undefined,
     researchStrategy,
     searchWeb,
@@ -88,64 +90,99 @@ export default function DueDiligencePage() {
             启用公开网页检索
           </Checkbox>
           <Text type="secondary">
-            本次来源：{[kbName ? '所选资料库' : '', searchWeb ? '公开网页' : '', '已有企业档案'].filter(Boolean).join('、')}
+            本次来源：{[kbName ? '所选资料库' : '', searchWeb ? '公开网页' : '', selectedProfile ? '所选企业档案' : ''].filter(Boolean).join('、') || '尚未选择来源'}
           </Text>
         </Space>
         {researchStrategy === 'agent' && (
           <Alert type="info" showIcon style={{ marginBottom: 12 }}
             message="AI 将根据新发现继续阅读、追查和检查替代解释，最后列出证据与补件要求。"
-            description={!kbName && !searchWeb ? '尚未选择资料库或网页来源；本次只能分析已有档案并提出信息缺口。' : '调查循环最多 12 步、4 分钟；后续评分与报告阶段另计。'} />
+            description={!kbName && !searchWeb ? '尚未选择资料库或网页来源；没有资料支持的事项只能列为信息缺口。' : '调查循环最多 12 步、4 分钟；后续评分与报告阶段另计。'} />
         )}
-        <Space.Compact style={{ width: '100%' }}>
+        <Row gutter={[16, 12]}>
+          <Col xs={24} md={8}>
+          <label htmlFor="dd-profile">企业档案（可选）</label>
           <Select
+            id="dd-profile"
             allowClear
             value={companyProfileId}
             onChange={setCompanyProfileId}
             disabled={running}
             placeholder="企业档案（可选）"
-            style={{ width: 250 }}
+            style={{ width: '100%' }}
             options={companyProfiles.map(profile => ({
               value: profile.id,
               label: `${profile.name}${profile.scenario === 'factoring' ? ' · 保理' : ''}`,
             }))}
           />
+          </Col>
+          <Col xs={24} md={8}>
+          <label htmlFor="dd-kb">资料库（可选）</label>
           <Select
+            id="dd-kb"
             allowClear
             value={kbName}
             onChange={setKbName}
             disabled={running}
             placeholder="资料库（可选）"
-            style={{ width: 220 }}
+            style={{ width: '100%' }}
             options={knowledgeBases.map(kb => ({
               value: kb.name,
               label: `${kb.name}（${kb.document_count}份）`,
             }))}
           />
+          </Col>
+          <Col xs={24} md={8}>
+          <label htmlFor="dd-asof">调查截止日（可选）</label>
           <Input
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="输入尽调对象与授信申请，例如：请对某某有限公司做贷前尽职调查，授信2000万元"
-            onPressEnter={() => !running && query.trim() && launch()}
-            disabled={running}
-          />
-          <Input
+            id="dd-asof"
+            type="date"
             value={asOf}
             onChange={e => setAsOf(e.target.value)}
-            placeholder="截止日 YYYY-MM-DD"
             disabled={running}
-            style={{ width: 170 }}
           />
-          <Button type="primary" loading={running} disabled={!query.trim()}
+          </Col>
+          <Col span={24}>
+          <label htmlFor="dd-subject">调查主体（必填）</label>
+          <Input
+            id="dd-subject"
+            value={selectedProfile?.name || subjectName}
+            onChange={e => setSubjectName(e.target.value)}
+            placeholder="例如：海岫精密部件有限公司"
+            disabled={running || Boolean(companyProfileId)}
+          />
+          {companyProfileId && <Text type="secondary">主体与所选档案保持一致；如需手动修改，请先清除企业档案选择。调查问题不会被覆盖。</Text>}
+          </Col>
+          <Col span={24}>
+          <label htmlFor="dd-query">调查问题与关注重点（必填）</label>
+          <Input.TextArea
+            id="dd-query"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="填写具体调查问题、申请金额与期限、需要验证的解释及补件要求。可直接粘贴测试计划中的完整 Q1。"
+            autoSize={{ minRows: 4, maxRows: 12 }}
+            disabled={running}
+          />
+          <Text type="secondary">主体与问题分别提交；请确认问题中提到的企业与调查主体一致。回车换行，点击按钮发起。</Text>
+          </Col>
+          <Col span={24}>
+          <Space>
+          <Button type="primary" loading={running} disabled={!canLaunch}
             onClick={launch}>
             发起尽调
           </Button>
           {!idle && <Button onClick={reset} disabled={running}>重置</Button>}
-        </Space.Compact>
+          </Space>
+          </Col>
+        </Row>
         {idle && (
           <Space size={4} wrap style={{ marginTop: 8 }}>
             <Text type="secondary" style={{ fontSize: 12 }}>示例：</Text>
             {SAMPLES.map(s => (
-              <Tag key={s} style={{ cursor: 'pointer' }} onClick={() => setQuery(s)}>
+              <Tag key={s} style={{ cursor: companyProfileId ? 'not-allowed' : 'pointer' }} onClick={() => {
+                if (companyProfileId) return
+                setSubjectName(s.slice(2, s.indexOf('做')))
+                setQuery(s)
+              }}>
                 {s.slice(2, s.indexOf('做'))}
               </Tag>
             ))}
