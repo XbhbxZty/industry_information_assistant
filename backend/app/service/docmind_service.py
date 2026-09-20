@@ -7,6 +7,7 @@
 import os
 import time
 import hashlib
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 from alibabacloud_docmind_api20220711.client import Client as DocMindClient
 from alibabacloud_docmind_api20220711 import models as docmind_models
@@ -221,6 +222,9 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]
     if not text:
         return []
 
+    if chunk_size <= 0 or not 0 <= overlap < chunk_size:
+        raise ValueError("切片大小必须为正数，且重叠长度须小于切片大小")
+
     chunks = []
     start = 0
 
@@ -240,7 +244,9 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]
         if chunk.strip():
             chunks.append(chunk.strip())
 
-        start = end - overlap
+        if end >= len(text):
+            break
+        start = max(start + 1, end - overlap)
 
     return chunks
 
@@ -290,24 +296,25 @@ def process_document_with_docmind(
     try:
         print(f"开始处理文档: {file_name}")
 
-        # 1. 初始化服务并提交任务
-        service = DocMindService()
-        task_id = service.submit_job(file_path, file_name)
-
-        if not task_id:
-            result["message"] = "文档提交失败"
-            print(result["message"])
-            return result
-
-        # 2. 等待任务完成
-        if not service.wait_for_completion(task_id):
-            result["message"] = "文档解析任务失败或超时"
-            print(result["message"])
-            return result
-
-        # 3. 收集解析结果
-        print("开始收集解析结果...")
-        text = service.collect_all_results(task_id)
+        if Path(file_name).suffix.lower() in {".txt", ".md"}:
+            try:
+                text = Path(file_path).read_text(encoding="utf-8-sig")
+            except UnicodeDecodeError:
+                result["message"] = "文本编码不支持，请将 TXT/Markdown 保存为 UTF-8 后重试"
+                return result
+            if "\x00" in text:
+                result["message"] = "文本包含二进制内容，请上传 UTF-8 纯文本"
+                return result
+        else:
+            service = DocMindService()
+            task_id = service.submit_job(file_path, file_name)
+            if not task_id:
+                result["message"] = getattr(service, "last_error", None) or "文档提交失败"
+                return result
+            if not service.wait_for_completion(task_id):
+                result["message"] = "文档解析任务失败或超时"
+                return result
+            text = service.collect_all_results(task_id)
 
         if not text or not text.strip():
             result["message"] = "文档内容为空"
