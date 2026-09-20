@@ -1,0 +1,21 @@
+{
+  "run_id": "",
+  "case_id": "T01",
+  "git_commit": "",
+  "account_alias": "A",
+  "kb_id": "",
+  "uploaded_files": [],
+  "models": {},
+  "strategy": "agent",
+  "as_of": "2026-02-20",
+  "search_modes": ["local"],
+  "elapsed_seconds": null,
+  "terminal_status": "not_run",
+  "first_failed_stage": null,
+  "stages": {"upload": "not_run", "parse": "not_run", "index": "not_run", "auth": "not_run", "retrieve": "not_run", "read": "not_run", "findings": "not_run", "report_or_review_pause": "not_run"},
+  "quality_checks": {"1": null, "2": null, "3": null, "4": null, "5": null, "6": null, "7": null, "8": null, "9": null, "10": null},
+  "hard_failures": [],
+  "not_exercised": [],
+  "evidence_artifacts": [],
+  "reviewer_notes": ""
+}
