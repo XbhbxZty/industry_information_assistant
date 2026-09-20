@@ -129,7 +129,11 @@ async def process_document(document_id: str, file_path: str, kb_id: str, db_sess
         db.close()
         # 清理临时文件
         if os.path.exists(file_path):
-            os.remove(file_path)
+            try:
+                os.remove(file_path)
+            except OSError:
+                import logging
+                logging.getLogger(__name__).warning("上传临时文件清理失败，document_id=%s", document_id)
 
 
 @router.get("", response_model=List[KnowledgeBaseResponse])

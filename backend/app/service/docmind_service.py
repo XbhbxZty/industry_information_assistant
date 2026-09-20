@@ -8,6 +8,7 @@ import os
 import time
 import hashlib
 from pathlib import Path
+from requests.utils import get_environ_proxies
 from typing import List, Dict, Any, Optional
 from alibabacloud_docmind_api20220711.client import Client as DocMindClient
 from alibabacloud_docmind_api20220711 import models as docmind_models
@@ -26,6 +27,7 @@ class DocMindService:
         self.access_key_secret = os.getenv("DOCMIND_ACCESS_KEY_SECRET")
         self.endpoint = "docmind-api.cn-hangzhou.aliyuncs.com"
         self.client = self._create_client()
+        self.last_error = None
 
     def _create_client(self) -> DocMindClient:
         """创建 DocMind 客户端"""
@@ -34,6 +36,9 @@ class DocMindService:
             access_key_secret=self.access_key_secret,
         )
         config.endpoint = self.endpoint
+        proxies = get_environ_proxies(f"https://{self.endpoint}")
+        config.http_proxy = proxies.get("http")
+        config.https_proxy = proxies.get("https") or proxies.get("all")
         return DocMindClient(config)
 
     def submit_job(self, file_path: str, file_name: str) -> Optional[str]:
@@ -47,15 +52,23 @@ class DocMindService:
         Returns:
             任务 ID，失败返回 None
         """
+        self.last_error = None
         try:
-            request = docmind_models.SubmitDocParserJobAdvanceRequest(
-                file_url_object=open(file_path, "rb"),
-                file_name=file_name,
-                file_name_extension=file_name.split('.')[-1] if '.' in file_name else None,
+            # Advance creates its own authorization client; config proxies alone
+            # do not reach that client. Pass the resolved OS/environment route.
+            proxies = get_environ_proxies("https://openplatform.aliyuncs.com")
+            runtime = util_models.RuntimeOptions(
+                http_proxy=proxies.get("http"),
+                https_proxy=proxies.get("https") or proxies.get("all"),
+                connect_timeout=10000, read_timeout=30000,
             )
-
-            runtime = util_models.RuntimeOptions()
-            response = self.client.submit_doc_parser_job_advance(request, runtime)
+            with open(file_path, "rb") as source:
+                request = docmind_models.SubmitDocParserJobAdvanceRequest(
+                    file_url_object=source,
+                    file_name=file_name,
+                    file_name_extension=file_name.split('.')[-1] if '.' in file_name else None,
+                )
+                response = self.client.submit_doc_parser_job_advance(request, runtime)
 
             if response.body and response.body.data:
                 task_id = response.body.data.id
@@ -64,6 +77,13 @@ class DocMindService:
             return None
 
         except Exception as e:
+            # Never expose signed URLs, credentials or provider response bodies
+            # in the public error message.
+            detail = str(e).lower()
+            if "timeout" in detail or "timed out" in detail or "connection" in detail:
+                self.last_error = "云端文档提交失败：网络连接失败或超时，请检查代理与阿里云端点连通性；TXT/Markdown 可使用本地解析"
+            else:
+                self.last_error = "云端文档提交失败：请检查解析服务权限、额度及文件格式，具体原因见后端日志"
             print(f"提交任务失败: {e}")
             import traceback
             traceback.print_exc()

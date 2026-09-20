@@ -40,3 +40,32 @@ def test_bad_encoding_fails_before_embedding(tmp_path, monkeypatch):
     result = module.process_document_with_docmind(str(path), path.name, 'kb_test')
     assert not result['success'] and 'UTF-8' in result['message']
     embedding.assert_not_called()
+
+
+def test_cloud_failure_closes_file_and_passes_proxy(tmp_path, monkeypatch):
+    path = tmp_path / 'test.pdf'
+    path.write_bytes(b'%PDF-test')
+    monkeypatch.setattr(module, 'get_environ_proxies', lambda url: {'https': 'http://127.0.0.1:7890'})
+    service = object.__new__(module.DocMindService)
+    captured = []
+    def fail(request, runtime):
+        captured.append(request.file_url_object)
+        assert runtime.https_proxy == 'http://127.0.0.1:7890'
+        assert not captured[0].closed
+        raise RuntimeError('connection timed out secret-token')
+    service.client = Mock(submit_doc_parser_job_advance=fail)
+    assert service.submit_job(str(path), path.name) is None
+    assert captured[0].closed
+    assert '网络' in service.last_error and 'secret-token' not in service.last_error
+
+
+def test_cloud_success_closes_file(tmp_path, monkeypatch):
+    path = tmp_path / 'test.pdf'
+    path.write_bytes(b'%PDF-test')
+    monkeypatch.setattr(module, 'get_environ_proxies', lambda url: {})
+    service = object.__new__(module.DocMindService)
+    service.client = Mock()
+    service.client.submit_doc_parser_job_advance.return_value.body.data.id = 'task-1'
+    assert service.submit_job(str(path), path.name) == 'task-1'
+    request = service.client.submit_doc_parser_job_advance.call_args.args[0]
+    assert request.file_url_object.closed
