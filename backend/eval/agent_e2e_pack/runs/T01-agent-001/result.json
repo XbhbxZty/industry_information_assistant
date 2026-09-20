@@ -1,0 +1,133 @@
+{
+  "run_id": "T01-agent-001",
+  "case_id": "T01",
+  "session_id": "dd-1789912910938",
+  "git_commit": null,
+  "git_commit_note": "未保存运行版本指纹。前端按提交时间推定为0924e8d；后端进程此前在a2e9a44后重启，不能以当前HEAD冒充运行版本。",
+  "account_alias": "A",
+  "kb_id": "63fca1f1-7585-431d-86e5-e04fc360b570",
+  "uploaded_files": [
+    "01_subject_and_request.txt",
+    "02_financial_statements.txt",
+    "03_management_explanation.txt",
+    "04_receivable_aging.txt",
+    "05_receipts_until_cutoff.txt"
+  ],
+  "models": {
+    "architect": "deepseek-v4-flash",
+    "scout": "qwen-plus",
+    "data_analyst": "deepseek-v4-flash",
+    "wizard": "deepseek-v4-flash",
+    "critic": "deepseek-v4-flash",
+    "writer": "deepseek-v4-flash"
+  },
+  "query": "请对海岫精密部件有限公司拟申请的800万元、12个月流动资金贷款开展截至2026年2月20日的尽职调查。只使用我选择的本地材料。重点判断2025年经营现金流转负是否主要由提前备货解释，核查回款改善能否缓释风险。请区分已观察事实、推断、相互矛盾的陈述和仍缺失的信息，给出可追溯依据及按优先级排列的补件清单。不要代替人工审批。",
+  "subject_name": "海岫精密部件有限公司",
+  "strategy": "agent",
+  "as_of": "2026-02-20",
+  "search_modes": [
+    "local"
+  ],
+  "elapsed_seconds": null,
+  "investigation_elapsed_seconds": 105.86,
+  "checkpoint_created_at": "2026-09-20T14:01:57.474647",
+  "checkpoint_updated_at": "2026-09-20T14:04:38.825588",
+  "timing_note": "数据库时间无时区，原样保留；两次保存相隔161.35秒，仅为检查点窗口，不是端到端耗时。",
+  "terminal_status": "awaiting_review",
+  "persisted_status": "paused",
+  "agent_status": "stalled",
+  "first_failed_stage": "read/evidence_extraction",
+  "stages": {
+    "upload": "passed",
+    "parse": "passed",
+    "index": "passed",
+    "auth": "passed",
+    "retrieve": "passed",
+    "read": "partial_2_of_5",
+    "findings": "partial_2_findings",
+    "report_or_review_pause": "passed"
+  },
+  "quality_checks": {
+    "1": 1,
+    "2": 0,
+    "3": 0,
+    "4": 0,
+    "5": 0,
+    "6": 0,
+    "7": 0,
+    "8": 0,
+    "9": 1,
+    "10": 0
+  },
+  "quality_score": 2,
+  "quality_total": 10,
+  "quality_rationale": [
+    {
+      "item": 1,
+      "score": 1,
+      "reason": "主体与截止日正确；读取HX-02时单体、期间及万元口径明确，未发现口径混用。"
+    },
+    {
+      "item": 2,
+      "score": 0,
+      "reason": "引文有2025利润720及现金流-300，但未识别利润从600增至720的背离，摘要反称无2024年对比数据。"
+    },
+    {
+      "item": 3,
+      "score": 0,
+      "reason": "提到存货增加150，但没有比较应收占款900；拿存货增量与现金流净额-300直接比较不足以归因。"
+    },
+    {
+      "item": 4,
+      "score": 0,
+      "reason": "提到484及应付余额图表，但没有说明应付增加400的抵消和同比归因资料的准确限制。"
+    },
+    {
+      "item": 5,
+      "score": 0,
+      "reason": "未阅读HX-04，未分析10%→30%及客户甲争议、客户乙延期。"
+    },
+    {
+      "item": 6,
+      "score": 0,
+      "reason": "未阅读HX-05，未区分660中的预收300和短账龄回收80。"
+    },
+    {
+      "item": 7,
+      "score": 0,
+      "reason": "未给出280、590和32.18%。"
+    },
+    {
+      "item": 8,
+      "score": 0,
+      "reason": "没有利用回款台账的缓释信息；将尚未独立核验与不存在台账混淆。"
+    },
+    {
+      "item": 9,
+      "score": 1,
+      "reason": "两条记录发现均有已阅读原文和可定位来源；引文逐字匹配。此项只肯定溯源，不肯定摘要推断。"
+    },
+    {
+      "item": 10,
+      "score": 0,
+      "reason": "补件涉及484、银行流水与订单，但漏掉客户甲争议，且要求补充已提供的部分资料；未按优先级组织。"
+    }
+  ],
+  "hard_failures": [],
+  "hard_failure_scope": "已审阅材料未发现ORACLE列出的硬失败；不存在硬失败不等于内容正确，跨用户及注入场景未覆盖。",
+  "not_exercised": [
+    "T02主体/时点干扰",
+    "T03补件更新",
+    "T05文档指令注入",
+    "T06跨账号隔离",
+    "T07标准模式对照",
+    "浏览器全过程与原始HTTP请求抓包"
+  ],
+  "evidence_artifacts": [
+    "report.md",
+    "investigation.json",
+    "evaluation.md"
+  ],
+  "overall_verdict": "not_passed",
+  "reviewer_notes": "内容2/10低于8/10目标，agent stalled，关键账龄和回款资料未读。0/15不是唯一或充分的失败理由。两条引文正确，事实核实与自动审批边界保留。"
+}
