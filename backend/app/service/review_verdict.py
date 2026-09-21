@@ -70,6 +70,7 @@ VERDICT_ORDER = [VERDICT_PASS, VERDICT_NEEDS_REVISION, VERDICT_MAJOR_ISSUES]
 # 尽调场景的核心问题类型：整套反幻觉架构就是为了抓它们。
 # **不接受 severity 降级**——模型说存在即阻断。
 DD_BLOCKING_ISSUE_TYPES = frozenset({
+    "analysis_quality_error",       # 分析复核确认的口径、归因、分类或问题覆盖错误
     "unverified_as_fact",           # 把未核实字段当事实断言
     "conflict_silently_resolved",   # 多源冲突被单方面采信
     "unsupported_risk_conclusion",  # 风险结论无证据支撑

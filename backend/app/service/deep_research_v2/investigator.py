@@ -11,6 +11,7 @@ import json
 from dataclasses import dataclass
 from time import monotonic
 from typing import Any, Awaitable, Callable
+from .analysis_quality import ANALYSIS_RULES
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,9 @@ RECOVERY_PROMPT = """调查工具已停止继续执行。根据 findings、quest
 """
 
 Choose = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
+SYSTEM_PROMPT += ANALYSIS_RULES
+REVIEW_PROMPT += ANALYSIS_RULES
+RECOVERY_PROMPT += ANALYSIS_RULES
 Execute = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
 
 

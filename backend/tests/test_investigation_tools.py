@@ -43,6 +43,8 @@ def test_read_and_record_does_not_change_rating_or_checks():
     assert result["progress"]
     assert tools.state["field_checks"] == original
     assert result["finding"]["verified"] is False
+    assert result["finding"]["citation_status"] == "located"
+    assert result["finding"]["inference_status"] == "not_reviewed"
     assert tools.scout._analyze_search_results.call_args.kwargs["all_active_fields"] is True
 
 

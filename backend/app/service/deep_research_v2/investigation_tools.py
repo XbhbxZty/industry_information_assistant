@@ -112,6 +112,7 @@ class InvestigationTools:
             if kind not in ("support", "counter", "gap"):
                 raise ValueError("发现类型必须是 support、counter 或 gap")
             finding = {"claim": claim, "quote": quote, "source_id": sid, "kind": kind,
+                       "citation_status": "located", "inference_status": "not_reviewed",
                        "verified": False, "url": source.get("url"), "title": source.get("title")}
             findings = self.notebook.setdefault("findings", [])
             if any(f["claim"] == claim and f["source_id"] == sid for f in findings):
