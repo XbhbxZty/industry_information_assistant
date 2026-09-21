@@ -20,6 +20,19 @@ async def main():
     # Pin the same Scout model used in the recorded baseline.
     scout = DeepScout(config.api_key, config.base_url, '', model=baseline['models']['scout'])
     kb = baseline['kb_id']
+    # Fail closed before any model/embedding request if this shared local
+    # collection has changed since the synthetic fixture upload.
+    from pymilvus import Collection
+    collection = Collection('kb_' + kb.replace('-', ''))
+    collection.load()
+    rows = collection.query(expr='', output_fields=['filename', 'content', 'kb_id'], limit=10000)
+    expected = {p.name: p.read_text(encoding='utf-8-sig').strip()
+                for p in (ROOT / 'eval/agent_e2e_pack/uploads/base').glob('*.txt')}
+    if (len(rows) != len(expected) or len({r['filename'] for r in rows}) != len(expected)
+            or any(r['kb_id'] != kb or r['filename'] not in expected
+                   or r['content'].strip() != expected[r['filename']] for r in rows)):
+        raise RuntimeError('Corpus differs from the five approved synthetic fixtures; no model call made')
+    print('SYNTHETIC_CORPUS_VERIFIED: 5 files', flush=True)
     state = create_initial_state(baseline['query'], 't01-focused-regression', search_web=False,
                                 search_local=True, as_of=baseline['as_of'],
                                 subject_name=baseline['subject_name'], due_diligence=True,
