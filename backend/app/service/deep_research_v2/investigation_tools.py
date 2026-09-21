@@ -189,6 +189,7 @@ class InvestigationTools:
             # candidate/rejection feedback immediately so the agent can re-read.
             feedback.update(candidate_count=len(self.state.get("rag_evidence_candidates", [])),
                             rejections=[r.get("reason") for r in self.state.get("rag_evidence_rejections", [])[before:]][:8])
+            source["extraction_error"] = feedback.get("error")
         return {"ok": True, "progress": fresh_read, "source_id": sid,
                 "title": source.get("title"), "chunk_index": source.get("chunk_index"),
                 "text": text[:6000], "evidence_feedback": feedback,

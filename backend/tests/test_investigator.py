@@ -5,6 +5,40 @@ from pathlib import Path
 
 import pytest
 
+
+def test_source_memory_survives_action_window_and_reaches_review():
+    notebook = {"sources": {
+        "read1": {"title": "对比表", "read": True, "read_texts": ["上年收入为30，本年为40"], "extraction_error": "timeout"},
+        "unread1": {"title": "到账明细", "read": False, "summary": "分类到账记录"},
+    }}
+    async def choose(prompt, context):
+        assert len(context["source_inventory"]) == 2
+        assert context["read_evidence"][0]["text"] == "上年收入为30，本年为40"
+        assert context["source_inventory"][1]["status"] == "retrieved_unread"
+        if "最多提出两个" in prompt:
+            assert context["proposed_finish"]["summary"] == "需阅读到账明细"
+            return {"questions": []}
+        return {"action": "finish", "arguments": {"summary": "需阅读到账明细"}}
+    async def execute(*args):
+        pytest.fail("no tool needed")
+    asyncio.run(investigate(brief={}, tools={}, choose=choose, execute=execute, notebook=notebook))
+
+
+def test_recovery_sees_unread_materials_and_original_text():
+    notebook = {"findings": [{"claim": "有资料"}], "sources": {
+        "a": {"title": "已有台账", "read": False, "summary": "到账数据"}}}
+    async def choose(prompt, context):
+        if "调查工具已停止" in prompt:
+            assert context["source_inventory"][0]["status"] == "retrieved_unread"
+            return {"summary": "台账已提供但未读", "missing_materials": []}
+        return {"action": "bad"}
+    async def execute(*args):
+        pytest.fail("invalid tool")
+    result = asyncio.run(investigate(brief={}, tools={}, choose=choose, execute=execute,
+                                    notebook=notebook, budget=InvestigationBudget(max_steps=1)))
+    assert result["summary"] == "台账已提供但未读"
+    assert result["status"] == "step_limit"
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 from service.deep_research_v2.investigator import investigate, InvestigationBudget
 
