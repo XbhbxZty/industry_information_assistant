@@ -1,4 +1,4 @@
-"""Two synthetic live Critic checks, NOT an E2E test. No DB, browser or file writes.
+"""Synthetic live Critic checks, NOT an E2E test. No DB, browser or file writes.
 
 Explicit opt-in: python backend/eval/replay_analysis_quality.py --live
 Only the invented text below is sent to the configured model provider.
@@ -26,7 +26,17 @@ GOOD = """据内部台账（尚未经独立核验），经营现金流由400降�
 资料不足，不能评级或审批。补件：银行流水核验回款、上期调节表核查同比归因。"""
 
 
-async def main():
+CASES = {
+    "attribution_error": (SOURCE, BAD.splitlines()[0] + "\n" + "\n".join(GOOD.splitlines()[2:]), "cashflow_attribution"),
+    "receipt_error": (SOURCE, "\n".join(GOOD.splitlines()[:2]) + "\n" + "\n".join(BAD.splitlines()[1:]), "receipt_reconciliation"),
+    "correct_with_limits": (SOURCE, GOOD, None),
+    "insufficient_disclosed": (
+        "虚构测试公司甲内部台账：本期经营现金流100，上期400。收到款项200，但缺少债权对应关系、账龄、上期调节表和银行流水。金额万元，单体，未经审计。",
+        "据未经独立核验的内部台账，经营现金流由400降至100，下降300。缺少调节表，不能认定同比下降主因。收到200但没有债权对应关系，不能区分期末应收回收与新订单预收，无法计算剩余长账龄及覆盖率。优先补逐笔债权勾稽及期末账龄、两期调节表、银行流水。资料不足，不能评级或审批。", None),
+}
+
+
+async def main(args):
     from dotenv import load_dotenv
     load_dotenv(ROOT / ".env")
     from config.llm_config import get_config
@@ -36,25 +46,42 @@ async def main():
     critic = CriticMaster(config.api_key, config.base_url, model=config.agents.critic.model)
     original_call = critic.call_llm
 
+    calls = []
     async def bounded_call(**kwargs):
-        kwargs.update(timeout=45, max_retries=0, max_tokens=4000)
-        return await asyncio.wait_for(original_call(**kwargs), timeout=55)
+        requested_meta = kwargs.get("return_meta", False)
+        # Keep the production output budget and temperature unless explicitly testing a cap.
+        kwargs.update(timeout=60, max_retries=0, return_meta=True)
+        if args.max_tokens:
+            kwargs["max_tokens"] = args.max_tokens
+        content, meta = await asyncio.wait_for(original_call(**kwargs), timeout=70)
+        try:
+            strict_object = isinstance(json.loads(content), dict)
+        except (ValueError, TypeError):
+            strict_object = False
+        calls.append({"request": {k: kwargs[k] for k in ("max_tokens", "temperature", "timeout", "max_retries")},
+                      "meta": meta, "strict_json_object": strict_object, "content": content})
+        return (content, meta) if requested_meta else content
     critic.call_llm = bounded_call
     results = []
-    for name, report in (("incorrect_attribution_and_receipts", BAD), ("correct_with_limits", GOOD)):
+    for repeat, name in ((r, n) for r in range(1, args.repeats + 1) for n in args.cases):
+        source, report, expected_issue = CASES[name]
+        calls.clear()
         state = create_initial_state("说明现金流下降原因及回款分类、剩余长账龄、覆盖率与核查限制。",
                                      "synthetic-analysis-review", due_diligence=True, research_strategy="agent",
                                      subject_name="虚构测试公司甲", search_web=False, search_local=False,
                                      as_of="2026-02-20")
         state["final_report"] = report
+        critic.as_of = state["as_of"]
         state["agent_investigation"] = {"summary": report, "findings": [], "sources": {
-            "s1": {"title": "合成台账", "read": True, "read_texts": [SOURCE], "summary": SOURCE}}}
+            "s1": {"title": "合成台账", "read": True, "read_texts": [source], "summary": source}}}
         try:
             raw = await critic._review_content(state)
             result = critic.merge_review(state, raw)
-            results.append({"case": name, "review": result})
+            results.append({"case": name, "repeat": repeat, "expected_issue": expected_issue, "review": result,
+                            "calls": list(calls)})
         except Exception as exc:
-            results.append({"case": name, "error": type(exc).__name__})
+            results.append({"case": name, "repeat": repeat, "error": type(exc).__name__, "calls": list(calls)})
+        print("CASE_JSON=" + json.dumps(results[-1], ensure_ascii=False), flush=True)
     print("RESULT_JSON=" + json.dumps({"test_type": "focused_synthetic_critic_not_e2e",
                                        "model": config.agents.critic.model, "results": results}, ensure_ascii=False))
 
@@ -62,7 +89,11 @@ async def main():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--live", action="store_true")
+    parser.add_argument("--repeats", type=int, choices=range(1, 4), default=2)
+    parser.add_argument("--cases", nargs="+", choices=tuple(CASES), default=list(CASES))
+    parser.add_argument("--max-tokens", type=int, choices=(4000, 8000), default=None,
+                        help="omit to retain production configuration")
     args = parser.parse_args()
     if not args.live:
         parser.error("--live is required; sends only built-in synthetic cases to the configured provider")
-    asyncio.run(main())
+    asyncio.run(main(args))

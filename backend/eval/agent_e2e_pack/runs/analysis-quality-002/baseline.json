@@ -1,0 +1,902 @@
+{
+  "test_type": "focused_synthetic_critic_not_e2e",
+  "model": "deepseek-v4-flash",
+  "results": [
+    {
+      "case": "attribution_error",
+      "repeat": 1,
+      "expected_issue": "cashflow_attribution",
+      "review": {
+        "overall_assessment": {
+          "quality_score": 4,
+          "verdict": "major_issues",
+          "summary": "报告草稿在声明数据未独立核验和正确指出无法审批方面处理得当，但在现金流归因环节存在严重违规：1) 基于未核实数据断言同比下降主因（unverified_as_fact）；2) 违反量化分析纪律第3条，用本期营运资金变动除以同比差额归因（cashflow_attribution）。两类问题均可能导致错误授信判断。回款分类和覆盖率计算正确，但归因不完整（忽略存货增加30）。整体须重大修订。",
+          "verdict_source": "rule",
+          "llm_verdict": "major_issues",
+          "llm_verdict_overridden": false,
+          "verdict_reasons": [
+            "unverified_as_fact（模型标记为 critical）：该类问题不接受严重度降级，一律阻断自动通过",
+            "analysis_quality_error（模型标记为 major）：该类问题不接受严重度降级，一律阻断自动通过",
+            "analysis_quality_error（模型标记为 major）：该类问题不接受严重度降级，一律阻断自动通过",
+            "存在 1 条 critical 问题",
+            "质量分 4.0 低于通过线 7.0"
+          ]
+        },
+        "issues": [
+          {
+            "id": "issue_1",
+            "target_section": "章节草稿",
+            "issue_type": "unverified_as_fact",
+            "severity": "critical",
+            "location": "首句：据内部台账（尚未经独立核验），应收增加240占现金流同比下降300的80%，因此是同比下降主因。",
+            "description": "报告基于未经独立核验的内部台账数据，得出了‘同比下降主因’的实质性结论。虽然声明了数据状态，但归因断言属于对未核实字段的实质结论，违反了‘不得向任何一个方向倾斜’的规则。",
+            "evidence": "原文使用未经核验的应收增加240与现金流下降300计算80%占比，并据此断言‘是同比下降主因’。",
+            "suggestion": "改为：据内部台账（未经独立核验），应收增加240，现金流同比下降300，若数据属实则应收增加占下降的80%，但数据未经核验，不能确认为主因。主因结论需待上期调节表和银行流水核验后方可判断。",
+            "requires_new_search": false,
+            "search_query": "",
+            "detected_by": "llm"
+          },
+          {
+            "id": "issue_2",
+            "target_section": "章节草稿",
+            "issue_type": "logic_error",
+            "severity": "critical",
+            "location": "同issue_1位置",
+            "description": "违反量化分析纪律第3条：缺少上期各调节项时，不得用本期营运资金变动除以现金流同比差额声称贡献率或主因。报告直接用应收增加240除以现金流同比下降300得到80%并称主因，即使数据已核实，该归因方法也因缺少上期调节表而不成立。",
+            "evidence": "报告写‘应收增加240占现金流同比下降300的80%，因此是同比下降主因’，而合成台账明确无上期调节表，存货增加30也未纳入归因。",
+            "suggestion": "删除‘因此是同比下降主因’的断言；改为：本期应收增加240，存货增加30，两者合计减少现金流270万元，占现金流同比下降300的90%，但缺少上期调节表，无法分离当期新增利润与营运资金变动的贡献，同比归因无法完成。",
+            "requires_new_search": false,
+            "search_query": "",
+            "detected_by": "llm"
+          },
+          {
+            "target_section": "全局",
+            "location": "question_coverage",
+            "issue_type": "analysis_quality_error",
+            "severity": "major",
+            "description": "报告覆盖了用户要求的现金流下降原因、回款分类、剩余长账龄、覆盖率和核查限制，但下降原因归因违反量化分析纪律（见issue_2），且遗漏存货增加30的影响，归因不完整。",
+            "evidence": "据内部台账（尚未经独立核验），应收增加240占现金流同比下降300的80%，因此是同比下降主因。",
+            "suggestion": "修正对应分析并重新复核",
+            "requires_new_search": false,
+            "detected_by": "llm"
+          },
+          {
+            "target_section": "全局",
+            "location": "cashflow_attribution",
+            "issue_type": "analysis_quality_error",
+            "severity": "major",
+            "description": "严重违规。报告用本期应收增加240除以现金流同比下降300得出80%贡献率并断言主因。量化分析纪律第3条明确禁止在缺少上期各调节项时进行此类计算。即使数据已核实，该方法也不成立。此外报告未计入存货增加30的影响。",
+            "evidence": "应收增加240占现金流同比下降300的80%，因此是同比下降主因。",
+            "suggestion": "修正对应分析并重新复核",
+            "requires_new_search": false,
+            "detected_by": "llm"
+          }
+        ],
+        "fact_check_results": [],
+        "missing_aspects": [
+          "报告未提及存货增加30万元同样影响现金流，导致归因片面。"
+        ],
+        "strength_points": [
+          "明确声明数据来源为‘尚未经独立核验’的内部台账，风险意识正确。",
+          "最后指出‘资料不足，不能评级或审批’，符合风控原则。",
+          "回款分类和长账龄覆盖率计算准确，合规。"
+        ],
+        "analysis_checks": [
+          {
+            "id": "question_coverage",
+            "status": "issue",
+            "reason": "报告覆盖了用户要求的现金流下降原因、回款分类、剩余长账龄、覆盖率和核查限制，但下降原因归因违反量化分析纪律（见issue_2），且遗漏存货增加30的影响，归因不完整。",
+            "report_quote": "据内部台账（尚未经独立核验），应收增加240占现金流同比下降300的80%，因此是同比下降主因。"
+          },
+          {
+            "id": "period_basis",
+            "status": "supported",
+            "reason": "报告使用了‘本期’和‘上期’进行对比，合成台账明确本期现金流100、上期400，期间可辨识，未发现期间混淆或违法。",
+            "report_quote": "（基于上下文，未单独引用）"
+          },
+          {
+            "id": "cashflow_attribution",
+            "status": "issue",
+            "reason": "严重违规。报告用本期应收增加240除以现金流同比下降300得出80%贡献率并断言主因。量化分析纪律第3条明确禁止在缺少上期各调节项时进行此类计算。即使数据已核实，该方法也不成立。此外报告未计入存货增加30的影响。",
+            "report_quote": "应收增加240占现金流同比下降300的80%，因此是同比下降主因。"
+          },
+          {
+            "id": "receipt_reconciliation",
+            "status": "supported",
+            "reason": "回款分类符合纪律：期末应收回款130=长账龄90+短账龄40，新订单预收70，总收款200=90+40+70，互斥且合计正确。长账龄剩余160=250-90，覆盖率36%=90/250，数字与合成台账一致。",
+            "report_quote": "期末应收回款130=长账龄90+短账龄40；另有新订单预收70，全部收款200=90+40+70。长账龄剩余160=250-90；同一债权池覆盖率36%=90/250"
+          }
+        ]
+      },
+      "calls": [
+        {
+          "request": {
+            "max_tokens": 8000,
+            "temperature": 0,
+            "timeout": 60,
+            "max_retries": 0
+          },
+          "meta": {
+            "finish_reason": "stop",
+            "completion_tokens": 4649,
+            "prompt_tokens": 3710,
+            "duration_ms": 52829
+          },
+          "strict_json_object": true,
+          "content": "{\n  \"overall_assessment\": {\n    \"quality_score\": 4,\n    \"verdict\": \"major_issues\",\n    \"summary\": \"报告草稿在声明数据未独立核验和正确指出无法审批方面处理得当，但在现金流归因环节存在严重违规：1) 基于未核实数据断言同比下降主因（unverified_as_fact）；2) 违反量化分析纪律第3条，用本期营运资金变动除以同比差额归因（cashflow_attribution）。两类问题均可能导致错误授信判断。回款分类和覆盖率计算正确，但归因不完整（忽略存货增加30）。整体须重大修订。\"\n  },\n  \"issues\": [\n    {\n      \"id\": \"issue_1\",\n      \"target_section\": \"章节草稿\",\n      \"issue_type\": \"unverified_as_fact\",\n      \"severity\": \"critical\",\n      \"location\": \"首句：据内部台账（尚未经独立核验），应收增加240占现金流同比下降300的80%，因此是同比下降主因。\",\n      \"description\": \"报告基于未经独立核验的内部台账数据，得出了‘同比下降主因’的实质性结论。虽然声明了数据状态，但归因断言属于对未核实字段的实质结论，违反了‘不得向任何一个方向倾斜’的规则。\",\n      \"evidence\": \"原文使用未经核验的应收增加240与现金流下降300计算80%占比，并据此断言‘是同比下降主因’。\",\n      \"suggestion\": \"改为：据内部台账（未经独立核验），应收增加240，现金流同比下降300，若数据属实则应收增加占下降的80%，但数据未经核验，不能确认为主因。主因结论需待上期调节表和银行流水核验后方可判断。\",\n      \"requires_new_search\": false,\n      \"search_query\": \"\"\n    },\n    {\n      \"id\": \"issue_2\",\n      \"target_section\": \"章节草稿\",\n      \"issue_type\": \"logic_error\",\n      \"severity\": \"critical\",\n      \"location\": \"同issue_1位置\",\n      \"description\": \"违反量化分析纪律第3条：缺少上期各调节项时，不得用本期营运资金变动除以现金流同比差额声称贡献率或主因。报告直接用应收增加240除以现金流同比下降300得到80%并称主因，即使数据已核实，该归因方法也因缺少上期调节表而不成立。\",\n      \"evidence\": \"报告写‘应收增加240占现金流同比下降300的80%，因此是同比下降主因’，而合成台账明确无上期调节表，存货增加30也未纳入归因。\",\n      \"suggestion\": \"删除‘因此是同比下降主因’的断言；改为：本期应收增加240，存货增加30，两者合计减少现金流270万元，占现金流同比下降300的90%，但缺少上期调节表，无法分离当期新增利润与营运资金变动的贡献，同比归因无法完成。\",\n      \"requires_new_search\": false,\n      \"search_query\": \"\"\n    }\n  ],\n  \"fact_check_results\": [],\n  \"missing_aspects\": [\n    \"报告未提及存货增加30万元同样影响现金流，导致归因片面。\"\n  ],\n  \"strength_points\": [\n    \"明确声明数据来源为‘尚未经独立核验’的内部台账，风险意识正确。\",\n    \"最后指出‘资料不足，不能评级或审批’，符合风控原则。\",\n    \"回款分类和长账龄覆盖率计算准确，合规。\"\n  ],\n  \"analysis_checks\": [\n    {\n      \"id\": \"question_coverage\",\n      \"status\": \"issue\",\n      \"reason\": \"报告覆盖了用户要求的现金流下降原因、回款分类、剩余长账龄、覆盖率和核查限制，但下降原因归因违反量化分析纪律（见issue_2），且遗漏存货增加30的影响，归因不完整。\",\n      \"report_quote\": \"据内部台账（尚未经独立核验），应收增加240占现金流同比下降300的80%，因此是同比下降主因。\"\n    },\n    {\n      \"id\": \"period_basis\",\n      \"status\": \"supported\",\n      \"reason\": \"报告使用了‘本期’和‘上期’进行对比，合成台账明确本期现金流100、上期400，期间可辨识，未发现期间混淆或违法。\",\n      \"report_quote\": \"（基于上下文，未单独引用）\"\n    },\n    {\n      \"id\": \"cashflow_attribution\",\n      \"status\": \"issue\",\n      \"reason\": \"严重违规。报告用本期应收增加240除以现金流同比下降300得出80%贡献率并断言主因。量化分析纪律第3条明确禁止在缺少上期各调节项时进行此类计算。即使数据已核实，该方法也不成立。此外报告未计入存货增加30的影响。\",\n      \"report_quote\": \"应收增加240占现金流同比下降300的80%，因此是同比下降主因。\"\n    },\n    {\n      \"id\": \"receipt_reconciliation\",\n      \"status\": \"supported\",\n      \"reason\": \"回款分类符合纪律：期末应收回款130=长账龄90+短账龄40，新订单预收70，总收款200=90+40+70，互斥且合计正确。长账龄剩余160=250-90，覆盖率36%=90/250，数字与合成台账一致。\",\n      \"report_quote\": \"期末应收回款130=长账龄90+短账龄40；另有新订单预收70，全部收款200=90+40+70。长账龄剩余160=250-90；同一债权池覆盖率36%=90/250\"\n    }\n  ]\n}"
+        }
+      ]
+    },
+    {
+      "case": "receipt_error",
+      "repeat": 1,
+      "expected_issue": "receipt_reconciliation",
+      "review": {
+        "overall_assessment": {
+          "quality_score": 6,
+          "verdict": "major_issues",
+          "summary": "报告整体结构清晰，对资料限制的披露充分，但回款分类不完整导致总收款核对缺口，覆盖率表述可优化，且未明确期间基准。虽未给出风险结论，但量化分析细节需修正以满足审计可追溯要求。",
+          "verdict_source": "rule",
+          "llm_verdict": "needs_revision",
+          "llm_verdict_overridden": true,
+          "verdict_reasons": [
+            "analysis_quality_error（模型标记为 major）：该类问题不接受严重度降级，一律阻断自动通过",
+            "review_not_executed（模型标记为 major）：该类问题不接受严重度降级，一律阻断自动通过",
+            "analysis_quality_error（模型标记为 major）：该类问题不接受严重度降级，一律阻断自动通过",
+            "存在 1 条 major 问题",
+            "质量分 6.0 低于通过线 7.0"
+          ]
+        },
+        "issues": [
+          {
+            "id": "issue_1",
+            "target_section": "现金流分析",
+            "issue_type": "incomplete",
+            "severity": "major",
+            "location": "回款分类部分",
+            "description": "报告仅列出“期末应收已收回90”和“新订单预收70”，但合成台账显示回款还包括短账龄回款40（对应期末短账龄），导致总收款分类之和（90+70=160）与台账总收款200不一致，遗漏一个互斥分类。",
+            "evidence": "合成台账（source_id: s1）记载：“收到对应长账龄90、对应短账龄40、新订单预收70，总收款200”。报告草稿未体现短账龄回款40。",
+            "suggestion": "补列短账龄回款40，并确保总收款=长账龄回款+短账龄回款+新订单预收，且长账龄未回收余额=长账龄余额-长账龄回款。",
+            "requires_new_search": false,
+            "search_query": null,
+            "detected_by": "llm"
+          },
+          {
+            "id": "issue_2",
+            "target_section": "现金流分析",
+            "issue_type": "logic_error",
+            "severity": "minor",
+            "location": "覆盖率表述",
+            "description": "报告写“长账龄未回收160，覆盖率36%”，其中36%实际是已回收长账龄90与长账龄余额250之比，但表述指向未回收，易引起歧义。应明确表述为“长账龄回款覆盖率为36%（=90/250）”。",
+            "evidence": "报告原文：“长账龄未回收160，覆盖率36%”。计算：90/250=36%，正确但表述不清。",
+            "suggestion": "改为“期末长账龄余额250，已回款90（覆盖率36%），未回收160”。",
+            "requires_new_search": false,
+            "search_query": null,
+            "detected_by": "llm"
+          },
+          {
+            "id": "issue_3",
+            "target_section": "现金流分析",
+            "issue_type": "missing_source",
+            "severity": "minor",
+            "location": "期间基准",
+            "description": "未明确“本期”和“上期”的具体时间范围（如2025年度对比2024年度），虽然上下文可能隐含，但风控复核要求来源中应包含期间。",
+            "evidence": "报告草稿仅写“本期应收增加240、存货增加30”，未定义期间起止。",
+            "suggestion": "在首句补充如“据内部台账（2025年1-12月 vs 2024年1-12月，未经独立核验）”。",
+            "requires_new_search": false,
+            "search_query": null,
+            "detected_by": "llm"
+          },
+          {
+            "target_section": "全局",
+            "location": "question_coverage",
+            "issue_type": "analysis_quality_error",
+            "severity": "major",
+            "description": "报告覆盖了现金流下降原因（应收/存货占用）、回款分类（部分）、剩余长账龄（160）、覆盖率（36%）及核查限制（不能评级、需补件）。但回款分类不完整（遗漏短账龄40），导致回款分类项未能全面回答用户问题。",
+            "evidence": "期末应收已收回90；新订单预收70，长账龄未回收160，覆盖率36%。",
+            "suggestion": "修正对应分析并重新复核",
+            "requires_new_search": false,
+            "detected_by": "llm"
+          },
+          {
+            "target_section": "全局",
+            "location": "period_basis",
+            "issue_type": "review_not_executed",
+            "severity": "major",
+            "description": "分析复核项 period_basis 缺失或格式无效，尚未完成复核",
+            "evidence": "缺少有效的结构化复核回执",
+            "suggestion": "重新执行分析复核；不得视为已通过",
+            "requires_new_search": false,
+            "detected_by": "protocol"
+          },
+          {
+            "target_section": "全局",
+            "location": "receipt_reconciliation",
+            "issue_type": "analysis_quality_error",
+            "severity": "major",
+            "description": "报告仅列期末应收已收回90和新订单预收70，合计160。但合成台账显示总收款200，其中含短账龄回款40，报告未涵盖该分类，导致互斥分类之和（160）≠总收款（200），且长账龄未回收160虽计算正确（250-90），但短账龄未回收未体现。同时缺少总收款核对声明。",
+            "evidence": "期末应收已收回90；新订单预收70，长账龄未回收160，覆盖率36%。",
+            "suggestion": "修正对应分析并重新复核",
+            "requires_new_search": false,
+            "detected_by": "llm"
+          }
+        ],
+        "fact_check_results": [
+          {
+            "fact_id": "internal_book_operating_cf",
+            "status": "unverified",
+            "reason": "数据来自内部台账且明确标注未经独立核验，报告未将其作为事实断言。"
+          },
+          {
+            "fact_id": "ar_increase_240",
+            "status": "unverified",
+            "reason": "同上，未独立核验，但报告如实转述。"
+          },
+          {
+            "fact_id": "receipt_90_70",
+            "status": "unverified",
+            "reason": "来源均为内部台账，且遗漏了短账龄40的子项，实际分类完整性存疑。"
+          }
+        ],
+        "missing_aspects": [
+          "回款分类中缺少短账龄回款40，导致总收款核对无法闭合。",
+          "未明确报告所引用的两期数据的具体时间区间。"
+        ],
+        "strength_points": [
+          "明确标注数据来源为内部台账且未经独立核验，无幻觉。",
+          "充分披露缺少上期调节表，避免因果归因错误。",
+          "正确指出资料不足不能评级/审批，符合风控谨慎原则。",
+          "覆盖率计算口径（分子分母同一债权池）正确。"
+        ],
+        "analysis_checks": [
+          {
+            "id": "question_coverage",
+            "status": "issue",
+            "reason": "报告覆盖了现金流下降原因（应收/存货占用）、回款分类（部分）、剩余长账龄（160）、覆盖率（36%）及核查限制（不能评级、需补件）。但回款分类不完整（遗漏短账龄40），导致回款分类项未能全面回答用户问题。",
+            "report_quote": "期末应收已收回90；新订单预收70，长账龄未回收160，覆盖率36%。"
+          },
+          {
+            "id": "period_basis",
+            "status": "issue",
+            "reason": "报告使用“本期”“上期”但未定义具体时间区间，违反“来源应包含期间”的纪律。合成台账也未直接给出期间，但报告应至少声明如“2026年1-2月 vs 2025年同期”。",
+            "report_quote": "据内部台账（尚未经独立核验），经营现金流由400降至100，下降300。本期应收增加240、存货增加30…"
+          },
+          {
+            "id": "cashflow_attribution",
+            "status": "supported",
+            "reason": "报告正确指出缺少上期调节表，不能将240/300解释为贡献率或主因，符合量化分析纪律第3条。未虚构归因结论。",
+            "report_quote": "缺少上期各调节项，不能把240/300解释为同比贡献率或据此认定主因。"
+          },
+          {
+            "id": "receipt_reconciliation",
+            "status": "issue",
+            "reason": "报告仅列期末应收已收回90和新订单预收70，合计160。但合成台账显示总收款200，其中含短账龄回款40，报告未涵盖该分类，导致互斥分类之和（160）≠总收款（200），且长账龄未回收160虽计算正确（250-90），但短账龄未回收未体现。同时缺少总收款核对声明。",
+            "report_quote": "期末应收已收回90；新订单预收70，长账龄未回收160，覆盖率36%。"
+          }
+        ],
+        "degraded": true
+      },
+      "calls": [
+        {
+          "request": {
+            "max_tokens": 8000,
+            "temperature": 0,
+            "timeout": 60,
+            "max_retries": 0
+          },
+          "meta": {
+            "finish_reason": "stop",
+            "completion_tokens": 4003,
+            "prompt_tokens": 3696,
+            "duration_ms": 43928
+          },
+          "strict_json_object": true,
+          "content": "{\n    \"overall_assessment\": {\n        \"quality_score\": 6,\n        \"verdict\": \"needs_revision\",\n        \"summary\": \"报告整体结构清晰，对资料限制的披露充分，但回款分类不完整导致总收款核对缺口，覆盖率表述可优化，且未明确期间基准。虽未给出风险结论，但量化分析细节需修正以满足审计可追溯要求。\"\n    },\n    \"issues\": [\n        {\n            \"id\": \"issue_1\",\n            \"target_section\": \"现金流分析\",\n            \"issue_type\": \"incomplete\",\n            \"severity\": \"major\",\n            \"location\": \"回款分类部分\",\n            \"description\": \"报告仅列出“期末应收已收回90”和“新订单预收70”，但合成台账显示回款还包括短账龄回款40（对应期末短账龄），导致总收款分类之和（90+70=160）与台账总收款200不一致，遗漏一个互斥分类。\",\n            \"evidence\": \"合成台账（source_id: s1）记载：“收到对应长账龄90、对应短账龄40、新订单预收70，总收款200”。报告草稿未体现短账龄回款40。\",\n            \"suggestion\": \"补列短账龄回款40，并确保总收款=长账龄回款+短账龄回款+新订单预收，且长账龄未回收余额=长账龄余额-长账龄回款。\",\n            \"requires_new_search\": false,\n            \"search_query\": null\n        },\n        {\n            \"id\": \"issue_2\",\n            \"target_section\": \"现金流分析\",\n            \"issue_type\": \"logic_error\",\n            \"severity\": \"minor\",\n            \"location\": \"覆盖率表述\",\n            \"description\": \"报告写“长账龄未回收160，覆盖率36%”，其中36%实际是已回收长账龄90与长账龄余额250之比，但表述指向未回收，易引起歧义。应明确表述为“长账龄回款覆盖率为36%（=90/250）”。\",\n            \"evidence\": \"报告原文：“长账龄未回收160，覆盖率36%”。计算：90/250=36%，正确但表述不清。\",\n            \"suggestion\": \"改为“期末长账龄余额250，已回款90（覆盖率36%），未回收160”。\",\n            \"requires_new_search\": false,\n            \"search_query\": null\n        },\n        {\n            \"id\": \"issue_3\",\n            \"target_section\": \"现金流分析\",\n            \"issue_type\": \"missing_source\",\n            \"severity\": \"minor\",\n            \"location\": \"期间基准\",\n            \"description\": \"未明确“本期”和“上期”的具体时间范围（如2025年度对比2024年度），虽然上下文可能隐含，但风控复核要求来源中应包含期间。\",\n            \"evidence\": \"报告草稿仅写“本期应收增加240、存货增加30”，未定义期间起止。\",\n            \"suggestion\": \"在首句补充如“据内部台账（2025年1-12月 vs 2024年1-12月，未经独立核验）”。\",\n            \"requires_new_search\": false,\n            \"search_query\": null\n        }\n    ],\n    \"fact_check_results\": [\n        {\n            \"fact_id\": \"internal_book_operating_cf\",\n            \"status\": \"unverified\",\n            \"reason\": \"数据来自内部台账且明确标注未经独立核验，报告未将其作为事实断言。\"\n        },\n        {\n            \"fact_id\": \"ar_increase_240\",\n            \"status\": \"unverified\",\n            \"reason\": \"同上，未独立核验，但报告如实转述。\"\n        },\n        {\n            \"fact_id\": \"receipt_90_70\",\n            \"status\": \"unverified\",\n            \"reason\": \"来源均为内部台账，且遗漏了短账龄40的子项，实际分类完整性存疑。\"\n        }\n    ],\n    \"missing_aspects\": [\n        \"回款分类中缺少短账龄回款40，导致总收款核对无法闭合。\",\n        \"未明确报告所引用的两期数据的具体时间区间。\"\n    ],\n    \"strength_points\": [\n        \"明确标注数据来源为内部台账且未经独立核验，无幻觉。\",\n        \"充分披露缺少上期调节表，避免因果归因错误。\",\n        \"正确指出资料不足不能评级/审批，符合风控谨慎原则。\",\n        \"覆盖率计算口径（分子分母同一债权池）正确。\"\n    ],\n    \"analysis_checks\": [\n        {\n            \"id\": \"question_coverage\",\n            \"status\": \"issue\",\n            \"reason\": \"报告覆盖了现金流下降原因（应收/存货占用）、回款分类（部分）、剩余长账龄（160）、覆盖率（36%）及核查限制（不能评级、需补件）。但回款分类不完整（遗漏短账龄40），导致回款分类项未能全面回答用户问题。\",\n            \"report_quote\": \"期末应收已收回90；新订单预收70，长账龄未回收160，覆盖率36%。\"\n        },\n        {\n            \"id\": \"period_basis\",\n            \"status\": \"issue\",\n            \"reason\": \"报告使用“本期”“上期”但未定义具体时间区间，违反“来源应包含期间”的纪律。合成台账也未直接给出期间，但报告应至少声明如“2026年1-2月 vs 2025年同期”。\",\n            \"report_quote\": \"据内部台账（尚未经独立核验），经营现金流由400降至100，下降300。本期应收增加240、存货增加30…\"\n        },\n        {\n            \"id\": \"cashflow_attribution\",\n            \"status\": \"supported\",\n            \"reason\": \"报告正确指出缺少上期调节表，不能将240/300解释为贡献率或主因，符合量化分析纪律第3条。未虚构归因结论。\",\n            \"report_quote\": \"缺少上期各调节项，不能把240/300解释为同比贡献率或据此认定主因。\"\n        },\n        {\n            \"id\": \"receipt_reconciliation\",\n            \"status\": \"issue\",\n            \"reason\": \"报告仅列期末应收已收回90和新订单预收70，合计160。但合成台账显示总收款200，其中含短账龄回款40，报告未涵盖该分类，导致互斥分类之和（160）≠总收款（200），且长账龄未回收160虽计算正确（250-90），但短账龄未回收未体现。同时缺少总收款核对声明。\",\n            \"report_quote\": \"期末应收已收回90；新订单预收70，长账龄未回收160，覆盖率36%。\"\n        }\n    ]\n}"
+        }
+      ]
+    },
+    {
+      "case": "correct_with_limits",
+      "repeat": 1,
+      "expected_issue": null,
+      "review": {
+        "overall_assessment": {
+          "quality_score": 9,
+          "verdict": "pass",
+          "summary": "草稿准确、严谨地回应了研究问题，明确了现金流下降的营运资金占用方向，完整拆分了回款分类（长账龄/短账龄/预收）并核对总和，计算了剩余长账龄与覆盖率，且主动披露数据未经独立核验、缺少上期调节表等关键限制，拒绝形成无支撑结论。无任何尽调专项违规或量化计算错误。",
+          "verdict_source": "rule",
+          "llm_verdict": "pass",
+          "llm_verdict_overridden": false,
+          "verdict_reasons": [
+            "未发现阻断级问题且质量分达标"
+          ]
+        },
+        "issues": [],
+        "fact_check_results": [],
+        "missing_aspects": [],
+        "strength_points": [
+          "开篇即声明数据来源及未经独立核验状态，规避了unverified_as_fact风险",
+          "回款分类互斥且总和一致（90+40+70=200），长账龄回款与余额对应关系清晰",
+          "明确拒绝在资料不足时评级或审批，风控立场正确",
+          "量化计算（覆盖率36%、剩余160）公式正确且口径一致"
+        ],
+        "analysis_checks": [
+          {
+            "id": "question_coverage",
+            "status": "supported",
+            "reason": "报告逐一覆盖了用户要求的主题：现金流下降原因（应收+存货占用，但明确无法同比归因）、回款分类（长账龄90+短账龄40+预收70）、剩余长账龄（160）、覆盖率（36%）及核查限制（未经独立核验、缺上期调节表）。",
+            "report_quote": "本期应收增加240、存货增加30，均占用现金；缺少上期各调节项，不能把240/300解释为同比贡献率或据此认定主因。期末应收回款130=长账龄90+短账龄40；另有新订单预收70，全部收款200=90+40+70。长账龄剩余160=250-90；同一债权池覆盖率36%=90/250。资料不足，不能评级或审批。"
+          },
+          {
+            "id": "period_basis",
+            "status": "supported",
+            "reason": "报告使用'本期'与'上期'作为期间参照，未出现跨期混淆、百分比含义误用或使用截止日后信息。虽未标注具体会计期间（因内部台账本身未提供），但上下文一致，不影响归因判断。",
+            "report_quote": "经营现金流由400降至100，下降300。"
+          },
+          {
+            "id": "cashflow_attribution",
+            "status": "supported",
+            "reason": "报告正确识别了应收增加240和存货增加30对现金的占用，并明确指出因缺少上期调节表，不得将240/300解释为同比贡献率或主因。符合量化分析纪律中'缺少上期各调节项时，不得用本期营运资金变动除以现金流同比差额声称贡献率'的约束。",
+            "report_quote": "本期应收增加240、存货增加30，均占用现金；缺少上期各调节项，不能把240/300解释为同比贡献率或据此认定主因。"
+          },
+          {
+            "id": "receipt_reconciliation",
+            "status": "supported",
+            "reason": "回款分类互斥且总和对账一致：长账龄90+短账龄40+预收70=200。长账龄回款90是期末应收回款130的子集，未重复求和或替代。剩余长账龄160=250-90，覆盖率36%=90/250，分子分母均属同一债权池（期末长账龄余额）。",
+            "report_quote": "期末应收回款130=长账龄90+短账龄40；另有新订单预收70，全部收款200=90+40+70。长账龄剩余160=250-90；同一债权池覆盖率36%=90/250。"
+          }
+        ]
+      },
+      "calls": [
+        {
+          "request": {
+            "max_tokens": 8000,
+            "temperature": 0,
+            "timeout": 60,
+            "max_retries": 0
+          },
+          "meta": {
+            "finish_reason": "stop",
+            "completion_tokens": 2594,
+            "prompt_tokens": 3771,
+            "duration_ms": 27575
+          },
+          "strict_json_object": true,
+          "content": "{\n  \"overall_assessment\": {\n    \"quality_score\": 9,\n    \"verdict\": \"pass\",\n    \"summary\": \"草稿准确、严谨地回应了研究问题，明确了现金流下降的营运资金占用方向，完整拆分了回款分类（长账龄/短账龄/预收）并核对总和，计算了剩余长账龄与覆盖率，且主动披露数据未经独立核验、缺少上期调节表等关键限制，拒绝形成无支撑结论。无任何尽调专项违规或量化计算错误。\"\n  },\n  \"issues\": [],\n  \"fact_check_results\": [],\n  \"missing_aspects\": [],\n  \"strength_points\": [\n    \"开篇即声明数据来源及未经独立核验状态，规避了unverified_as_fact风险\",\n    \"回款分类互斥且总和一致（90+40+70=200），长账龄回款与余额对应关系清晰\",\n    \"明确拒绝在资料不足时评级或审批，风控立场正确\",\n    \"量化计算（覆盖率36%、剩余160）公式正确且口径一致\"\n  ],\n  \"analysis_checks\": [\n    {\n      \"id\": \"question_coverage\",\n      \"status\": \"supported\",\n      \"reason\": \"报告逐一覆盖了用户要求的主题：现金流下降原因（应收+存货占用，但明确无法同比归因）、回款分类（长账龄90+短账龄40+预收70）、剩余长账龄（160）、覆盖率（36%）及核查限制（未经独立核验、缺上期调节表）。\",\n      \"report_quote\": \"本期应收增加240、存货增加30，均占用现金；缺少上期各调节项，不能把240/300解释为同比贡献率或据此认定主因。期末应收回款130=长账龄90+短账龄40；另有新订单预收70，全部收款200=90+40+70。长账龄剩余160=250-90；同一债权池覆盖率36%=90/250。资料不足，不能评级或审批。\"\n    },\n    {\n      \"id\": \"period_basis\",\n      \"status\": \"supported\",\n      \"reason\": \"报告使用'本期'与'上期'作为期间参照，未出现跨期混淆、百分比含义误用或使用截止日后信息。虽未标注具体会计期间（因内部台账本身未提供），但上下文一致，不影响归因判断。\",\n      \"report_quote\": \"经营现金流由400降至100，下降300。\"\n    },\n    {\n      \"id\": \"cashflow_attribution\",\n      \"status\": \"supported\",\n      \"reason\": \"报告正确识别了应收增加240和存货增加30对现金的占用，并明确指出因缺少上期调节表，不得将240/300解释为同比贡献率或主因。符合量化分析纪律中'缺少上期各调节项时，不得用本期营运资金变动除以现金流同比差额声称贡献率'的约束。\",\n      \"report_quote\": \"本期应收增加240、存货增加30，均占用现金；缺少上期各调节项，不能把240/300解释为同比贡献率或据此认定主因。\"\n    },\n    {\n      \"id\": \"receipt_reconciliation\",\n      \"status\": \"supported\",\n      \"reason\": \"回款分类互斥且总和对账一致：长账龄90+短账龄40+预收70=200。长账龄回款90是期末应收回款130的子集，未重复求和或替代。剩余长账龄160=250-90，覆盖率36%=90/250，分子分母均属同一债权池（期末长账龄余额）。\",\n      \"report_quote\": \"期末应收回款130=长账龄90+短账龄40；另有新订单预收70，全部收款200=90+40+70。长账龄剩余160=250-90；同一债权池覆盖率36%=90/250。\"\n    }\n  ]\n}"
+        }
+      ]
+    },
+    {
+      "case": "insufficient_disclosed",
+      "repeat": 1,
+      "expected_issue": null,
+      "review": {
+        "overall_assessment": {
+          "quality_score": 8,
+          "verdict": "major_issues",
+          "summary": "该草稿准确反映了信息缺口，未将未经核实的内部台账数据当作事实断言，也未给出无支撑的风险结论。量化分析中的四项专项检查均合规，仅建议补充台账的具体名称与时间以便追踪。整体风控逻辑清晰，可直接进入评审会并作为补充资料清单附件。",
+          "verdict_source": "rule",
+          "llm_verdict": "pass",
+          "llm_verdict_overridden": true,
+          "verdict_reasons": [
+            "review_not_executed（模型标记为 major）：该类问题不接受严重度降级，一律阻断自动通过",
+            "review_not_executed（模型标记为 major）：该类问题不接受严重度降级，一律阻断自动通过",
+            "review_not_executed（模型标记为 major）：该类问题不接受严重度降级，一律阻断自动通过",
+            "review_not_executed（模型标记为 major）：该类问题不接受严重度降级，一律阻断自动通过"
+          ]
+        },
+        "issues": [
+          {
+            "id": "issue_1",
+            "target_section": "章节草稿",
+            "issue_type": "incomplete",
+            "severity": "minor",
+            "location": "首句",
+            "detected_by": "llm"
+          },
+          {
+            "target_section": "全局",
+            "location": "question_coverage",
+            "issue_type": "review_not_executed",
+            "severity": "major",
+            "description": "分析复核项 question_coverage 缺失或格式无效，尚未完成复核",
+            "evidence": "缺少有效的结构化复核回执",
+            "suggestion": "重新执行分析复核；不得视为已通过",
+            "requires_new_search": false,
+            "detected_by": "protocol"
+          },
+          {
+            "target_section": "全局",
+            "location": "period_basis",
+            "issue_type": "review_not_executed",
+            "severity": "major",
+            "description": "分析复核项 period_basis 缺失或格式无效，尚未完成复核",
+            "evidence": "缺少有效的结构化复核回执",
+            "suggestion": "重新执行分析复核；不得视为已通过",
+            "requires_new_search": false,
+            "detected_by": "protocol"
+          },
+          {
+            "target_section": "全局",
+            "location": "cashflow_attribution",
+            "issue_type": "review_not_executed",
+            "severity": "major",
+            "description": "分析复核项 cashflow_attribution 缺失或格式无效，尚未完成复核",
+            "evidence": "缺少有效的结构化复核回执",
+            "suggestion": "重新执行分析复核；不得视为已通过",
+            "requires_new_search": false,
+            "detected_by": "protocol"
+          },
+          {
+            "target_section": "全局",
+            "location": "receipt_reconciliation",
+            "issue_type": "review_not_executed",
+            "severity": "major",
+            "description": "分析复核项 receipt_reconciliation 缺失或格式无效，尚未完成复核",
+            "evidence": "缺少有效的结构化复核回执",
+            "suggestion": "重新执行分析复核；不得视为已通过",
+            "requires_new_search": false,
+            "detected_by": "protocol"
+          }
+        ],
+        "evidence": "正文仅模糊提及“未经独立核验的内部台账”，未给出台账名称、编制时间或提供方，后续如果追查数据来源将无法定位。",
+        "suggestion": "建议在报告中注明台账的具体名称（如“客户A公司2025年度内部现金流台账”）、编制日期或期间，以及提供方/接触条件。",
+        "requires_new_search": false,
+        "search_query": "",
+        "degraded": true
+      },
+      "calls": [
+        {
+          "request": {
+            "max_tokens": 8000,
+            "temperature": 0,
+            "timeout": 60,
+            "max_retries": 0
+          },
+          "meta": {
+            "finish_reason": "stop",
+            "completion_tokens": 2483,
+            "prompt_tokens": 3549,
+            "duration_ms": 29275
+          },
+          "strict_json_object": true,
+          "content": "{\n    \"overall_assessment\": {\n        \"quality_score\": 8,\n        \"verdict\": \"pass\",\n        \"summary\": \"该草稿准确反映了信息缺口，未将未经核实的内部台账数据当作事实断言，也未给出无支撑的风险结论。量化分析中的四项专项检查均合规，仅建议补充台账的具体名称与时间以便追踪。整体风控逻辑清晰，可直接进入评审会并作为补充资料清单附件。\"\n    },\n    \"issues\": [\n        {\n            \"id\": \"issue_1\",\n            \"target_section\": \"章节草稿\",\n            \"issue_type\": \"incomplete\",\n            \"severity\": \"minor\",\n            \"location\": \"首句\"   },\n            \"description\" ],\n            \"evidence\": \"正文仅模糊提及“未经独立核验的内部台账”，未给出台账名称、编制时间或提供方，后续如果追查数据来源将无法定位。\",\n            \"suggestion\": \"建议在报告中注明台账的具体名称（如“客户A公司2025年度内部现金流台账”）、编制日期或期间，以及提供方/接触条件。\",\n            \"requires_new_search\": false,\n            \"search_query\": \"\"\n        }"
+        }
+      ]
+    },
+    {
+      "case": "attribution_error",
+      "repeat": 2,
+      "expected_issue": "cashflow_attribution",
+      "review": {
+        "overall_assessment": {
+          "quality_score": 6,
+          "verdict": "major_issues",
+          "summary": "报告基于内部台账（声明未核验）分析了现金流下降原因、回款分类与覆盖率，中间计算基本正确，并坦承资料不足不能评级。但存在两个主要不足：1) 归因结论基于未核验数据，应更严格限定为初步推断；2) 归因时忽略了存货增加30万元的现金流出影响，导致归因不完整。此外未明确会计期间，建议补充。整体而言，报告思路清晰，但量化归因需更严谨，建议修改后进入下一步。",
+          "verdict_source": "rule",
+          "llm_verdict": "needs_revision",
+          "llm_verdict_overridden": true,
+          "verdict_reasons": [
+            "unverified_as_fact（模型标记为 minor）：该类问题不接受严重度降级，一律阻断自动通过",
+            "review_not_executed（模型标记为 major）：该类问题不接受严重度降级，一律阻断自动通过",
+            "analysis_quality_error（模型标记为 major）：该类问题不接受严重度降级，一律阻断自动通过",
+            "质量分 6.0 低于通过线 7.0"
+          ]
+        },
+        "issues": [
+          {
+            "id": "issue_1",
+            "target_section": "章节草稿",
+            "issue_type": "unverified_as_fact",
+            "severity": "minor",
+            "location": "第1句",
+            "description": "报告使用'据内部台账（尚未经独立核验）'作为基础，得出'应收增加240占现金流同比下降300的80%，因此是同比下降主因'的结论。虽然声明了未经核验，但'因此是同比下降主因'属于实质性因果断言，可能让读者误认为该结论已经确认。正确做法是仅表述为初步判断，并强调需核验。",
+            "evidence": "原文：'据内部台账（尚未经独立核验），应收增加240占现金流同比下降300的80%，因此是同比下降主因。'",
+            "suggestion": "改为：'据内部台账（尚未经独立核验），应收增加240为现金流下降300的80%。这提示应收增加可能是同比降幅的主要原因之一，但需银行流水核验后才能最终确认。'",
+            "requires_new_search": false,
+            "search_query": "",
+            "detected_by": "llm"
+          },
+          {
+            "id": "issue_2",
+            "target_section": "章节草稿",
+            "issue_type": "logic_error",
+            "severity": "minor",
+            "location": "第1句",
+            "description": "归因分析只考虑了应收增加240，但合成台账显示存货增加30也是本期现金流出（营运资金占用增加）。忽略存货变动使归因比例（80%）被高估了本属于存货的贡献份额。完整的现金流同比归因需要上期调节表，目前至少应指出存货的影响。",
+            "evidence": "合成台账：'本期应收增加240、存货增加30'。报告未提及存货增加。",
+            "suggestion": "补充：'此外存货增加30亦占用现金，合计营运资金增加270。若仅以应收增加计算占比，可能缩小了其他因素（如存货）的影响。在未取得上期调节表前，无法确定各因素的精确贡献率。'",
+            "requires_new_search": false,
+            "search_query": "",
+            "detected_by": "llm"
+          },
+          {
+            "id": "issue_3",
+            "target_section": "章节草稿",
+            "issue_type": "incomplete",
+            "severity": "minor",
+            "location": "全文",
+            "description": "报告使用了'本期'与'上期'，但未明确具体的会计期间或截止日期。在风控报告中，必须注明时间范围（如2025年度 vs 2024年度，或2026年1月 vs 2025年1月）。",
+            "evidence": "原文：'本期经营现金流100，上期400'。",
+            "suggestion": "补充期间：'2025年度（假设）经营现金流100，2024年度400'。",
+            "requires_new_search": false,
+            "search_query": "",
+            "detected_by": "llm"
+          },
+          {
+            "target_section": "全局",
+            "location": "period_basis",
+            "issue_type": "review_not_executed",
+            "severity": "major",
+            "description": "分析复核项 period_basis 缺失或格式无效，尚未完成复核",
+            "evidence": "缺少有效的结构化复核回执",
+            "suggestion": "重新执行分析复核；不得视为已通过",
+            "requires_new_search": false,
+            "detected_by": "protocol"
+          },
+          {
+            "target_section": "全局",
+            "location": "cashflow_attribution",
+            "issue_type": "analysis_quality_error",
+            "severity": "major",
+            "description": "报告使用'应收增加240 / 现金流同比下降300 = 80%'来归因，但忽略了存货增加30（也是营运资金占用）。合规的同比归因需要上期调节表，以各调节项变化额对比现金流变动额。目前缺失存货影响，归因不完整；且报告未计算各调节项对现金流的贡献方向（应付增加是来源，存货增加是运用），仅用单一比例代替。",
+            "evidence": "应收增加240占现金流同比下降300的80%，因此是同比下降主因。",
+            "suggestion": "修正对应分析并重新复核",
+            "requires_new_search": false,
+            "detected_by": "llm"
+          }
+        ],
+        "fact_check_results": [],
+        "missing_aspects": [
+          "未提及存货增加30对现金流的影响",
+          "未明确会计期间",
+          "未说明长账龄的具体期限定义（如是否超过1年）"
+        ],
+        "strength_points": [
+          "明确声明内部台账尚未经独立核验，诚实披露数据局限",
+          "坦承资料不足，不给出评级或审批建议，符合风控保守原则",
+          "回款分类互斥、计算正确，长账龄余额与覆盖率逻辑清晰"
+        ],
+        "analysis_checks": [
+          {
+            "id": "question_coverage",
+            "status": "supported",
+            "reason": "报告回答了研究问题的全部四项：（1）现金流下降原因——应收增加240；（2）回款分类——期末应收回款130（长账龄90+短账龄40）和新订单预收70；（3）剩余长账龄——160；（4）覆盖率——36%。同时指出核查限制（资料不足，需补件）。虽归因有缺漏，但问题本身已全部触及。",
+            "report_quote": "据内部台账…应收增加240占现金流同比下降300的80%…期末应收回款130=长账龄90+短账龄40；另有新订单预收70…长账龄剩余160=250-90；同一债权池覆盖率36%=90/250…资料不足，不能评级或审批。"
+          },
+          {
+            "id": "period_basis",
+            "status": "issue",
+            "reason": "报告未指定'本期'与'上期'的具体会计期间，无法判断比较基期的合理性。研究截止日为2026-02-20，但报告内容不含任何日期，违反了第4条纪律中'每个计算写出来源、主体、期间、单位'的要求。",
+            "report_quote": "本期经营现金流100，上期400。"
+          },
+          {
+            "id": "cashflow_attribution",
+            "status": "issue",
+            "reason": "报告使用'应收增加240 / 现金流同比下降300 = 80%'来归因，但忽略了存货增加30（也是营运资金占用）。合规的同比归因需要上期调节表，以各调节项变化额对比现金流变动额。目前缺失存货影响，归因不完整；且报告未计算各调节项对现金流的贡献方向（应付增加是来源，存货增加是运用），仅用单一比例代替。",
+            "report_quote": "应收增加240占现金流同比下降300的80%，因此是同比下降主因。"
+          },
+          {
+            "id": "receipt_reconciliation",
+            "status": "supported",
+            "reason": "报告严格将总收款分解为互斥的三部分：长账龄回款90、短账龄回款40、新订单预收70，合计200=90+40+70。长账龄未收回余额=250-90=160，覆盖率=90/250=36%，分子分母属于同一债权池。分类正确，无重复求和。",
+            "report_quote": "期末应收回款130=长账龄90+短账龄40；另有新订单预收70，全部收款200=90+40+70。长账龄剩余160=250-90；同一债权池覆盖率36%=90/250。"
+          }
+        ],
+        "degraded": true
+      },
+      "calls": [
+        {
+          "request": {
+            "max_tokens": 8000,
+            "temperature": 0,
+            "timeout": 60,
+            "max_retries": 0
+          },
+          "meta": {
+            "finish_reason": "stop",
+            "completion_tokens": 3679,
+            "prompt_tokens": 3710,
+            "duration_ms": 40693
+          },
+          "strict_json_object": true,
+          "content": "{\n    \"overall_assessment\": {\n        \"quality_score\": 6,\n        \"verdict\": \"needs_revision\",\n        \"summary\": \"报告基于内部台账（声明未核验）分析了现金流下降原因、回款分类与覆盖率，中间计算基本正确，并坦承资料不足不能评级。但存在两个主要不足：1) 归因结论基于未核验数据，应更严格限定为初步推断；2) 归因时忽略了存货增加30万元的现金流出影响，导致归因不完整。此外未明确会计期间，建议补充。整体而言，报告思路清晰，但量化归因需更严谨，建议修改后进入下一步。\"\n    },\n    \"issues\": [\n        {\n            \"id\": \"issue_1\",\n            \"target_section\": \"章节草稿\",\n            \"issue_type\": \"unverified_as_fact\",\n            \"severity\": \"minor\",\n            \"location\": \"第1句\",\n            \"description\": \"报告使用'据内部台账（尚未经独立核验）'作为基础，得出'应收增加240占现金流同比下降300的80%，因此是同比下降主因'的结论。虽然声明了未经核验，但'因此是同比下降主因'属于实质性因果断言，可能让读者误认为该结论已经确认。正确做法是仅表述为初步判断，并强调需核验。\",\n            \"evidence\": \"原文：'据内部台账（尚未经独立核验），应收增加240占现金流同比下降300的80%，因此是同比下降主因。'\",\n            \"suggestion\": \"改为：'据内部台账（尚未经独立核验），应收增加240为现金流下降300的80%。这提示应收增加可能是同比降幅的主要原因之一，但需银行流水核验后才能最终确认。'\",\n            \"requires_new_search\": false,\n            \"search_query\": \"\"\n        },\n        {\n            \"id\": \"issue_2\",\n            \"target_section\": \"章节草稿\",\n            \"issue_type\": \"logic_error\",\n            \"severity\": \"minor\",\n            \"location\": \"第1句\",\n            \"description\": \"归因分析只考虑了应收增加240，但合成台账显示存货增加30也是本期现金流出（营运资金占用增加）。忽略存货变动使归因比例（80%）被高估了本属于存货的贡献份额。完整的现金流同比归因需要上期调节表，目前至少应指出存货的影响。\",\n            \"evidence\": \"合成台账：'本期应收增加240、存货增加30'。报告未提及存货增加。\",\n            \"suggestion\": \"补充：'此外存货增加30亦占用现金，合计营运资金增加270。若仅以应收增加计算占比，可能缩小了其他因素（如存货）的影响。在未取得上期调节表前，无法确定各因素的精确贡献率。'\",\n            \"requires_new_search\": false,\n            \"search_query\": \"\"\n        },\n        {\n            \"id\": \"issue_3\",\n            \"target_section\": \"章节草稿\",\n            \"issue_type\": \"incomplete\",\n            \"severity\": \"minor\",\n            \"location\": \"全文\",\n            \"description\": \"报告使用了'本期'与'上期'，但未明确具体的会计期间或截止日期。在风控报告中，必须注明时间范围（如2025年度 vs 2024年度，或2026年1月 vs 2025年1月）。\",\n            \"evidence\": \"原文：'本期经营现金流100，上期400'。\",\n            \"suggestion\": \"补充期间：'2025年度（假设）经营现金流100，2024年度400'。\",\n            \"requires_new_search\": false,\n            \"search_query\": \"\"\n        }\n    ],\n    \"fact_check_results\": [],\n    \"missing_aspects\": [\n        \"未提及存货增加30对现金流的影响\",\n        \"未明确会计期间\",\n        \"未说明长账龄的具体期限定义（如是否超过1年）\"\n    ],\n    \"strength_points\": [\n        \"明确声明内部台账尚未经独立核验，诚实披露数据局限\",\n        \"坦承资料不足，不给出评级或审批建议，符合风控保守原则\",\n        \"回款分类互斥、计算正确，长账龄余额与覆盖率逻辑清晰\"\n    ],\n    \"analysis_checks\": [\n        {\n            \"id\": \"question_coverage\",\n            \"status\": \"supported\",\n            \"reason\": \"报告回答了研究问题的全部四项：（1）现金流下降原因——应收增加240；（2）回款分类——期末应收回款130（长账龄90+短账龄40）和新订单预收70；（3）剩余长账龄——160；（4）覆盖率——36%。同时指出核查限制（资料不足，需补件）。虽归因有缺漏，但问题本身已全部触及。\",\n            \"report_quote\": \"据内部台账…应收增加240占现金流同比下降300的80%…期末应收回款130=长账龄90+短账龄40；另有新订单预收70…长账龄剩余160=250-90；同一债权池覆盖率36%=90/250…资料不足，不能评级或审批。\"\n        },\n        {\n            \"id\": \"period_basis\",\n            \"status\": \"issue\",\n            \"reason\": \"报告未指定'本期'与'上期'的具体会计期间，无法判断比较基期的合理性。研究截止日为2026-02-20，但报告内容不含任何日期，违反了第4条纪律中'每个计算写出来源、主体、期间、单位'的要求。\",\n            \"report_quote\": \"本期经营现金流100，上期400。\"\n        },\n        {\n            \"id\": \"cashflow_attribution\",\n            \"status\": \"issue\",\n            \"reason\": \"报告使用'应收增加240 / 现金流同比下降300 = 80%'来归因，但忽略了存货增加30（也是营运资金占用）。合规的同比归因需要上期调节表，以各调节项变化额对比现金流变动额。目前缺失存货影响，归因不完整；且报告未计算各调节项对现金流的贡献方向（应付增加是来源，存货增加是运用），仅用单一比例代替。\",\n            \"report_quote\": \"应收增加240占现金流同比下降300的80%，因此是同比下降主因。\"\n        },\n        {\n            \"id\": \"receipt_reconciliation\",\n            \"status\": \"supported\",\n            \"reason\": \"报告严格将总收款分解为互斥的三部分：长账龄回款90、短账龄回款40、新订单预收70，合计200=90+40+70。长账龄未收回余额=250-90=160，覆盖率=90/250=36%，分子分母属于同一债权池。分类正确，无重复求和。\",\n            \"report_quote\": \"期末应收回款130=长账龄90+短账龄40；另有新订单预收70，全部收款200=90+40+70。长账龄剩余160=250-90；同一债权池覆盖率36%=90/250。\"\n        }\n    ]\n}"
+        }
+      ]
+    },
+    {
+      "case": "receipt_error",
+      "repeat": 2,
+      "expected_issue": "receipt_reconciliation",
+      "review": {
+        "overall_assessment": {
+          "quality_score": 7,
+          "verdict": "major_issues",
+          "summary": "报告对资料不足保持高度警惕，未作出任何未经支撑的结论或评级，风控处理正确。但回款分类不完整（未披露短账龄回款），且缺少期间定义，降低了量化分析的清晰度和可追溯性，需在最终报告中完善。",
+          "verdict_source": "rule",
+          "llm_verdict": "pass",
+          "llm_verdict_overridden": true,
+          "verdict_reasons": [
+            "review_not_executed（模型标记为 major）：该类问题不接受严重度降级，一律阻断自动通过",
+            "review_not_executed（模型标记为 major）：该类问题不接受严重度降级，一律阻断自动通过",
+            "analysis_quality_error（模型标记为 major）：该类问题不接受严重度降级，一律阻断自动通过"
+          ]
+        },
+        "issues": [
+          {
+            "id": "issue_1",
+            "target_section": "章节草稿",
+            "issue_type": "incomplete",
+            "severity": "minor",
+            "location": "回款分类及覆盖率描述",
+            "description": "报告仅提及“期末应收已收回90”和“长账龄未回收160”，未区分长账龄与短账龄回款，也未披露台账中实际存在的短账龄回款40，导致回款分类不互斥，长账龄覆盖率公式无法直接验证。",
+            "evidence": "报告原文：“期末应收已收回90；新订单预收70，长账龄未回收160，覆盖率36%。” 台账数据（s1）显示总收款200包含：对应长账龄90、对应短账龄40、新订单预收70；短账龄回款未被单独陈述。",
+            "suggestion": "将“期末应收已收回90”拆分为“长账龄回款90”和“短账龄回款40”，并明确覆盖率的分子分母（如长账龄覆盖率 = 长账龄回款90 / 期末长账龄余额250 = 36%），确保分类互斥且公式可追溯。",
+            "requires_new_search": false,
+            "detected_by": "llm"
+          },
+          {
+            "target_section": "全局",
+            "location": "question_coverage",
+            "issue_type": "review_not_executed",
+            "severity": "major",
+            "description": "分析复核项 question_coverage 缺失或格式无效，尚未完成复核",
+            "evidence": "缺少有效的结构化复核回执",
+            "suggestion": "重新执行分析复核；不得视为已通过",
+            "requires_new_search": false,
+            "detected_by": "protocol"
+          },
+          {
+            "target_section": "全局",
+            "location": "period_basis",
+            "issue_type": "review_not_executed",
+            "severity": "major",
+            "description": "分析复核项 period_basis 缺失或格式无效，尚未完成复核",
+            "evidence": "缺少有效的结构化复核回执",
+            "suggestion": "重新执行分析复核；不得视为已通过",
+            "requires_new_search": false,
+            "detected_by": "protocol"
+          },
+          {
+            "target_section": "全局",
+            "location": "receipt_reconciliation",
+            "issue_type": "analysis_quality_error",
+            "severity": "major",
+            "description": "纪律要求回款按对应债权互斥分类并核对总收款。台账显示总收款200=长账龄90+短账龄40+预收70，但报告中只有“期末应收已收回90”和“预收70”，短账龄40未被单独列出，导致分类不互斥，总收款合计无法直接验证。覆盖率36%未说明分子分母，无法确认是否使用同一债权池。",
+            "evidence": "期末应收已收回90；新订单预收70，长账龄未回收160，覆盖率36%。",
+            "suggestion": "修正对应分析并重新复核",
+            "requires_new_search": false,
+            "detected_by": "llm"
+          }
+        ],
+        "fact_check_results": [],
+        "missing_aspects": [
+          "回款分类未包含短账龄回款，分类体系不完整",
+          "报告未明确“本期”与“上期”的具体日历期间，影响时效性判断"
+        ],
+        "strength_points": [
+          "明确指出数据来源为“内部台账（尚未经独立核验）”，未将未核实信息当作事实",
+          "在缺少上期调节表时拒绝归因，遵守量化分析纪律",
+          "直接给出“资料不足，不能评级或审批”的保守结论，避免错误授信",
+          "补件要求合理：银行流水核验回款、上期调节表核查归因"
+        ],
+        "analysis_checks": [
+          {
+            "id": "question_coverage",
+            "status": "issue",
+            "reason": "用户要求说明现金流下降原因、回款分类、剩余长账龄、覆盖率和核查限制。报告对下降原因做了部分解释（应收及存货占用），但回款分类遗漏了短账龄回款40，导致分类不完整；覆盖率未写清分子分母。其余问题基本覆盖。",
+            "report_quote": "本期应收增加240、存货增加30，均占用现金；缺少上期各调节项，不能把240/300解释为同比贡献率或据此认定主因。期末应收已收回90；新订单预收70，长账龄未回收160，覆盖率36%。"
+          },
+          {
+            "id": "period_basis",
+            "status": "issue",
+            "reason": "报告使用“本期”“上期”但未注明具体日历期间或会计期间，读者无法判断数据的时效性和可比性。即使作为内部草稿，也应标注时间段（如“2026年1-6月”）。",
+            "report_quote": "经营现金流由400降至100，下降300。本期应收增加240、存货增加30，均占用现金"
+          },
+          {
+            "id": "cashflow_attribution",
+            "status": "supported",
+            "reason": "报告正确指出缺少上期调节表，不能将本期营运资金变动(240+30=270)与现金流同比差额(300)进行贡献率运算，也没有进一步归因，符合纪律要求。",
+            "report_quote": "缺少上期各调节项，不能把240/300解释为同比贡献率或据此认定主因"
+          },
+          {
+            "id": "receipt_reconciliation",
+            "status": "issue",
+            "reason": "纪律要求回款按对应债权互斥分类并核对总收款。台账显示总收款200=长账龄90+短账龄40+预收70，但报告中只有“期末应收已收回90”和“预收70”，短账龄40未被单独列出，导致分类不互斥，总收款合计无法直接验证。覆盖率36%未说明分子分母，无法确认是否使用同一债权池。",
+            "report_quote": "期末应收已收回90；新订单预收70，长账龄未回收160，覆盖率36%。"
+          }
+        ],
+        "degraded": true
+      },
+      "calls": [
+        {
+          "request": {
+            "max_tokens": 8000,
+            "temperature": 0,
+            "timeout": 60,
+            "max_retries": 0
+          },
+          "meta": {
+            "finish_reason": "stop",
+            "completion_tokens": 4206,
+            "prompt_tokens": 3696,
+            "duration_ms": 45290
+          },
+          "strict_json_object": true,
+          "content": "{\n  \"overall_assessment\": {\n    \"quality_score\": 7,\n    \"verdict\": \"pass\",\n    \"summary\": \"报告对资料不足保持高度警惕，未作出任何未经支撑的结论或评级，风控处理正确。但回款分类不完整（未披露短账龄回款），且缺少期间定义，降低了量化分析的清晰度和可追溯性，需在最终报告中完善。\"\n  },\n  \"issues\": [\n    {\n      \"id\": \"issue_1\",\n      \"target_section\": \"章节草稿\",\n      \"issue_type\": \"incomplete\",\n      \"severity\": \"minor\",\n      \"location\": \"回款分类及覆盖率描述\",\n      \"description\": \"报告仅提及“期末应收已收回90”和“长账龄未回收160”，未区分长账龄与短账龄回款，也未披露台账中实际存在的短账龄回款40，导致回款分类不互斥，长账龄覆盖率公式无法直接验证。\",\n      \"evidence\": \"报告原文：“期末应收已收回90；新订单预收70，长账龄未回收160，覆盖率36%。” 台账数据（s1）显示总收款200包含：对应长账龄90、对应短账龄40、新订单预收70；短账龄回款未被单独陈述。\",\n      \"suggestion\": \"将“期末应收已收回90”拆分为“长账龄回款90”和“短账龄回款40”，并明确覆盖率的分子分母（如长账龄覆盖率 = 长账龄回款90 / 期末长账龄余额250 = 36%），确保分类互斥且公式可追溯。\",\n      \"requires_new_search\": false\n    }\n  ],\n  \"fact_check_results\": [],\n  \"missing_aspects\": [\n    \"回款分类未包含短账龄回款，分类体系不完整\",\n    \"报告未明确“本期”与“上期”的具体日历期间，影响时效性判断\"\n  ],\n  \"strength_points\": [\n    \"明确指出数据来源为“内部台账（尚未经独立核验）”，未将未核实信息当作事实\",\n    \"在缺少上期调节表时拒绝归因，遵守量化分析纪律\",\n    \"直接给出“资料不足，不能评级或审批”的保守结论，避免错误授信\",\n    \"补件要求合理：银行流水核验回款、上期调节表核查归因\"\n  ],\n  \"analysis_checks\": [\n    {\n      \"id\": \"question_coverage\",\n      \"status\": \"issue\",\n      \"reason\": \"用户要求说明现金流下降原因、回款分类、剩余长账龄、覆盖率和核查限制。报告对下降原因做了部分解释（应收及存货占用），但回款分类遗漏了短账龄回款40，导致分类不完整；覆盖率未写清分子分母。其余问题基本覆盖。\",\n      \"report_quote\": \"本期应收增加240、存货增加30，均占用现金；缺少上期各调节项，不能把240/300解释为同比贡献率或据此认定主因。期末应收已收回90；新订单预收70，长账龄未回收160，覆盖率36%。\"\n    },\n    {\n      \"id\": \"period_basis\",\n      \"status\": \"issue\",\n      \"reason\": \"报告使用“本期”“上期”但未注明具体日历期间或会计期间，读者无法判断数据的时效性和可比性。即使作为内部草稿，也应标注时间段（如“2026年1-6月”）。\",\n      \"report_quote\": \"经营现金流由400降至100，下降300。本期应收增加240、存货增加30，均占用现金\"\n    },\n    {\n      \"id\": \"cashflow_attribution\",\n      \"status\": \"supported\",\n      \"reason\": \"报告正确指出缺少上期调节表，不能将本期营运资金变动(240+30=270)与现金流同比差额(300)进行贡献率运算，也没有进一步归因，符合纪律要求。\",\n      \"report_quote\": \"缺少上期各调节项，不能把240/300解释为同比贡献率或据此认定主因\"\n    },\n    {\n      \"id\": \"receipt_reconciliation\",\n      \"status\": \"issue\",\n      \"reason\": \"纪律要求回款按对应债权互斥分类并核对总收款。台账显示总收款200=长账龄90+短账龄40+预收70，但报告中只有“期末应收已收回90”和“预收70”，短账龄40未被单独列出，导致分类不互斥，总收款合计无法直接验证。覆盖率36%未说明分子分母，无法确认是否使用同一债权池。\",\n      \"report_quote\": \"期末应收已收回90；新订单预收70，长账龄未回收160，覆盖率36%。\"\n    }\n  ]\n}"
+        }
+      ]
+    },
+    {
+      "case": "correct_with_limits",
+      "repeat": 2,
+      "expected_issue": null,
+      "review": {
+        "overall_assessment": {
+          "quality_score": 8,
+          "verdict": "major_issues",
+          "summary": "报告草稿逻辑清晰、态度谨慎，正确回应了用户问题中的现金流下降原因、回款分类、长账龄余额和覆盖率，并明确指出资料不足无法评级。唯一不足是未明确所引用数据的期间基准，可能影响时效性判断。整体质量良好，可进入下一步修订。",
+          "verdict_source": "rule",
+          "llm_verdict": "pass",
+          "llm_verdict_overridden": true,
+          "verdict_reasons": [
+            "analysis_quality_error（模型标记为 major）：该类问题不接受严重度降级，一律阻断自动通过"
+          ]
+        },
+        "issues": [
+          {
+            "id": "issue_1",
+            "target_section": "章节草稿",
+            "issue_type": "incomplete",
+            "severity": "minor",
+            "location": "首句",
+            "description": "报告引用的经营现金流、应收、存货等数据均未标注所述期间（如‘本期’的具体年度/季度），也未说明台账的截止日期。在风控复核中，缺少期间基准将无法判断数据是否在研究截止日之前，也无法进行跨期对比。",
+            "evidence": "全文仅出现‘本期’‘上期’等相对时间，未提供任何绝对日期或期间表述（如‘2025年度’‘2026年1月’）。研究截止日为2026-02-20，但无法确认这些数据是截止日前还是截止日后的。",
+            "suggestion": "明确补充数据的期间范围（例如：‘据截至202X年XX月XX日的内部台账’或‘2025年度经营现金流……’），并在后续分析中保持期间一致性。",
+            "requires_new_search": false,
+            "search_query": "",
+            "detected_by": "llm"
+          },
+          {
+            "target_section": "全局",
+            "location": "period_basis",
+            "issue_type": "analysis_quality_error",
+            "severity": "major",
+            "description": "报告未提供任何绝对期间或截止日期，仅使用‘本期’‘上期’等相对表述。源数据中虽有‘截至测试截止日’，但报告正文未引用该日期。缺少期间基准会导致时效性无法判断，属于信息不完整。",
+            "evidence": "据内部台账（尚未经独立核验），经营现金流由400降至100，下降300。",
+            "suggestion": "修正对应分析并重新复核",
+            "requires_new_search": false,
+            "detected_by": "llm"
+          }
+        ],
+        "fact_check_results": [],
+        "missing_aspects": [
+          "数据期间基准未明确"
+        ],
+        "strength_points": [
+          "诚实披露数据来源为尚未独立核验的内部台账，避免事实断言",
+          "正确指出缺少上期调节项，无法进行同比贡献率归因，符合量化分析纪律",
+          "回款分类互斥，合计验证正确（90+40+70=200）",
+          "长账龄剩余和覆盖率计算正确，并明确提示不能认为风险已解除",
+          "结论保守合理，未在资料不足时强行评级或审批"
+        ],
+        "analysis_checks": [
+          {
+            "id": "question_coverage",
+            "status": "supported",
+            "reason": "报告逐项覆盖了用户要求的现金流下降原因、回款分类、剩余长账龄、覆盖率与核查限制。现金流下降原因提及应收和存货占用，但未强作归因；回款分类为长账龄90、短账龄40、新订单预收70；剩余长账龄=250-90=160；覆盖率=90/250=36%；核查限制为资料不足且需补件。",
+            "report_quote": "（全文均涉及上述要点）"
+          },
+          {
+            "id": "period_basis",
+            "status": "issue",
+            "reason": "报告未提供任何绝对期间或截止日期，仅使用‘本期’‘上期’等相对表述。源数据中虽有‘截至测试截止日’，但报告正文未引用该日期。缺少期间基准会导致时效性无法判断，属于信息不完整。",
+            "report_quote": "据内部台账（尚未经独立核验），经营现金流由400降至100，下降300。"
+          },
+          {
+            "id": "cashflow_attribution",
+            "status": "supported",
+            "reason": "报告正确指出‘缺少上期各调节项，不能把240/300解释为同比贡献率或据此认定主因’，未违反量化分析纪律中关于同比归因的限制。仅列出本期调节项（应收+240、存货+30）作为现金占用说明，未做越界归因。",
+            "report_quote": "本期应收增加240、存货增加30，均占用现金；缺少上期各调节项，不能把240/300解释为同比贡献率或据此认定主因。"
+          },
+          {
+            "id": "receipt_reconciliation",
+            "status": "supported",
+            "reason": "回款分类互斥：期末应收回款130（长账龄90+短账龄40）与新订单预收70合计200，验证正确。长账龄剩余=250-90=160，覆盖率=90/250=36%，计算正确。分类逻辑符合‘回款逐笔按对应债权分类’的要求，且未重复求和或互相替代。",
+            "report_quote": "期末应收回款130=长账龄90+短账龄40；另有新订单预收70，全部收款200=90+40+70。长账龄剩余160=250-90；同一债权池覆盖率36%=90/250"
+          }
+        ]
+      },
+      "calls": [
+        {
+          "request": {
+            "max_tokens": 8000,
+            "temperature": 0,
+            "timeout": 60,
+            "max_retries": 0
+          },
+          "meta": {
+            "finish_reason": "stop",
+            "completion_tokens": 2985,
+            "prompt_tokens": 3771,
+            "duration_ms": 34007
+          },
+          "strict_json_object": true,
+          "content": "{\n  \"overall_assessment\": {\n    \"quality_score\": 8,\n    \"verdict\": \"pass\",\n    \"summary\": \"报告草稿逻辑清晰、态度谨慎，正确回应了用户问题中的现金流下降原因、回款分类、长账龄余额和覆盖率，并明确指出资料不足无法评级。唯一不足是未明确所引用数据的期间基准，可能影响时效性判断。整体质量良好，可进入下一步修订。\"\n  },\n  \"issues\": [\n    {\n      \"id\": \"issue_1\",\n      \"target_section\": \"章节草稿\",\n      \"issue_type\": \"incomplete\",\n      \"severity\": \"minor\",\n      \"location\": \"首句\",\n      \"description\": \"报告引用的经营现金流、应收、存货等数据均未标注所述期间（如‘本期’的具体年度/季度），也未说明台账的截止日期。在风控复核中，缺少期间基准将无法判断数据是否在研究截止日之前，也无法进行跨期对比。\",\n      \"evidence\": \"全文仅出现‘本期’‘上期’等相对时间，未提供任何绝对日期或期间表述（如‘2025年度’‘2026年1月’）。研究截止日为2026-02-20，但无法确认这些数据是截止日前还是截止日后的。\",\n      \"suggestion\": \"明确补充数据的期间范围（例如：‘据截至202X年XX月XX日的内部台账’或‘2025年度经营现金流……’），并在后续分析中保持期间一致性。\",\n      \"requires_new_search\": false,\n      \"search_query\": \"\"\n    }\n  ],\n  \"fact_check_results\": [],\n  \"missing_aspects\": [\n    \"数据期间基准未明确\"\n  ],\n  \"strength_points\": [\n    \"诚实披露数据来源为尚未独立核验的内部台账，避免事实断言\",\n    \"正确指出缺少上期调节项，无法进行同比贡献率归因，符合量化分析纪律\",\n    \"回款分类互斥，合计验证正确（90+40+70=200）\",\n    \"长账龄剩余和覆盖率计算正确，并明确提示不能认为风险已解除\",\n    \"结论保守合理，未在资料不足时强行评级或审批\"\n  ],\n  \"analysis_checks\": [\n    {\n      \"id\": \"question_coverage\",\n      \"status\": \"supported\",\n      \"reason\": \"报告逐项覆盖了用户要求的现金流下降原因、回款分类、剩余长账龄、覆盖率与核查限制。现金流下降原因提及应收和存货占用，但未强作归因；回款分类为长账龄90、短账龄40、新订单预收70；剩余长账龄=250-90=160；覆盖率=90/250=36%；核查限制为资料不足且需补件。\",\n      \"report_quote\": \"（全文均涉及上述要点）\"\n    },\n    {\n      \"id\": \"period_basis\",\n      \"status\": \"issue\",\n      \"reason\": \"报告未提供任何绝对期间或截止日期，仅使用‘本期’‘上期’等相对表述。源数据中虽有‘截至测试截止日’，但报告正文未引用该日期。缺少期间基准会导致时效性无法判断，属于信息不完整。\",\n      \"report_quote\": \"据内部台账（尚未经独立核验），经营现金流由400降至100，下降300。\"\n    },\n    {\n      \"id\": \"cashflow_attribution\",\n      \"status\": \"supported\",\n      \"reason\": \"报告正确指出‘缺少上期各调节项，不能把240/300解释为同比贡献率或据此认定主因’，未违反量化分析纪律中关于同比归因的限制。仅列出本期调节项（应收+240、存货+30）作为现金占用说明，未做越界归因。\",\n      \"report_quote\": \"本期应收增加240、存货增加30，均占用现金；缺少上期各调节项，不能把240/300解释为同比贡献率或据此认定主因。\"\n    },\n    {\n      \"id\": \"receipt_reconciliation\",\n      \"status\": \"supported\",\n      \"reason\": \"回款分类互斥：期末应收回款130（长账龄90+短账龄40）与新订单预收70合计200，验证正确。长账龄剩余=250-90=160，覆盖率=90/250=36%，计算正确。分类逻辑符合‘回款逐笔按对应债权分类’的要求，且未重复求和或互相替代。\",\n      \"report_quote\": \"期末应收回款130=长账龄90+短账龄40；另有新订单预收70，全部收款200=90+40+70。长账龄剩余160=250-90；同一债权池覆盖率36%=90/250\"\n    }\n  ]\n}"
+        }
+      ]
+    },
+    {
+      "case": "insufficient_disclosed",
+      "repeat": 2,
+      "expected_issue": null,
+      "review": {
+        "overall_assessment": {
+          "quality_score": 7,
+          "verdict": "pass",
+          "summary": "报告诚实披露了资料不足的现状，对用户提出的每项问题均指出了无法回答的原因，没有超出数据支持范围的断言。未发现关键性错误或违规行为，资料缺口已在正文中明确标注。",
+          "verdict_source": "rule",
+          "llm_verdict": "pass",
+          "llm_verdict_overridden": false,
+          "verdict_reasons": [
+            "未发现阻断级问题且质量分达标"
+          ]
+        },
+        "issues": [],
+        "fact_check_results": [],
+        "missing_aspects": [],
+        "strength_points": [
+          "如实披露内部台账未经独立核验，未将其当作已核实事实",
+          "明确指出缺少调节表、债权对应关系等关键资料，拒绝在信息不足时强做归因或分类",
+          "结论合理：资料不足时不能评级或审批，符合风控原则"
+        ],
+        "analysis_checks": [
+          {
+            "id": "question_coverage",
+            "status": "supported",
+            "reason": "报告逐项回应了研究问题：1) 现金流下降原因——‘不能认定同比下降主因’；2) 回款分类——‘不能区分期末应收回收与新订单预收’；3) 剩余长账龄——‘无法计算’；4) 覆盖率——‘无法计算’。所有回应均基于资料不足的客观限制，未遗漏任何核心问题。",
+            "report_quote": "不能认定同比下降主因……不能区分期末应收回收与新订单预收，无法计算剩余长账龄及覆盖率"
+          },
+          {
+            "id": "period_basis",
+            "status": "supported",
+            "reason": "报告隐含使用了本期与上期口径（‘经营现金流由400降至100’），期间基础与内部台账一致，未出现矛盾或跨期口径混乱。未要求具体日历日期，因报告整体处于资料不足状态，该处理可接受。",
+            "report_quote": "经营现金流由400降至100"
+          },
+          {
+            "id": "cashflow_attribution",
+            "status": "supported",
+            "reason": "报告正确指出缺少调节表，不能认定同比下降主因，符合分析纪律第3条关于缺少上期调节项时不得使用本期营运资金变动除以差额声称主因的要求。",
+            "report_quote": "缺少调节表，不能认定同比下降主因"
+          },
+          {
+            "id": "receipt_reconciliation",
+            "status": "supported",
+            "reason": "报告明确披露收到200万元但缺少债权对应关系，因此无法区分期末应收回款与新订单预收，从而无法进行互斥分类、核对总收款或计算长账龄覆盖率。完全符合分析纪律第4条关于分类前提的要求。",
+            "report_quote": "收到200但没有债权对应关系，不能区分期末应收回收与新订单预收"
+          }
+        ]
+      },
+      "calls": [
+        {
+          "request": {
+            "max_tokens": 8000,
+            "temperature": 0,
+            "timeout": 60,
+            "max_retries": 0
+          },
+          "meta": {
+            "finish_reason": "stop",
+            "completion_tokens": 2572,
+            "prompt_tokens": 3549,
+            "duration_ms": 28736
+          },
+          "strict_json_object": true,
+          "content": "{\n  \"overall_assessment\": {\n    \"quality_score\": 7,\n    \"verdict\": \"pass\",\n    \"summary\": \"报告诚实披露了资料不足的现状，对用户提出的每项问题均指出了无法回答的原因，没有超出数据支持范围的断言。未发现关键性错误或违规行为，资料缺口已在正文中明确标注。\"\n  },\n  \"issues\": [],\n  \"fact_check_results\": [],\n  \"missing_aspects\": [],\n  \"strength_points\": [\n    \"如实披露内部台账未经独立核验，未将其当作已核实事实\",\n    \"明确指出缺少调节表、债权对应关系等关键资料，拒绝在信息不足时强做归因或分类\",\n    \"结论合理：资料不足时不能评级或审批，符合风控原则\"\n  ],\n  \"analysis_checks\": [\n    {\n      \"id\": \"question_coverage\",\n      \"status\": \"supported\",\n      \"reason\": \"报告逐项回应了研究问题：1) 现金流下降原因——‘不能认定同比下降主因’；2) 回款分类——‘不能区分期末应收回收与新订单预收’；3) 剩余长账龄——‘无法计算’；4) 覆盖率——‘无法计算’。所有回应均基于资料不足的客观限制，未遗漏任何核心问题。\",\n      \"report_quote\": \"不能认定同比下降主因……不能区分期末应收回收与新订单预收，无法计算剩余长账龄及覆盖率\"\n    },\n    {\n      \"id\": \"period_basis\",\n      \"status\": \"supported\",\n      \"reason\": \"报告隐含使用了本期与上期口径（‘经营现金流由400降至100’），期间基础与内部台账一致，未出现矛盾或跨期口径混乱。未要求具体日历日期，因报告整体处于资料不足状态，该处理可接受。\",\n      \"report_quote\": \"经营现金流由400降至100\"\n    },\n    {\n      \"id\": \"cashflow_attribution\",\n      \"status\": \"supported\",\n      \"reason\": \"报告正确指出缺少调节表，不能认定同比下降主因，符合分析纪律第3条关于缺少上期调节项时不得使用本期营运资金变动除以差额声称主因的要求。\",\n      \"report_quote\": \"缺少调节表，不能认定同比下降主因\"\n    },\n    {\n      \"id\": \"receipt_reconciliation\",\n      \"status\": \"supported\",\n      \"reason\": \"报告明确披露收到200万元但缺少债权对应关系，因此无法区分期末应收回款与新订单预收，从而无法进行互斥分类、核对总收款或计算长账龄覆盖率。完全符合分析纪律第4条关于分类前提的要求。\",\n      \"report_quote\": \"收到200但没有债权对应关系，不能区分期末应收回收与新订单预收\"\n    }\n  ]\n}"
+        }
+      ]
+    }
+  ],
+  "code_commit": "41b7f3a",
+  "note": "Production code unchanged during baseline process; harness metadata instrumentation only. Four synthetic cases repeated twice."
+}
