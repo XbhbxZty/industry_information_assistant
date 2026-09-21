@@ -192,6 +192,15 @@ class InvestigationTools:
         # Web excerpts remain exploratory material.
         feedback = {}
         if source.get("is_local"):
+            try:
+                from config.dd_checklist import CHECKLIST_BY_ID
+            except ImportError:
+                from app.config.dd_checklist import CHECKLIST_BY_ID
+            feedback["allowed_field_ids"] = [c.get("field_id") for c in self.state.get("field_checks", [])
+                                             if c.get("field_id") in CHECKLIST_BY_ID]
+            feedback["analysis_boundary"] = (
+                "核实候选只能使用 allowed_field_ids；账龄和回款等不在清单中的分析可用 record_finding 记录，"
+                "不得虚构字段或强行映射为其他已核实项。抽取失败不代表材料缺失。")
             before = len(self.state.get("rag_evidence_rejections", []))
             try:
                 analysis = await asyncio.wait_for(self.scout._analyze_search_results(

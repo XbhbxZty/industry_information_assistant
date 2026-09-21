@@ -36,7 +36,9 @@ def setup_tools():
 def test_read_and_record_does_not_change_rating_or_checks():
     tools, sid = setup_tools()
     original = copy.deepcopy(tools.state["field_checks"])
-    asyncio.run(tools.execute("read_source", {"source_id": sid}))
+    read = asyncio.run(tools.execute("read_source", {"source_id": sid}))
+    assert isinstance(read["evidence_feedback"]["allowed_field_ids"], list)
+    assert "record_finding" in read["evidence_feedback"]["analysis_boundary"]
     result = asyncio.run(tools.execute("record_finding", {
         "source_id": sid, "claim": "现金流下降可能与回款有关", "kind": "support",
         "quote": "企业现金流下降，需要调查回款情况。"}))

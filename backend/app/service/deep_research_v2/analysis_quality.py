@@ -62,3 +62,34 @@ def enforce_analysis_review(result, report):
         if not valid:
             result["degraded"] = True
     return result
+
+
+def apply_analysis_revision(notebook, revision):
+    """Update only interpretation, retaining source receipts and an audit history."""
+    if not isinstance(revision, dict):
+        raise ValueError("修订不是对象")
+    summary, findings, missing = (revision.get(k) for k in ("summary", "findings", "missing_materials"))
+    originals = notebook.get("findings", [])
+    if not isinstance(summary, str) or not 1 <= len(summary.strip()) <= 2000:
+        raise ValueError("修订概述长度无效")
+    if not isinstance(findings, list) or len(findings) != len(originals):
+        raise ValueError("必须逐项修订发现，不能静默删除原记录")
+    if not isinstance(missing, list) or len(missing) > 8 or any(not isinstance(x, str) or not 1 <= len(x.strip()) <= 400 for x in missing):
+        raise ValueError("补件列表无效")
+    replacements = deepcopy(originals)
+    indices = set()
+    for row in findings:
+        if not isinstance(row, dict):
+            raise ValueError("发现格式无效")
+        index, claim = row.get("index"), row.get("claim")
+        if type(index) is not int or not 0 <= index < len(originals) or index in indices:
+            raise ValueError("发现索引无效或重复")
+        if not isinstance(claim, str) or not 6 <= len(claim) <= 700:
+            raise ValueError("修订发现长度无效")
+        indices.add(index)
+        replacements[index].update(claim=claim, verified=False, inference_status="revision_pending_review")
+    # Commit only after all fields validate. Model-supplied source/quote/status fields are ignored.
+    history = deepcopy(notebook.get("analysis_revisions", []))
+    history.append({k: deepcopy(notebook.get(k)) for k in ("summary", "findings", "missing_materials")})
+    notebook.update(summary=summary, findings=replacements, missing_materials=missing,
+                    analysis_revisions=history[-3:])
