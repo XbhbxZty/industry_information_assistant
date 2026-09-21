@@ -2065,6 +2065,7 @@ URL: {url}
         due_diligence_mode: bool = False,
         active_field_ids: Optional[List[str]] = None,
         all_active_fields: bool = False,
+        extraction_timeout: Optional[float] = None,
     ) -> Optional[Dict]:
         """分析搜索结果
 
@@ -2200,6 +2201,7 @@ KB ID: {r.get('kb_id', '')}
             json_mode=True,
             temperature=0.2,
             max_tokens=6000 if due_diligence_mode else 16000,
+            **({"timeout": extraction_timeout, "max_retries": 0} if extraction_timeout is not None else {}),
         )
 
         return self.parse_json_response(response)

@@ -77,6 +77,7 @@ def evidence_context(notebook):
         "read_evidence": [
             {"source_id": sid, "title": s.get("title"), "text": "\n".join(s.get("read_texts", []))[:1500],
              "truncated": len("\n".join(s.get("read_texts", []))) > 1500,
+             "quote_options": dict(list(s.get("quote_options", {}).items())[:12]),
              "extraction_error": s.get("extraction_error")}
             for sid, s in list(sources.items())[:40] if s.get("read")
         ][:12],
@@ -114,6 +115,7 @@ async def investigate(
 
     prior_steps = int(notebook.get("steps_used", 0))
     for step in range(prior_steps, budget.max_steps):
+        action, arguments = None, {}
         notebook["steps_used"] = step + 1
         if monotonic() - started >= budget.max_seconds:
             notebook["status"] = "time_limit"
@@ -162,11 +164,12 @@ async def investigate(
             key = json.dumps([action, arguments], sort_keys=True, ensure_ascii=False)
             if key in seen:
                 raise ValueError("该行动已执行。请查看 source_inventory，选择相关的 retrieved_unread 来源；已读原文在 read_evidence 中，不需重复读取。若无相关未读材料则结束。")
-            seen.add(key)
             emit({"title": f"调查行动：{action}", "subtitle": reason})
             observation = await bounded(execute(action, arguments))
             if not isinstance(observation, dict):
                 raise ValueError("工具未返回结构化结果")
+            if observation.get("ok", True):
+                seen.add(key)
             # Keep bounded receipts; full sources live separately in the notebook.
             receipt = {"action": action, "arguments": arguments, "reason": reason, "result": observation}
             notebook["actions"].append(receipt)
@@ -178,7 +181,8 @@ async def investigate(
             stalled += 1
         except (ValueError, TypeError) as exc:
             observation = {"ok": False, "error": str(exc)[:400]}
-            notebook["actions"].append({"action": "invalid_action", "result": observation})
+            notebook["actions"].append({"action": "invalid_action", "attempted_action": action,
+                                        "arguments": arguments, "result": observation})
             stalled += 1
         except Exception as exc:
             # Provider/tool failures must stay visible; do not let the downstream
@@ -191,7 +195,12 @@ async def investigate(
             break
     else:
         notebook["status"] = "step_limit"
-    if notebook["status"] != "completed" and notebook["findings"] and monotonic() - started < budget.max_seconds:
+    if notebook["status"] != "completed":
+        inventory = evidence_context(notebook)["source_inventory"]
+        read_count = sum(s["status"] == "read_unverified" for s in inventory)
+        notebook["summary"] = f"调查未完成：已检索{len(inventory)}个来源，已阅读{read_count}个；未读或未核实不等于未提供。"
+        notebook["missing_materials"] = []
+    if notebook["status"] != "completed" and (notebook["findings"] or evidence_context(notebook)["read_evidence"]) and monotonic() - started < budget.max_seconds:
         # A stalled investigator must remain visibly stalled, but the useful
         # evidence it already recorded should not disappear from the report.
         # One bounded close-out call turns unresolved questions into explicit

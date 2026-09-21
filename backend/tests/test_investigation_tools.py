@@ -53,10 +53,10 @@ def test_adjacent_chunk_is_read_only_from_authorized_document():
     assert "账龄" in result["text"]
     assert result["source_id"] != sid
     assert tools.sources[result["source_id"]]["doc_id"] == DOC
-    with pytest.raises(ValueError, match="引文"):
-        asyncio.run(tools.execute("record_finding", {
+    invalid = asyncio.run(tools.execute("record_finding", {
             "source_id": result["source_id"], "claim": "不能将前一片段冒充当前来源",
             "quote": "企业现金流下降，需要调查回款情况。"}))
+    assert invalid["ok"] is False and "引文" in invalid["error"]
 
 
 def test_extraction_failure_preserves_readable_text_without_verification():
@@ -80,8 +80,8 @@ def test_extraction_cancellation_propagates():
 @pytest.mark.parametrize("invalid", ["unknown", None, []])
 def test_cannot_read_unknown_source(invalid):
     tools, _ = setup_tools()
-    with pytest.raises(ValueError):
-        asyncio.run(tools.execute("read_source", {"source_id": invalid}))
+    result = asyncio.run(tools.execute("read_source", {"source_id": invalid}))
+    assert not result["ok"] and result["sources"]
 
 
 def test_revoked_scope_and_forged_quote_are_rejected():
@@ -89,8 +89,8 @@ def test_revoked_scope_and_forged_quote_are_rejected():
     with pytest.raises(ValueError, match="先 read_source"):
         asyncio.run(tools.execute("record_finding", {"source_id": sid}))
     asyncio.run(tools.execute("read_source", {"source_id": sid}))
-    with pytest.raises(ValueError, match="引文"):
-        asyncio.run(tools.execute("record_finding", {"source_id": sid, "claim": "没有任何经营风险存在", "quote": "不存在任何经营风险"}))
+    result = asyncio.run(tools.execute("record_finding", {"source_id": sid, "claim": "没有任何经营风险存在", "quote": "不存在任何经营风险"}))
+    assert not result["ok"] and "引文" in result["error"]
     tools.state["kb_scope"] = []
     with pytest.raises(ValueError, match="授权"):
         asyncio.run(tools.execute("read_source", {"source_id": sid, "chunk_index": 2}))
@@ -100,6 +100,20 @@ def test_disabled_web_tool_never_runs():
     tools, _ = setup_tools()
     with pytest.raises(ValueError, match="未授权"):
         asyncio.run(tools.execute("search_web", {"query": "企业"}))
+
+
+def test_quote_id_uses_exact_read_text_and_rejects_unknown_id():
+    tools, sid = setup_tools()
+    read = asyncio.run(tools.execute("read_source", {"source_id": sid}))
+    qid, quote = next(iter(read["quote_options"].items()))
+    result = asyncio.run(tools.execute("record_finding", {
+        "source_id": sid, "claim": "现金流变化需要进一步调查", "quote_id": qid}))
+    assert result["finding"]["quote"] == quote and quote in read["text"]
+    assert result["finding"]["verified"] is False
+    bad = asyncio.run(tools.execute("record_finding", {
+        "source_id": sid, "claim": "现金流变化需要进一步调查", "quote_id": "forged"}))
+    assert not bad["ok"]
+    assert tools.scout._analyze_search_results.call_args.kwargs["extraction_timeout"] == 20
 
 
 def test_public_projection_omits_raw_sources_and_report_is_idempotent():

@@ -185,6 +185,7 @@ class BaseAgent(ABC):
         max_tokens: int = 0,
         timeout: Optional[float] = None,
         return_meta: bool = False,
+        max_retries: Optional[int] = None,
     ):
         """
         调用 LLM
@@ -236,8 +237,9 @@ class BaseAgent(ABC):
             if json_mode:
                 kwargs["response_format"] = {"type": "json_object"}
 
+            request_client = self.client if max_retries is None else self.client.with_options(max_retries=max_retries)
             response = await asyncio.to_thread(
-                self.client.chat.completions.create,
+                request_client.chat.completions.create,
                 **kwargs
             )
 

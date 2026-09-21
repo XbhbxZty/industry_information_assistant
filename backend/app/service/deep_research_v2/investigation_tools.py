@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import re
 from uuid import UUID
 
 from .investigator import investigate, InvestigationBudget
@@ -23,7 +24,7 @@ class InvestigationTools:
     def definitions(self):
         tools = {
             "read_source": '阅读已检索来源及提取证据：{"source_id":"s_...", "chunk_index":可选本地片段序号, "offset":可选网页正文偏移量}。可选择同文档其他片段；网页每次读取6000字。',
-            "record_finding": '记录有原文依据的分析：{"claim":"判断或替代解释", "source_id":"已读来源ID", "quote":"该来源中的原文", "kind":"support|counter|gap"}。仅为调查发现。',
+            "record_finding": '记录分析：{"claim":"判断或替代解释", "source_id":"已读来源ID", "quote_id":"阅读结果返回的引文ID", "kind":"support|counter|gap"}。优先选择quote_id，不要自行改写引文；也兼容quote原文。',
             "inspect_checks": "查看当前核查状态和证据校验反馈，参数 {}。",
         }
         if self.state.get("search_local"):
@@ -35,12 +36,19 @@ class InvestigationTools:
     def add_source(self, row):
         identity = json.dumps([row.get("kb_id"), row.get("doc_id"), row.get("chunk_index"),
                                row.get("url"), row.get("summary")], ensure_ascii=False)
-        sid = "s_" + hashlib.sha256(identity.encode()).hexdigest()[:16]
+        fingerprint = hashlib.sha256(identity.encode()).hexdigest()
+        sid = next((key for key, value in self.sources.items() if value.get("fingerprint") == fingerprint), None)
+        if sid is None:
+            index = 1
+            while f"s{index}" in self.sources:
+                index += 1
+            sid = f"s{index}"
         fresh = sid not in self.sources
         if fresh and len(self.sources) >= 40:
             return None, False
         self.sources.setdefault(sid, {**row, "summary": str(row.get("summary") or "")[:6000],
-                                     "read": False, "read_texts": []})
+                                     "read": False, "read_texts": [], "fingerprint": fingerprint,
+                                     "quote_options": {}})
         return sid, fresh
 
     async def choose(self, prompt, context):
@@ -85,17 +93,22 @@ class InvestigationTools:
             ], "evidence": self.state.get("rag_evidence_summary", {})}
         sid = args.get("source_id")
         if not isinstance(sid, str) or sid not in self.sources:
-            raise ValueError("来源 ID 不存在，请先检索")
+            return {"ok": False, "progress": False, "error": "来源 ID 不存在，请从返回目录选择，不要猜测", "sources": [
+                {"source_id": k, "title": v.get("title"), "read": v.get("read", False)}
+                for k, v in self.sources.items()]}
         source = self.sources[sid]
         if action == "record_finding":
             claim, quote = args.get("claim"), args.get("quote")
+            if "quote_id" in args:
+                quote = source.get("quote_options", {}).get(str(args["quote_id"]))
             kind = args.get("kind", "support")
             if not source.get("read"):
                 raise ValueError("请先 read_source 阅读原文")
             if not isinstance(claim, str) or not 6 <= len(claim) <= 700:
                 raise ValueError("发现应为 6 至 700 字")
             if not isinstance(quote, str) or not 6 <= len(quote) <= 1200 or not any(quote in t for t in source.get("read_texts", [])):
-                raise ValueError("引文无法在所读来源中定位，请重新阅读")
+                return {"ok": False, "progress": False, "error": "引文不匹配，请选择此来源已有quote_id，无需重新阅读", "source_id": sid,
+                        "quote_options": source.get("quote_options", {})}
             if kind not in ("support", "counter", "gap"):
                 raise ValueError("发现类型必须是 support、counter 或 gap")
             finding = {"claim": claim, "quote": quote, "source_id": sid, "kind": kind,
@@ -162,6 +175,12 @@ class InvestigationTools:
         if fresh_read:
             read_texts.append(text[:6000])
             source["read_texts"] = read_texts[-6:]
+        # IDs select exact server-observed text, never fuzzy-match model prose.
+        options = source.setdefault("quote_options", {})
+        for line in re.split(r"[\r\n]+|(?<=[。！？])", text[:6000]):
+            line = line.strip()
+            if 6 <= len(line) <= 1200 and line not in options.values() and len(options) < 40:
+                options[f"q{len(options) + 1}"] = line
         section = {"id": "agent_research", "title": "自主调查", "description": self.state["query"]}
         self.scout._retain_corpus_for_investigation(self.state, [{**source, "summary": text}], section["id"])
         # Local documents alone enter the existing deterministic evidence gate.
@@ -176,6 +195,7 @@ class InvestigationTools:
                     due_diligence_mode=True,
                     active_field_ids=[c.get("field_id", "") for c in self.state.get("field_checks", [])],
                     all_active_fields=True,
+                    extraction_timeout=20,
                 ), timeout=30)
                 if not isinstance(analysis, dict):
                     raise ValueError("invalid extraction result")
@@ -193,6 +213,7 @@ class InvestigationTools:
         return {"ok": True, "progress": fresh_read, "source_id": sid,
                 "title": source.get("title"), "chunk_index": source.get("chunk_index"),
                 "text": text[:6000], "evidence_feedback": feedback,
+                "quote_options": options,
                 "content_kind": "document_chunk" if source.get("is_local") else "web_page",
                 "total_chars": len(source.get("web_text") or text),
                 "truncated": source.get("truncated", False)}
