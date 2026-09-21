@@ -6,6 +6,34 @@ from pathlib import Path
 import pytest
 
 
+def test_cached_reads_lead_to_bounded_closeout_options():
+    notebook = {"sources": {"s1": {"read": True, "title": "资料", "read_texts": ["已读原文"]}}}
+    calls = []
+    async def choose(prompt, context):
+        if context["recovery"]["active"]:
+            assert set(context["tools"]) == {"record_finding"}
+            assert context["recovery"]["next_options"] == ["record_finding", "finish"]
+            return {"action": "finish", "arguments": {"summary": "已有原文，仍需核验"}}
+        return {"action": "read_source", "arguments": {"source_id": "s1"}}
+    async def execute(action, args):
+        calls.append(action)
+        return {"ok": True, "cached": True, "progress": False, "text": "已读原文"}
+    result = asyncio.run(investigate(brief={}, tools={"read_source": "", "record_finding": ""},
+                                    choose=choose, execute=execute, notebook=notebook, critique=False))
+    assert calls == ["read_source", "read_source"]
+    assert result["status"] == "completed"
+
+
+def test_invalid_action_keeps_brief_action_reason():
+    async def choose(prompt, context):
+        return {"action": "unknown", "reason": "核对分类口径"}
+    async def execute(*args):
+        pytest.fail("invalid tool ran")
+    result = asyncio.run(investigate(brief={}, tools={}, choose=choose, execute=execute,
+                                    notebook={}, budget=InvestigationBudget(max_steps=1)))
+    assert result["actions"][0]["reason"] == "核对分类口径"
+
+
 def test_source_memory_survives_action_window_and_reaches_review():
     notebook = {"sources": {
         "read1": {"title": "对比表", "read": True, "read_texts": ["上年收入为30，本年为40"], "extraction_error": "timeout"},

@@ -48,7 +48,7 @@ class InvestigationTools:
             return None, False
         self.sources.setdefault(sid, {**row, "summary": str(row.get("summary") or "")[:6000],
                                      "read": False, "read_texts": [], "fingerprint": fingerprint,
-                                     "quote_options": {}})
+                                     "quote_options": {}, "read_receipt": None})
         return sid, fresh
 
     async def choose(self, prompt, context):
@@ -169,6 +169,10 @@ class InvestigationTools:
             text = source.get("summary") or source.get("snippet") or ""
         if not text:
             return {"ok": False, "progress": False, "error": "来源没有可读文本"}
+        cached = source.get("read_receipt")
+        if cached and cached.get("text") == text[:6000]:
+            return {**cached, "progress": False, "cached": True,
+                    "note": "这是已读原文缓存，没有新增证据或重新抽取。请选择引文记录发现，或finish列明未决问题。"}
         source["read"] = True
         read_texts = source.setdefault("read_texts", [])
         fresh_read = text[:6000] not in read_texts
@@ -210,13 +214,15 @@ class InvestigationTools:
             feedback.update(candidate_count=len(self.state.get("rag_evidence_candidates", [])),
                             rejections=[r.get("reason") for r in self.state.get("rag_evidence_rejections", [])[before:]][:8])
             source["extraction_error"] = feedback.get("error")
-        return {"ok": True, "progress": fresh_read, "source_id": sid,
+        receipt = {"ok": True, "progress": fresh_read, "source_id": sid,
                 "title": source.get("title"), "chunk_index": source.get("chunk_index"),
                 "text": text[:6000], "evidence_feedback": feedback,
                 "quote_options": options,
                 "content_kind": "document_chunk" if source.get("is_local") else "web_page",
                 "total_chars": len(source.get("web_text") or text),
                 "truncated": source.get("truncated", False)}
+        source["read_receipt"] = receipt
+        return receipt
 
     async def run(self):
         brief = {"query": self.state["query"], "subject": self.state.get("company_name") or self.state.get("subject_name"),

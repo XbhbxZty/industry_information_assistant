@@ -115,19 +115,32 @@ async def investigate(
 
     prior_steps = int(notebook.get("steps_used", 0))
     for step in range(prior_steps, budget.max_steps):
-        action, arguments = None, {}
+        action, arguments, reason = None, {}, ""
         notebook["steps_used"] = step + 1
         if monotonic() - started >= budget.max_seconds:
             notebook["status"] = "time_limit"
             break
+        inventory = evidence_context(notebook)
+        recovering = stalled >= max(1, budget.max_stalled_steps - 1)
+        all_read = bool(inventory["source_inventory"]) and all(
+            s["status"] == "read_unverified" for s in inventory["source_inventory"])
+        available_tools = ({k: v for k, v in tools.items() if k == "record_finding"}
+                           if recovering and all_read else tools)
         context = {
-            "brief": brief, "tools": tools,
+            "brief": brief, "tools": available_tools,
             "questions": notebook["questions"],
             "findings": notebook["findings"][-16:],
             "recent_actions": notebook["actions"][-4:],
             "observation": observation,
             "remaining_steps": budget.max_steps - step,
-            **evidence_context(notebook),
+            **inventory,
+            "recovery": {
+                "active": recovering,
+                "consecutive_no_progress": stalled,
+                "instruction": ("全部来源已读且连续无进展：本轮只允许记录有引文的发现或finish；不要重新读取或搜索。"
+                                if recovering and all_read else "根据证据推进；缓存重读不算新进展。"),
+                "next_options": (["record_finding", "finish"] if recovering and all_read else []),
+            },
         }
         try:
             decision = await bounded(choose(SYSTEM_PROMPT, context))
@@ -159,10 +172,10 @@ async def investigate(
                 notebook["status"] = "completed"
                 break
 
-            if action not in tools:
+            if action not in available_tools:
                 raise ValueError("工具不可用，请使用 tools 中列出的工具")
             key = json.dumps([action, arguments], sort_keys=True, ensure_ascii=False)
-            if key in seen:
+            if key in seen and action != "read_source":
                 raise ValueError("该行动已执行。请查看 source_inventory，选择相关的 retrieved_unread 来源；已读原文在 read_evidence 中，不需重复读取。若无相关未读材料则结束。")
             emit({"title": f"调查行动：{action}", "subtitle": reason})
             observation = await bounded(execute(action, arguments))
@@ -182,7 +195,7 @@ async def investigate(
         except (ValueError, TypeError) as exc:
             observation = {"ok": False, "error": str(exc)[:400]}
             notebook["actions"].append({"action": "invalid_action", "attempted_action": action,
-                                        "arguments": arguments, "result": observation})
+                                        "arguments": arguments, "reason": reason, "result": observation})
             stalled += 1
         except Exception as exc:
             # Provider/tool failures must stay visible; do not let the downstream

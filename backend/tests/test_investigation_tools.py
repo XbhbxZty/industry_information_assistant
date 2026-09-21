@@ -116,6 +116,27 @@ def test_quote_id_uses_exact_read_text_and_rejects_unknown_id():
     assert tools.scout._analyze_search_results.call_args.kwargs["extraction_timeout"] == 20
 
 
+def test_repeat_read_is_cached_and_rechecks_scope():
+    tools, sid = setup_tools()
+    first = asyncio.run(tools.execute("read_source", {"source_id": sid}))
+    second = asyncio.run(tools.execute("read_source", {"source_id": sid}))
+    assert second["cached"] and not second["progress"]
+    assert first["text"] == second["text"]
+    assert tools.scout._analyze_search_results.call_count == 1
+    tools.state["kb_scope"] = []
+    with pytest.raises(ValueError, match="授权"):
+        asyncio.run(tools.execute("read_source", {"source_id": sid}))
+
+
+def test_failed_extraction_is_not_silently_retried_on_reread():
+    tools, sid = setup_tools()
+    tools.scout._analyze_search_results.side_effect = RuntimeError("offline")
+    asyncio.run(tools.execute("read_source", {"source_id": sid}))
+    result = asyncio.run(tools.execute("read_source", {"source_id": sid}))
+    assert result["cached"] and "RuntimeError" in result["evidence_feedback"]["error"]
+    assert tools.scout._analyze_search_results.call_count == 1
+
+
 def test_public_projection_omits_raw_sources_and_report_is_idempotent():
     notebook = {"status": "stalled", "sources": {"secret": "raw"}, "actions": [{"secret": "raw"}],
                 "findings": [{"claim": "<script>alert(1)</script>", "quote": "原文", "source_id": "s1"}],
