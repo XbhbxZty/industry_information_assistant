@@ -5,6 +5,7 @@ Only the invented text below is sent to the configured model provider.
 """
 import argparse
 import asyncio
+import copy
 import json
 import sys
 from pathlib import Path
@@ -74,11 +75,42 @@ async def main(args):
         critic.as_of = state["as_of"]
         state["agent_investigation"] = {"summary": report, "findings": [], "sources": {
             "s1": {"title": "合成台账", "read": True, "read_texts": [source], "summary": source}}}
+        if args.revise:
+            state["agent_investigation"]["findings"] = [{"claim": report.splitlines()[0], "quote": source,
+                "source_id": "s1", "title": "合成台账", "url": "synthetic://ledger", "kind": "support",
+                "verified": False, "citation_status": "located", "inference_status": "not_reviewed"}]
         try:
             raw = await critic._review_content(state)
             result = critic.merge_review(state, raw)
             results.append({"case": name, "repeat": repeat, "expected_issue": expected_issue, "review": result,
                             "calls": list(calls)})
+            if args.revise and expected_issue and not result.get("degraded"):
+                from service.deep_research_v2.agents.writer import LeadWriter
+                from service.deep_research_v2.investigation_report import append_investigation_report
+                writer = LeadWriter(config.api_key, config.base_url, model=config.agents.writer.model)
+                writer.as_of = state["as_of"]
+                revision_calls = []
+                writer_call = writer.call_llm
+                async def traced_writer_call(**kwargs):
+                    content, meta = await writer_call(**kwargs, return_meta=True)
+                    revision_calls.append({"content": content, "meta": meta})
+                    return content
+                writer.call_llm = traced_writer_call
+                state["critic_feedback"] = copy.deepcopy(result["issues"])
+                before = copy.deepcopy(state)
+                await writer._revise_agent_analysis(state)
+                state["final_report"] = append_investigation_report("", state["agent_investigation"])
+                calls.clear()
+                followup = critic.merge_review(state, await critic._review_content(state))
+                unchanged = all(state.get(k) == before.get(k) for k in ("field_checks", "risk_assessment", "critic_feedback"))
+                unchanged = unchanged and state["agent_investigation"]["sources"] == before["agent_investigation"]["sources"]
+                unchanged = unchanged and all(new.get(k) == old.get(k)
+                    for new, old in zip(state["agent_investigation"]["findings"], before["agent_investigation"]["findings"])
+                    for k in ("quote", "source_id", "verified", "citation_status"))
+                results[-1]["revision"] = {"model": config.agents.writer.model, "protected_state_unchanged": unchanged,
+                    "notebook": state["agent_investigation"], "review": followup, "calls": list(calls),
+                    "writer_calls": revision_calls, "writer_exercised": bool(revision_calls),
+                    "errors": state.get("errors", [])}
         except Exception as exc:
             results.append({"case": name, "repeat": repeat, "error": type(exc).__name__, "calls": list(calls)})
         print("CASE_JSON=" + json.dumps(results[-1], ensure_ascii=False), flush=True)
@@ -93,6 +125,7 @@ if __name__ == "__main__":
     parser.add_argument("--cases", nargs="+", choices=tuple(CASES), default=list(CASES))
     parser.add_argument("--max-tokens", type=int, choices=(4000, 8000), default=None,
                         help="omit to retain production configuration")
+    parser.add_argument("--revise", action="store_true", help="also exercise real Writer revision and Critic recheck; still not E2E")
     args = parser.parse_args()
     if not args.live:
         parser.error("--live is required; sends only built-in synthetic cases to the configured provider")
