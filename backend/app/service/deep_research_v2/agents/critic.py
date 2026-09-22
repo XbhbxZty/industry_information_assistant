@@ -365,6 +365,8 @@ class CriticMaster(BaseAgent):
             and ("issues" in llm_result or "overall_assessment" in llm_result)
         )
         if not _usable:
+            failure_meta = {k: llm_result[k] for k in ("review_failure", "call_meta")
+                            if isinstance(llm_result, dict) and k in llm_result}
             self.logger.error(
                 "[CriticMaster] LLM 审核不可用，且已无确定性兜底链路，按未审核处理"
             )
@@ -373,6 +375,7 @@ class CriticMaster(BaseAgent):
             # 而 review_not_executed 本就在阻断类型清单里，规则算出的
             # 结论与这里手写的一致，正好互为校验（BC-29）。
             llm_result = {
+                **failure_meta,
                 "overall_assessment": {
                     "quality_score": 0.0,
                     # 绝不能是 pass：审核根本没有执行过
@@ -517,6 +520,9 @@ class CriticMaster(BaseAgent):
         self.logger.info(f"[CriticMaster] 审核完成，结果: {bool(review_result)}")
 
         review_result = self.merge_review(state, review_result)
+        if state.get("research_strategy") == "agent" and state.get("due_diligence_mode"):
+            from ..analysis_quality import resolve_prior_analysis_issues
+            resolve_prior_analysis_issues(state.get("critic_feedback", []), review_result)
 
         if review_result is not None:
             # 记录反馈
@@ -552,6 +558,8 @@ class CriticMaster(BaseAgent):
                 "missing_aspects": review_result.get("missing_aspects", []),
                 "analysis_checks": review_result.get("analysis_checks", []),
                 "degraded": bool(review_result.get("degraded")),
+                "call_meta": review_result.get("call_meta", {}),
+                "review_failure": review_result.get("review_failure"),
             })
 
             # 如果有严重问题，发送具体反馈
@@ -687,6 +695,8 @@ class CriticMaster(BaseAgent):
 
         # 最终报告是实际交付物；扫描器与 LLM 共用同一文本入口。
         draft_content = self._content_for_review(state)
+        if state.get("research_strategy") == "agent" and state.get("due_diligence_mode"):
+            return await self._review_agent_content(state, draft_content)
 
         self.logger.info(f"[CriticMaster] 待审核内容长度: {len(draft_content)}")
 
@@ -762,6 +772,46 @@ class CriticMaster(BaseAgent):
         result = self.parse_json_response(response)
         self.logger.info(f"[CriticMaster] JSON 解析结果: {bool(result)}, verdict: {result.get('overall_assessment', {}).get('verdict') if result else 'N/A'}")
         return result
+
+    async def _review_agent_content(self, state, report):
+        """One compact, bounded review call; keep legacy workflow protocol unchanged."""
+        import asyncio
+        import json
+        from ..analysis_quality import COMPACT_REVIEW_PROMPT, parse_compact_review
+        from ..investigator import evidence_context
+        from ..investigation_report import append_investigation_report
+        appendix = append_investigation_report("", state.get("agent_investigation") or {})
+        context = {"query": state["query"], "report": report[:18000],
+                   "report_truncated": len(report) > 18000,
+                   "checklist": self._format_checklist_for_review(state),
+                   "as_of": state.get("as_of"), **evidence_context(state.get("agent_investigation") or {})}
+        notebook = state.get("agent_investigation") or {}
+        context["claims_to_audit"] = {
+            "summary": notebook.get("summary"),
+            "findings": [{"claim": f.get("claim"), "source_id": f.get("source_id")}
+                         for f in notebook.get("findings", [])[:20]],
+        }
+        if appendix.strip() not in context["report"]:
+            context["agent_appendix"] = appendix
+        # Evidence quotes must refer to actual delivered text, never only to a source.
+        # Keep the established substantive review boundaries; compact only the response protocol.
+        review_boundaries = self.REVIEW_PROMPT.split("## 研究问题", 1)[0].format(
+            field_checks=context["checklist"], as_of_section=self._format_as_of_section(state))
+        try:
+            content, meta = await asyncio.wait_for(self.call_llm(
+                system_prompt=review_boundaries + COMPACT_REVIEW_PROMPT,
+                user_prompt=json.dumps(context, ensure_ascii=False), json_mode=True,
+                temperature=self._cfg_temperature(), max_tokens=self._cfg_max_tokens(),
+                timeout=60, max_retries=0, return_meta=True,
+            ), timeout=70)
+            result = parse_compact_review(content, meta, report)
+            if context["report_truncated"]:
+                raise ValueError("review_report_truncated")
+            return result
+        except (ValueError, TypeError, asyncio.TimeoutError) as exc:
+            # The normal merge path records review_not_executed and blocks approval.
+            self.logger.warning("自主分析复核未完成: %s", type(exc).__name__)
+            return {"review_failure": str(exc)[:100], "call_meta": locals().get("meta", {})}
 
     async def final_check(self, state: ResearchState) -> Dict[str, Any]:
         """最终检查"""

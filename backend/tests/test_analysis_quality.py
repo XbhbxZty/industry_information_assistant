@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
-from service.deep_research_v2.analysis_quality import CHECKS, enforce_analysis_review, apply_analysis_revision
+from service.deep_research_v2.analysis_quality import CHECKS, enforce_analysis_review, apply_analysis_revision, parse_compact_review
 from service.deep_research_v2.agents.critic import CriticMaster
 from service.review_verdict import derive_verdict, unresolved_blocking_issues
 
@@ -146,6 +146,14 @@ def test_writer_revision_updates_appendix_not_rule_state():
     for key in ("field_checks", "risk_assessment", "critic_feedback"):
         assert state[key] == before[key]
     writer.call_llm.assert_awaited_once()
+    assert "30至200字" in writer.call_llm.call_args.kwargs["system_prompt"]
+    invalid = revision()
+    invalid["findings"][0]["claim"] = "过长" * 400
+    writer.call_llm.return_value = json.dumps(invalid)
+    preserved = copy.deepcopy(state["agent_investigation"])
+    asyncio.run(writer._revise_report(state))
+    assert state["agent_investigation"] == preserved
+    assert "修订发现长度无效" in state["errors"][-1]
     writer.call_llm.side_effect = RuntimeError("provider failure")
     preserved = copy.deepcopy(state["agent_investigation"])
     asyncio.run(writer._revise_report(state))
@@ -158,7 +166,8 @@ def test_critic_receives_agent_tail_beyond_ordinary_report_window():
     import json
     from unittest.mock import AsyncMock
     critic = CriticStub()
-    critic.call_llm = AsyncMock(return_value=json.dumps(receipt()))
+    raw = {"score": 9, "summary": "复核完成", "issues": [], "checks": receipt()["analysis_checks"]}
+    critic.call_llm = AsyncMock(return_value=(json.dumps(raw), {"finish_reason": "stop"}))
     critic._cfg_temperature = lambda: 0.2
     critic._cfg_max_tokens = lambda: 4000
     state = {"research_strategy": "agent", "due_diligence_mode": True,
@@ -168,5 +177,66 @@ def test_critic_receives_agent_tail_beyond_ordinary_report_window():
     asyncio.run(critic._review_content(state))
     prompt = critic.call_llm.call_args.kwargs["user_prompt"]
     assert "尾部需要复核" in prompt
-    assert "analysis_checks" in prompt
-    assert "cashflow_attribution" in prompt
+    system = critic.call_llm.call_args.kwargs["system_prompt"]
+    assert "checks" in system
+    assert "cashflow_attribution" in system
+    assert critic.call_llm.call_args.kwargs["return_meta"] is True
+    parsed_context = json.loads(prompt)
+    assert parsed_context["claims_to_audit"]["summary"] == "尾部需要复核"
+
+
+@pytest.mark.parametrize("finish", ["length", "content_filter", "", "tool_calls"])
+def test_truncated_review_rejected_even_if_json_is_complete(finish):
+    import json
+    raw = {"score": 9, "summary": "通过", "issues": [], "checks": receipt()["analysis_checks"]}
+    with pytest.raises(ValueError, match="incomplete_response"):
+        parse_compact_review(json.dumps(raw), {"finish_reason": finish}, "报告")
+
+
+@pytest.mark.parametrize("mutation", ["mixed_issues", "extra_key", "duplicate_check", "nonfinite_score", "unlocated_quote"])
+def test_compact_protocol_rejects_structural_degradation(mutation):
+    import json
+    raw = {"score": 9, "summary": "通过", "issues": [], "checks": receipt()["analysis_checks"]}
+    if mutation == "mixed_issues":
+        raw["issues"] = ["description"]
+    elif mutation == "extra_key":
+        raw["description"] = "错层字段"
+    elif mutation == "duplicate_check":
+        raw["checks"][0] = raw["checks"][1]
+    elif mutation == "nonfinite_score":
+        raw["score"] = float("nan")
+    else:
+        raw["issues"] = [{"type": "logic_error", "severity": "major", "quote": "编造原文", "reason": "错误", "fix": "修订"}]
+    with pytest.raises(ValueError):
+        parse_compact_review(json.dumps(raw), {"finish_reason": "stop"}, "报告")
+
+
+def test_duplicate_json_key_not_silently_overwritten():
+    with pytest.raises(ValueError, match="duplicate_key"):
+        parse_compact_review('{"score":3,"score":9}', {"finish_reason": "stop"}, "报告")
+
+
+def test_review_failure_metadata_survives_fail_closed_merge():
+    raw = {"review_failure": "review_incomplete_response", "call_meta": {"finish_reason": "length"}}
+    result = CriticStub().merge_review({"research_strategy": "agent", "due_diligence_mode": True}, raw)
+    assert result["review_failure"] == "review_incomplete_response"
+    assert result["call_meta"]["finish_reason"] == "length"
+    assert result["overall_assessment"]["verdict"] == "major_issues"
+
+
+def test_only_complete_passing_recheck_resolves_previous_analysis_issues():
+    from service.deep_research_v2.analysis_quality import resolve_prior_analysis_issues
+    prior = [{"issue_type": "analysis_quality_error", "resolved": False},
+             {"issue_type": "review_not_executed", "resolved": False},
+             {"issue_type": "unverified_as_fact", "resolved": False}]
+    review = receipt()
+    review["degraded"] = True
+    resolve_prior_analysis_issues(prior, review)
+    assert not any(i["resolved"] for i in prior)
+    review.pop("degraded")
+    saved = review.pop("analysis_checks")
+    resolve_prior_analysis_issues(prior, review)
+    assert not any(i["resolved"] for i in prior)
+    review["analysis_checks"] = saved
+    resolve_prior_analysis_issues(prior, review)
+    assert [i["resolved"] for i in prior] == [True, True, False]
