@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT / "app"))
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--session")
+    parser.add_argument("--ui", action="store_true", help="include this test's persisted UI events for audit")
     args = parser.parse_args()
     baseline = json.loads((ROOT / "eval/agent_e2e_pack/runs/T01-agent-002/result.json").read_text(encoding="utf-8"))
     load_dotenv(ROOT / ".env")
@@ -32,10 +33,10 @@ def main():
                                 (baseline["session_id"],)).fetchone()
         if not original:
             raise RuntimeError("Baseline owner unavailable")
-        rows = conn.execute("""SELECT session_id,status,phase,iteration,created_at,updated_at,state_json,final_report
+        rows = conn.execute("""SELECT session_id,status,phase,iteration,created_at,updated_at,state_json,final_report,ui_state_json
             FROM research_checkpoints WHERE user_id=%s AND query=%s
             ORDER BY created_at DESC LIMIT 12""", (original[0], baseline["query"])).fetchall()
-        for sid, status, phase, iteration, created, updated, state, report in rows:
+        for sid, status, phase, iteration, created, updated, state, report, ui_state in rows:
             if args.session and sid != args.session:
                 continue
             if {str(k.get("kb_id")) for k in state.get("kb_scope", [])} != {baseline["kb_id"]}:
@@ -48,6 +49,8 @@ def main():
                     "critic_feedback", "errors", "risk_assessment", "quality_score", "rag_evidence_summary",
                     "investigation_findings", "investigation_hypotheses", "messages")})
                 result["final_report"] = report or state.get("final_report")
+                if args.ui:
+                    result["ui_state"] = ui_state
             print("RESULT_JSON=" + json.dumps(result, ensure_ascii=False, default=str), flush=True)
 
 

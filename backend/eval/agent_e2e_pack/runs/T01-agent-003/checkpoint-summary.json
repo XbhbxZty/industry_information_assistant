@@ -1,0 +1,517 @@
+{
+  "session_id": "dd-1790046028682",
+  "status": "paused",
+  "phase": "completed",
+  "iteration": 0,
+  "created_at": "2026-09-22 03:00:35.373919",
+  "updated_at": "2026-09-22 03:04:35.979113",
+  "query": "请对海岫精密部件有限公司拟申请的800万元、12个月流动资金贷款开展截至2026年2月20日的尽职调查。只使用我选择的本地材料。重点判断2025年经营现金流转负是否主要由提前备货解释，核查回款改善能否缓释风险。请区分已观察事实、推断、相互矛盾的陈述和仍缺失的信息，给出可追溯依据及按优先级排列的补件清单。不要代替人工审批。",
+  "as_of": "2026-02-20",
+  "subject_name": "海岫精密部件有限公司",
+  "company_name": "海岫精密部件有限公司",
+  "kb_scope": [
+    {
+      "kb_id": "63fca1f1-7585-431d-86e5-e04fc360b570",
+      "kb_name": "`E2E-HX-T01-2026-9-20",
+      "collection": "kb_63fca1f17585431d86e5e04fc360b570",
+      "document_count": 5
+    }
+  ],
+  "research_strategy": "agent",
+  "search_web": false,
+  "search_local": true,
+  "critic_feedback": [],
+  "errors": [
+    "自主调查因 stalled 收束；未决问题不能视为已排除风险"
+  ],
+  "risk_assessment": {
+    "level": "数据不足，无法评级",
+    "gate_kinds": [
+      "overall_rate_below_min",
+      "judicial_required_unverified",
+      "category_rate_below_min",
+      "category_rate_below_min",
+      "category_rate_below_min",
+      "category_rate_below_min",
+      "category_rate_below_min"
+    ],
+    "completeness": {
+      "scenario": {
+        "name": "",
+        "rate": 0,
+        "total": 0,
+        "verified": 0,
+        "unverified_fields": []
+      },
+      "by_category": {
+        "basic": {
+          "rate": 0,
+          "total": 3,
+          "verified": 0,
+          "capability_gaps": 0
+        },
+        "equity": {
+          "rate": 0,
+          "total": 3,
+          "verified": 0,
+          "capability_gaps": 0
+        },
+        "opinion": {
+          "rate": 0,
+          "total": 2,
+          "verified": 0,
+          "capability_gaps": 0
+        },
+        "judicial": {
+          "rate": 0,
+          "total": 4,
+          "verified": 0,
+          "capability_gaps": 0
+        },
+        "relation": {
+          "rate": 0,
+          "total": 3,
+          "verified": 0,
+          "capability_gaps": 0
+        },
+        "financial": {
+          "rate": 0,
+          "total": 4,
+          "verified": 0,
+          "capability_gaps": 0
+        },
+        "operation": {
+          "rate": 0,
+          "total": 1,
+          "verified": 0,
+          "capability_gaps": 0
+        }
+      },
+      "verified_rate": 0,
+      "required_total": 15,
+      "capability_gaps": [],
+      "required_verified": 0,
+      "unverified_fields": [
+        "registration",
+        "business_scope",
+        "operating_status",
+        "shareholders",
+        "actual_controller",
+        "revenue",
+        "net_profit",
+        "debt_ratio",
+        "litigation",
+        "enforcement",
+        "dishonesty",
+        "guarantee",
+        "guarantee_circle",
+        "negative_news",
+        "regulatory_penalty"
+      ],
+      "conflicting_fields": []
+    },
+    "credit_advice": "信息不足，不得出具授信建议；建议补齐必查项后重新评估",
+    "gates_applied": [
+      "总体核实率 0% 低于 60%，不具备评级条件",
+      "司法维度必查项未核实（litigation、enforcement、dishonesty），等级下限提升至中风险",
+      "financial 维度核实率不足 50%，不参与加权且等级下限提升",
+      "judicial 维度核实率不足 50%，不参与加权且等级下限提升",
+      "relation 维度核实率不足 50%，不参与加权且等级下限提升",
+      "operation 维度核实率不足 50%，不参与加权且等级下限提升",
+      "opinion 维度核实率不足 50%，不参与加权且等级下限提升"
+    ],
+    "composite_score": 0,
+    "triggered_rules": [],
+    "dimension_scores": {},
+    "dimensions_excluded": [
+      "financial",
+      "judicial",
+      "relation",
+      "operation",
+      "opinion"
+    ],
+    "credit_recommendation": {
+      "basis": [],
+      "reason": "信息不足，不具备测算条件；补齐必查项后重新评估",
+      "range_low": null,
+      "conditions": [
+        "以下必查项尚未核实，须补齐后复评：registration、business_scope、operating_status、shareholders、actual_controller",
+        "本笔评级要求人工复核，未经复核不得放款"
+      ],
+      "deductions": [],
+      "range_high": null,
+      "adjustments": [],
+      "advice_text": "信息不足，不具备测算条件；补齐必查项后重新评估",
+      "recommendable": false,
+      "based_on_level": "数据不足，无法评级",
+      "application_gap": null,
+      "suggested_amount": null,
+      "unavailable_bases": [],
+      "application_amount": null
+    },
+    "requires_human_review": true
+  },
+  "quality_score": 9,
+  "rag_evidence_summary": {
+    "rejected": 4,
+    "verified": 0,
+    "conflicting": 0,
+    "rejection_reasons": {
+      "无法从原文切出证据窗口": 1,
+      "field_id 不属于固定二十项清单": 2,
+      "取值近邻原文没有该字段的确定性关键词，字段归属无法确认": 1
+    },
+    "rejection_breakdown": [
+      {
+        "count": 2,
+        "fields": {
+          "receivable_aging": 2
+        },
+        "reason": "field_id 不属于固定二十项清单",
+        "samples": [
+          {
+            "value": "2900",
+            "field_id": "receivable_aging",
+            "section_id": "agent_research"
+          },
+          {
+            "value": "2000",
+            "field_id": "receivable_aging",
+            "section_id": "agent_research"
+          }
+        ]
+      },
+      {
+        "count": 1,
+        "fields": {
+          "cash_flow": 1
+        },
+        "reason": "取值近邻原文没有该字段的确定性关键词，字段归属无法确认",
+        "samples": [
+          {
+            "value": "转负",
+            "field_id": "cash_flow",
+            "section_id": "agent_research"
+          }
+        ]
+      },
+      {
+        "count": 1,
+        "fields": {
+          "cash_flow": 1
+        },
+        "reason": "无法从原文切出证据窗口",
+        "samples": [
+          {
+            "value": "转负",
+            "detail": "取值「转负」无法在原文中逐字定位",
+            "field_id": "cash_flow",
+            "section_id": "agent_research"
+          }
+        ]
+      }
+    ]
+  },
+  "field_checks": [
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "basic",
+      "field_id": "registration",
+      "required": true,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "工商登记基本信息",
+      "section_id": "sec_1",
+      "failure_reason": "数据源 business_registry 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    },
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "basic",
+      "field_id": "business_scope",
+      "required": true,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "经营范围",
+      "section_id": "sec_1",
+      "failure_reason": "数据源 business_registry 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    },
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "basic",
+      "field_id": "operating_status",
+      "required": true,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "登记状态",
+      "section_id": "sec_1",
+      "failure_reason": "数据源 business_registry 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    },
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "equity",
+      "field_id": "shareholders",
+      "required": true,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "股东结构",
+      "section_id": "sec_2",
+      "failure_reason": "数据源 business_registry 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    },
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "equity",
+      "field_id": "actual_controller",
+      "required": true,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "实际控制人",
+      "section_id": "sec_2",
+      "failure_reason": "数据源 business_registry 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    },
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "equity",
+      "field_id": "external_investment",
+      "required": false,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "对外投资",
+      "section_id": "sec_2",
+      "failure_reason": "数据源 business_registry 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    },
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "operation",
+      "field_id": "bidding_record",
+      "required": false,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "中标记录",
+      "section_id": "sec_3",
+      "failure_reason": "数据源 bidding 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    },
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "financial",
+      "field_id": "revenue",
+      "required": true,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "营业收入",
+      "section_id": "sec_4",
+      "failure_reason": "数据源 financial_report 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    },
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "financial",
+      "field_id": "net_profit",
+      "required": true,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "净利润",
+      "section_id": "sec_4",
+      "failure_reason": "数据源 financial_report 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    },
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "financial",
+      "field_id": "debt_ratio",
+      "required": true,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "资产负债率",
+      "section_id": "sec_4",
+      "failure_reason": "数据源 financial_report 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    },
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "financial",
+      "field_id": "cash_flow",
+      "required": false,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "经营性现金流",
+      "section_id": "sec_4",
+      "failure_reason": "数据源 financial_report 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    },
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "judicial",
+      "field_id": "litigation",
+      "required": true,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "涉诉记录",
+      "section_id": "sec_5",
+      "failure_reason": "数据源 judicial 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    },
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "judicial",
+      "field_id": "enforcement",
+      "required": true,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "被执行记录",
+      "section_id": "sec_5",
+      "failure_reason": "数据源 judicial 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    },
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "judicial",
+      "field_id": "dishonesty",
+      "required": true,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "失信记录",
+      "section_id": "sec_5",
+      "failure_reason": "数据源 judicial 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    },
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "judicial",
+      "field_id": "equity_freeze",
+      "required": false,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "股权冻结",
+      "section_id": "sec_5",
+      "failure_reason": "数据源 judicial 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    },
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "relation",
+      "field_id": "guarantee",
+      "required": true,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "对外担保",
+      "section_id": "sec_6",
+      "failure_reason": "数据源 business_registry 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    },
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "relation",
+      "field_id": "guarantee_circle",
+      "required": true,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "担保圈",
+      "section_id": "sec_6",
+      "failure_reason": "数据源 graph_analysis 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    },
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "relation",
+      "field_id": "related_party",
+      "required": false,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "关联方交易",
+      "section_id": "sec_6",
+      "failure_reason": "数据源 financial_report 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    },
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "opinion",
+      "field_id": "negative_news",
+      "required": true,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "负面舆情",
+      "section_id": "sec_7",
+      "failure_reason": "数据源 public_opinion 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    },
+    {
+      "scope": "core",
+      "value": null,
+      "status": "unverified",
+      "sources": [],
+      "category": "opinion",
+      "field_id": "regulatory_penalty",
+      "required": true,
+      "checked_at": "2026-09-21T20:00:35.210257",
+      "field_name": "监管处罚",
+      "section_id": "sec_7",
+      "failure_reason": "数据源 public_opinion 未覆盖该项",
+      "conflict_detail": [],
+      "attempted_sources": []
+    }
+  ]
+}
