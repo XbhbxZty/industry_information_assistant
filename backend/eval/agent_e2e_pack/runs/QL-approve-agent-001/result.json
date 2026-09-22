@@ -1,0 +1,422 @@
+{
+  "run_id": "QL-approve-agent-001",
+  "session_id": "dd-1790058867534",
+  "git_commit": "bb001e1a4779ff4c2b1bbfa18e488db7f194fa9d",
+  "dirty_worktree": true,
+  "fixture": "approve (existing untracked user files; not included in this commit)",
+  "status": "completed",
+  "phase": "completed",
+  "iteration": 2,
+  "created_at": "2026-09-22 06:34:33.315842",
+  "updated_at": "2026-09-22 06:38:35.675303",
+  "elapsed_seconds": null,
+  "investigation_seconds": 76,
+  "rule_checks": "passed_expected_values",
+  "agent_checks": "failed",
+  "overall_verdict": "not_passed",
+  "not_exercised": [
+    "upload/parse/index creation",
+    "browser visual verification",
+    "human review submission",
+    "actual lending",
+    "without-profile control"
+  ],
+  "query": "请对岐澜精工传动有限公司拟申请的1500万元、12个月流动资金贷款开展截至2026年5月18日的尽职调查。只使用我选择的本地材料与企业档案，不要检索互联网。请逐项交代固定二十项核查清单的核实情况，区分已观察事实、推断与仍缺失的信息，说明经营现金流、应收账龄与期后回款之间的勾稽关系，并为关键结论标注可追溯来源。风险等级与授信额度以规则引擎的测算为准，不要在正文里改写等级或金额。",
+  "as_of": "2026-05-18",
+  "subject_name": "岐澜精工传动有限公司",
+  "kb_scope": [
+    {
+      "kb_id": "7ed41088-1acf-4497-819e-d742d175e987",
+      "kb_name": "`E2E-HX-T02-2026-9-22",
+      "collection": "kb_7ed410881acf4497819ed742d175e987",
+      "document_count": 8
+    }
+  ],
+  "research_strategy": "agent",
+  "search_web": false,
+  "search_local": true,
+  "risk_assessment": {
+    "level": "低风险",
+    "gate_kinds": [],
+    "completeness": {
+      "scenario": {
+        "name": "",
+        "rate": 0,
+        "total": 0,
+        "verified": 0,
+        "unverified_fields": []
+      },
+      "by_category": {
+        "basic": {
+          "rate": 1,
+          "total": 3,
+          "verified": 3,
+          "capability_gaps": 0
+        },
+        "equity": {
+          "rate": 1,
+          "total": 3,
+          "verified": 3,
+          "capability_gaps": 0
+        },
+        "opinion": {
+          "rate": 1,
+          "total": 2,
+          "verified": 2,
+          "capability_gaps": 0
+        },
+        "judicial": {
+          "rate": 1,
+          "total": 4,
+          "verified": 4,
+          "capability_gaps": 0
+        },
+        "relation": {
+          "rate": 1,
+          "total": 3,
+          "verified": 3,
+          "capability_gaps": 0
+        },
+        "financial": {
+          "rate": 1,
+          "total": 4,
+          "verified": 4,
+          "capability_gaps": 0
+        },
+        "operation": {
+          "rate": 1,
+          "total": 1,
+          "verified": 1,
+          "capability_gaps": 0
+        }
+      },
+      "verified_rate": 1,
+      "required_total": 15,
+      "capability_gaps": [],
+      "required_verified": 15,
+      "unverified_fields": [],
+      "conflicting_fields": []
+    },
+    "credit_advice": "可考虑核准授信",
+    "gates_applied": [],
+    "composite_score": 4,
+    "triggered_rules": [
+      {
+        "score": 0,
+        "detail": "资产负债率 46.8%，处于安全区间（≤50%）",
+        "evidence": [
+          "fact_fb7af6ac",
+          "fact_43157f96",
+          "fact_9513ec8e"
+        ],
+        "field_id": "debt_ratio",
+        "dimension": "financial"
+      },
+      {
+        "score": 0,
+        "detail": "净利率 11.1%，盈利能力良好",
+        "evidence": [
+          "fact_fb7af6ac",
+          "fact_43157f96",
+          "fact_9513ec8e"
+        ],
+        "field_id": "net_profit",
+        "dimension": "financial"
+      },
+      {
+        "score": 0,
+        "detail": "营收较基期增长 29.0%",
+        "evidence": [
+          "fact_fb7af6ac",
+          "fact_43157f96",
+          "fact_9513ec8e"
+        ],
+        "field_id": "revenue",
+        "dimension": "financial"
+      },
+      {
+        "score": 0,
+        "detail": "经营性现金流各期均为正",
+        "evidence": [
+          "fact_fb7af6ac",
+          "fact_43157f96",
+          "fact_9513ec8e"
+        ],
+        "field_id": "cash_flow",
+        "dimension": "financial"
+      },
+      {
+        "score": 0,
+        "detail": "未发现失信被执行人记录",
+        "evidence": [],
+        "field_id": "dishonesty",
+        "dimension": "judicial"
+      },
+      {
+        "score": 0,
+        "detail": "未发现被执行记录",
+        "evidence": [],
+        "field_id": "enforcement",
+        "dimension": "judicial"
+      },
+      {
+        "score": 0,
+        "detail": "1 笔涉诉均为原告方，不构成负面",
+        "evidence": [
+          "fact_5e4d2637"
+        ],
+        "field_id": "litigation",
+        "dimension": "judicial"
+      },
+      {
+        "score": 40,
+        "detail": "对外担保 1 笔，合计 300 万元",
+        "evidence": [],
+        "field_id": "guarantee",
+        "dimension": "relation"
+      },
+      {
+        "score": 0,
+        "detail": "未发现担保圈涉入情况",
+        "evidence": [],
+        "field_id": "guarantee_circle",
+        "dimension": "relation"
+      },
+      {
+        "score": 0,
+        "detail": "登记状态：存续",
+        "evidence": [
+          "fact_d2845008",
+          "fact_a4065c26"
+        ],
+        "field_id": "operating_status",
+        "dimension": "operation"
+      },
+      {
+        "score": 0,
+        "detail": "中标记录 2 条",
+        "evidence": [
+          "fact_e1e60e99",
+          "fact_d867e909",
+          "fact_327d48bf"
+        ],
+        "field_id": "bidding_record",
+        "dimension": "operation"
+      },
+      {
+        "score": 0,
+        "detail": "已确认负面舆情 0 条",
+        "evidence": [],
+        "field_id": "negative_news",
+        "dimension": "opinion"
+      },
+      {
+        "score": 0,
+        "detail": "监管处罚 0 条",
+        "evidence": [],
+        "field_id": "regulatory_penalty",
+        "dimension": "opinion"
+      }
+    ],
+    "dimension_scores": {
+      "opinion": 0,
+      "judicial": 0,
+      "relation": 20,
+      "financial": 0,
+      "operation": 0
+    },
+    "dimensions_excluded": [],
+    "credit_recommendation": {
+      "basis": [
+        {
+          "value": 1852,
+          "detail": "2025年度营业收入 9260 万元 × 20%",
+          "method": "营收法"
+        },
+        {
+          "value": 2445,
+          "detail": "经营性现金流净额 815 万元 × 3.0",
+          "method": "现金流法"
+        }
+      ],
+      "reason": "",
+      "range_low": 1319,
+      "conditions": [
+        "对外担保 1 笔合计 300 万元属或有负债，须持续监控被担保方履约情况"
+      ],
+      "deductions": [
+        {
+          "item": "对外担保（或有负债）",
+          "amount": 300,
+          "detail": "1 笔合计 300 万元，被担保方违约时须代偿，全额扣减"
+        }
+      ],
+      "range_high": 1785,
+      "adjustments": [
+        {
+          "detail": "2 个口径取最小值，采用营收法",
+          "factor": "口径选取",
+          "multiplier": 1
+        },
+        {
+          "detail": "按 低风险 系数 1.0 调整",
+          "factor": "风险等级（低风险）",
+          "multiplier": 1
+        }
+      ],
+      "advice_text": "建议授信额度 1319–1785 万元（测算中值 1552 万元）；申请金额 1500 万元，在建议区间内",
+      "recommendable": true,
+      "based_on_level": "低风险",
+      "application_gap": -52,
+      "suggested_amount": 1552,
+      "unavailable_bases": [
+        {
+          "method": "净资产法",
+          "reason": "资产总额与负债总额均不在核查清单内，无可核实来源；净资产为二者之差，因此本口径不参与测算（不等于测算结果为零）"
+        }
+      ],
+      "application_amount": 1500
+    },
+    "requires_human_review": false
+  },
+  "critic_feedback": [
+    {
+      "id": "issue_d9ef591d",
+      "evidence": "必查项核实率 | 15/15（100%）",
+      "location": "必查项核实率 | 15/15（100%）",
+      "resolved": false,
+      "severity": "critical",
+      "issue_type": "unverified_as_fact",
+      "suggestion": "更正为20/20（或与实际列项一致），并逐一确认所有20项均已列明且核实状态正确。",
+      "description": "报告正文与证据溯源附录实际列出20项必查项，但评级表格中写15/15，与核查清单状态20项矛盾。该错误可能导致评审会认为只有15项已核实，遗漏5项的信息完整度评估，属于事实性错误且影响授信判断。",
+      "detected_by": "llm",
+      "target_section": "全局",
+      "requires_new_search": false
+    },
+    {
+      "id": "issue_545c42c9",
+      "evidence": "参保人数三年复合增速6.3%",
+      "location": "参保人数三年复合增速6.3%",
+      "resolved": false,
+      "severity": "minor",
+      "issue_type": "unverified_as_fact",
+      "suggestion": "删除该断言或补充可追溯的参保人数来源并标注核实状态。",
+      "description": "在调查员概述（AI分析）中声称的参保人数增速未出现在任何已核实字段或已读证据中，属于无来源的断言。虽然调查记录声明不替代规则评级，但该数据无依据，可能误导对经营扩张能力的判断。",
+      "detected_by": "llm",
+      "target_section": "全局",
+      "requires_new_search": false
+    },
+    {
+      "id": "issue_ef152653",
+      "evidence": "缺少有效的结构化复核回执",
+      "location": "question_coverage",
+      "resolved": true,
+      "severity": "major",
+      "issue_type": "review_not_executed",
+      "resolution": "subsequent_complete_analysis_review",
+      "suggestion": "重新执行分析复核；不得视为已通过",
+      "description": "分析复核项 question_coverage 缺失或格式无效，尚未完成复核",
+      "detected_by": "protocol",
+      "target_section": "全局",
+      "requires_new_search": false
+    },
+    {
+      "id": "issue_5e5938e4",
+      "evidence": "- 〔探索性·未经核实〕2025年末一年以上应收账款余额为435万元，较2024年末的315万元增加120万元。（来源：本地知识库／`E2E-HX-T02-2026-9-22；发布日期：未标注；获取时间：2026-09-21T23:34:47.733241）",
+      "location": "- 〔探索性·未经核实〕2025年末一年以上应收账款余额为435万元，较2024年末的315万元增加120万元。（来源：本地知识库／`E2E-HX-T02-2026-9-22；发布日期：未标注；获取时",
+      "resolved": false,
+      "severity": "minor",
+      "issue_type": "post_cutoff_evidence",
+      "suggestion": "在探索性部分开头统一声明：'以下数据获取时间晚于研究截止日2026-05-18，仅作后验参考，不参与本次判断。'",
+      "description": "该信息获取时间为2026-09-21，晚于研究截止日2026-05-18。报告将其放在调查层补充中并声明不作为授信依据，但未明确标注'以下为截止日后信息'，不符合规则对截止日后信息处理的明确标注要求。虽未影响核心结论，但易造成混淆。",
+      "detected_by": "llm",
+      "target_section": "全局",
+      "requires_new_search": false
+    },
+    {
+      "id": "issue_e8c2703f",
+      "evidence": "现有证据可支持：（1）主体资质完整、实缴资本到位、股权结构清晰、经营持续扩张（参保人数三年复合增速6.3%）",
+      "location": "现有证据可支持：（1）主体资质完整、实缴资本到位、股权结构清晰、经营持续扩张（参保人数三年复合增速6.3%）",
+      "resolved": false,
+      "severity": "minor",
+      "issue_type": "hallucination",
+      "suggestion": "删除'参保人数三年复合增速6.3%'这一表述，或补充对应的人事数据来源并标注为未核实。",
+      "description": "报告正文及所有已核实字段中均未出现'参保人数'数据及其来源。调查员概述声称'现有证据可支持'，但该数字无任何证据支撑，属于无来源的陈述。虽然该部分声明不替代规则评级，但仍可能误导阅读者认为该数字已被核实。",
+      "detected_by": "llm",
+      "target_section": "全局",
+      "requires_new_search": false
+    }
+  ],
+  "quality_score": 10,
+  "errors": [
+    "自主调查因 stalled 收束；未决问题不能视为已排除风险",
+    "评审提出 3 条意见待复核；撰写环节无权改写规则正文，自主分析如有修订仍须重新审核，未解决须由人工处理：报告正文与证据溯源附录实际列出20项必查项，但评级表格中写15/15，与核查清单状态20项矛盾。该错误可能导致评审会认为；在调查员概述（AI分析）中声称的参保人数增速未出现在任何已核实字段或已读证据中，属于无来源的断言。虽然调查记录声明不替代；分析复核项 question_coverage 缺失或格式无效，尚未完成复核",
+    "评审提出 5 条意见待复核；撰写环节无权改写规则正文，自主分析如有修订仍须重新审核，未解决须由人工处理：报告正文与证据溯源附录实际列出20项必查项，但评级表格中写15/15，与核查清单状态20项矛盾。该错误可能导致评审会认为；在调查员概述（AI分析）中声称的参保人数增速未出现在任何已核实字段或已读证据中，属于无来源的断言。虽然调查记录声明不替代；分析复核项 question_coverage 缺失或格式无效，尚未完成复核；该信息获取时间为2026-09-21，晚于研究截止日2026-05-18。报告将其放在调查层补充中并声明不作为授信依据，；报告正文及所有已核实字段中均未出现'参保人数'数据及其来源。调查员概述声称'现有证据可支持'，但该数字无任何证据支撑，属"
+  ],
+  "completeness": {
+    "scenario": {
+      "name": "",
+      "rate": 0,
+      "total": 0,
+      "verified": 0,
+      "unverified_fields": []
+    },
+    "by_category": {
+      "basic": {
+        "rate": 1,
+        "total": 3,
+        "verified": 3,
+        "capability_gaps": 0
+      },
+      "equity": {
+        "rate": 1,
+        "total": 3,
+        "verified": 3,
+        "capability_gaps": 0
+      },
+      "opinion": {
+        "rate": 1,
+        "total": 2,
+        "verified": 2,
+        "capability_gaps": 0
+      },
+      "judicial": {
+        "rate": 1,
+        "total": 4,
+        "verified": 4,
+        "capability_gaps": 0
+      },
+      "relation": {
+        "rate": 1,
+        "total": 3,
+        "verified": 3,
+        "capability_gaps": 0
+      },
+      "financial": {
+        "rate": 1,
+        "total": 4,
+        "verified": 4,
+        "capability_gaps": 0
+      },
+      "operation": {
+        "rate": 1,
+        "total": 1,
+        "verified": 1,
+        "capability_gaps": 0
+      }
+    },
+    "verified_rate": 1,
+    "required_total": 15,
+    "capability_gaps": [],
+    "required_verified": 15,
+    "unverified_fields": [],
+    "conflicting_fields": []
+  },
+  "rag_evidence_summary": {
+    "rejected": 0,
+    "verified": 0,
+    "conflicting": 0,
+    "rejection_reasons": {},
+    "rejection_breakdown": []
+  }
+}
