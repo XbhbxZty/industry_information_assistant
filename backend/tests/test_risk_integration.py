@@ -24,7 +24,7 @@ from config.dd_checklist import build_field_checks, compute_completeness  # noqa
 from service import risk_scorecard  # noqa: E402
 from service.company_profile import fill_field_checks, profile_to_facts  # noqa: E402
 from service.risk_scorecard import INSUFFICIENT, LEVELS, RISK_BLOCK_MARKER  # noqa: E402
-from service.deep_research_v2.agents import data_analyst as da_module  # noqa: E402
+from service import risk_evaluation as evaluation_module  # noqa: E402
 from service.deep_research_v2.agents.data_analyst import DataAnalyst  # noqa: E402
 from service.deep_research_v2.agents.writer import LeadWriter  # noqa: E402
 from service.deep_research_v2.graph import build_complete_event  # noqa: E402
@@ -223,16 +223,16 @@ def test_五家真实评测档案通过字段一致性重放():
 def test_评分执行失败时fail_closed():
     """算不出 ≠ 没风险。异常不能让评级消失，也不能变成一个低分"""
     state = _dd_state()
-    orig = da_module.score_risk
+    orig = evaluation_module.score_risk
 
     def _boom(*a, **k):
         raise ValueError("模拟打分异常")
 
-    da_module.score_risk = _boom
+    evaluation_module.score_risk = _boom
     try:
         r = _analyst().assess_risk(state)
     finally:
-        da_module.score_risk = orig
+        evaluation_module.score_risk = orig
 
     assert r["level"] == INSUFFICIENT
     assert r["requires_human_review"] is True

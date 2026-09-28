@@ -88,3 +88,18 @@ def test_scenario_only_operation_fields_do_not_create_a_core_dimension_gate():
     assert "operation" not in result["dimension_scores"]
     assert "operation" not in result["dimensions_excluded"]
     assert GATE_CATEGORY_RATE not in result["gate_kinds"]
+
+
+def test_optional_bidding_gap_does_not_add_an_extra_conflict_escalation_step():
+    # EVAL-005's former high-risk label compounded two gates: the erroneous
+    # optional-bidding floor and the valid registration-conflict escalation.
+    # Removing only the former must preserve the conflict and human review.
+    checks = checks_for({"registration": "conflicting", "bidding_record": "unverified"})
+    company = {**COMPANY, "registration": {"operating_status": "存续"}}
+    result = score(company, checks, compute_completeness(checks))
+
+    assert result["composite_score"] <= 25
+    assert result["level"] == "中风险"
+    assert result["gate_kinds"] == ["conflict_escalation"]
+    assert result["requires_human_review"] is True
+    assert next(c for c in checks if c["field_id"] == "registration")["status"] == "conflicting"

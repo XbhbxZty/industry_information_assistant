@@ -21,23 +21,9 @@ from .base import BaseAgent
 from ..state import ResearchState, ResearchPhase
 
 try:
-    from service.risk_scorecard import (
-        score as score_risk, unratable, apply_provenance_gate, PROFILE_BACKED_FIELDS,
-    )
-    from service.company_profile import replay_from_profile, verify_field_checks
-    from service.verification import build_scoring_view
-    from service.credit_advice import recommend_credit
-    from config.dd_checklist import compute_completeness
-    from config.verification_policy import POLICY
+    from service.risk_evaluation import evaluate_risk
 except ImportError:  # 兼容以 app 为包根的导入方式
-    from app.service.risk_scorecard import (
-        score as score_risk, unratable, apply_provenance_gate, PROFILE_BACKED_FIELDS,
-    )
-    from app.service.company_profile import replay_from_profile, verify_field_checks
-    from app.service.verification import build_scoring_view
-    from app.service.credit_advice import recommend_credit
-    from app.config.dd_checklist import compute_completeness
-    from app.config.verification_policy import POLICY
+    from app.service.risk_evaluation import evaluate_risk
 
 
 class DataAnalyst(BaseAgent):
@@ -290,8 +276,8 @@ class DataAnalyst(BaseAgent):
            且不依赖任何 LLM 产物；后续数据提取/知识图谱/图表任何一步抛异常，
            评级都已经产出。确定性组件依赖不确定组件，方向是反的。
 
-        2. **评测与生产走同一入口**（BC-15）。评分 + 事件推送收敛在这一个方法里，
-           评测直接调它，测到的就是生产行为。
+        2. **评测与生产走同一入口**（BC-15）。纯评估收敛在 evaluate_risk；
+           本方法只将共同结果写入 state 并推送事件。
 
         3. **前置条件不满足时 fail-closed**。清单说 verified 但档案没进 state，
            score() 会把"档案里没有被执行记录"读成"未发现被执行记录"——
@@ -300,106 +286,28 @@ class DataAnalyst(BaseAgent):
 
         Returns: 评分结果；非尽调流程（无核查清单）返回 None
         """
-        checks = state.get("field_checks") or []
-        if not checks:
+        # A prior successful run must not leave usable scoring inputs behind
+        # when current evidence fails validation (or is no longer applicable).
+        # Explicitly overwrite the channel: omitting a key from a node result
+        # does not delete its previous value when LangGraph merges updates.
+        state["scoring_view"] = {}
+        evaluation = evaluate_risk(
+            state.get("company_profile"), state.get("field_checks"),
+            state.get("evidence_store"), as_of=state.get("as_of", "") or "",
+        )
+        result = evaluation.assessment
+        if result is None:
             # 未识别到尽调对象，退化为普通研究流程，没有清单可评——
             # 这里不做 fail-closed，因为根本不存在"授信结论"这个产物
             self.logger.info("[DataAnalyst] 无核查清单，跳过风险评分（非尽调流程）")
             return None
 
-        # 完整度按当前清单重算：闸门的判据必须与被评分的清单同源，
-        # 不能用可能已过期的 state["completeness"]
-        completeness = compute_completeness(checks)
-        state["completeness"] = completeness
-
-        profile = state.get("company_profile") or {}
-        if not profile:
-            result = unratable(
-                "结构化企业档案缺失，无法执行风险评分（清单状态无法映射到具体数值）",
-                completeness,
-            )
-            self.logger.error("[DataAnalyst] 有核查清单但无 company_profile，评级 fail-closed")
-            # 用 setdefault：从旧检查点恢复的 state 可能没有这个键，
-            # 而 fail-closed 分支自己再抛异常就彻底失去意义了
-            state.setdefault("errors", []).append("风险评分：company_profile 缺失，已按不可评级处理")
-        else:
-            evidence_store = state.get("evidence_store") or {}
-            try:
-                # v0.6：按 verification_origin 分发重放依据，而非一律用初始档案。
-                # 结构化适配器核实的字段本就无法由初始档案重放，旧实现会把
-                # 合法增量证据误判为不一致并全面 fail-closed。
-                # 研究截止日：留空即不施加时点闸门。给定时，晚于该日的证据
-                # 直接 fail-closed，事实日期不明的转降级（见 verification.check_as_of）
-                report = verify_field_checks(
-                    profile, checks, evidence_store,
-                    as_of=state.get("as_of", "") or "",
-                )
-                # 降级必须显式披露，不能只进日志（BC-02 的教训）
-                for d in report.degradations:
-                    state.setdefault("errors", []).append(
-                        f"证据链降级：{d['field_id']} {d['detail']}"
-                    )
-                    self.logger.warning(
-                        f"[DataAnalyst] 证据链降级 {d['field_id']}: {d['reason']}"
-                    )
-                if report.mismatches:
-                    fields = "、".join(
-                        f"{m['field_id']}({m['reason']})" for m in report.mismatches
-                    )
-                    result = unratable(
-                        f"核查清单证据链不完整或与来源不一致（{fields}），不予评级",
-                        completeness,
-                    )
-                    self.logger.error(
-                        f"[DataAnalyst] 证据链校验失败，评级 fail-closed: {fields}"
-                    )
-                    state.setdefault("errors", []).append(
-                        f"风险评分：证据链校验失败（{fields}），已按不可评级处理"
-                    )
-                else:
-                    # 校验通过 ≠ 可以评分。评分卡读的是结构化档案，不是清单状态；
-                    # 适配器证据必须先合并进这份数据，否则新增的负面证据会被
-                    # 读成"未发现 XX"（BC-31）。合并不了就不予评级。
-                    view, unmergeable = build_scoring_view(
-                        profile, checks, evidence_store,
-                        profile_backed_fields=PROFILE_BACKED_FIELDS,
-                        profile_replay_fn=replay_from_profile,
-                    )
-                    if unmergeable:
-                        fields = "、".join(m["field_id"] for m in unmergeable)
-                        result = unratable(
-                            f"结构化证据无法并入评分数据视图（{fields}），"
-                            f"评分卡会读到旧档案并可能得出相反结论，不予评级",
-                            completeness,
-                        )
-                        self.logger.error(
-                            f"[DataAnalyst] 证据无法并入评分视图，fail-closed: {fields}"
-                        )
-                        state.setdefault("errors", []).append(
-                            f"风险评分：证据未提供 profile_patch（{fields}），已按不可评级处理"
-                        )
-                    else:
-                        result = score_risk(view, checks, completeness)
-                    # 来源降级必须约束等级，不能只写进 errors（BC-33）
-                    result = apply_provenance_gate(
-                        result, report.degradations, POLICY.degraded_level_floor
-                    )
-                    # 额度建议基于**合并后的评分视图**，与评级同源。
-                    # 用原始 profile 会让适配器查到的担保不参与扣减（BC-31 同形）。
-                    # 必须在闸门之后：等级被闸门改过，额度系数要跟着改。
-                    result["credit_recommendation"] = recommend_credit(view, checks, result)
-                    # 合并后的评分视图必须留在 state（BC-70）。
-                    # 人工复核覆盖等级后要按同一份数据重算额度——
-                    # 用原始 profile 重算会丢掉适配器查到的担保，
-                    # 重算出来的数字与初次评级不同源，等于制造第二处口径。
-                    # 它同时补上一个可审计缺口：评分卡实际读到的是哪份数据。
-                    state["scoring_view"] = view
-            except Exception as e:
-                # 打分本身出错同样不得静默：没有评级 ≠ 没有风险
-                result = unratable(f"风险评分执行失败（{type(e).__name__}: {e}），不予评级", completeness)
-                self.logger.error(f"[DataAnalyst] 风险评分异常，已 fail-closed: {e}", exc_info=True)
-                state.setdefault("errors", []).append(f"风险评分执行失败: {e}")
-
+        state["completeness"] = evaluation.completeness
+        state.setdefault("errors", []).extend(evaluation.errors)
+        for error in evaluation.errors:
+            self.logger.warning("[DataAnalyst] %s", error)
+        if evaluation.scoring_view is not None:
+            state["scoring_view"] = evaluation.scoring_view
         state["risk_assessment"] = result
         self.logger.info(
             f"[DataAnalyst] 风险评级：{result['level']}"
