@@ -795,8 +795,10 @@ class CriticMaster(BaseAgent):
         notebook = state.get("agent_investigation") or {}
         context["claims_to_audit"] = {
             "summary": notebook.get("summary"),
-            "findings": [{"claim": f.get("claim"), "source_id": f.get("source_id")}
+            "findings": [{"claim": f.get("claim"), "source_id": f.get("source_id"),
+                          "citations": f.get("citations", []), "calculation_ids": f.get("calculation_ids", [])}
                          for f in notebook.get("findings", [])[:20]],
+            "calculations": notebook.get("calculations", [])[:12],
         }
         if appendix.strip() not in context["report"]:
             context["agent_appendix"] = appendix
@@ -814,6 +816,8 @@ class CriticMaster(BaseAgent):
             result = parse_compact_review(content, meta, report)
             if context["report_truncated"]:
                 raise ValueError("review_report_truncated")
+            if context["cited_evidence_truncated"]:
+                raise ValueError("review_cited_evidence_truncated")
             return result
         except (ValueError, TypeError, asyncio.TimeoutError) as exc:
             # The normal merge path records review_not_executed and blocks approval.

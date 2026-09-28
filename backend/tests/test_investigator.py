@@ -107,7 +107,7 @@ def test_repeated_action_stops_without_repeating_io_or_claiming_completion():
         return {"ok": False, "progress": False, "error": "索引不可用"}
     notebook = asyncio.run(investigate(brief={}, tools={"search": ""}, choose=choose,
                                       execute=execute, notebook={}))
-    assert len(calls) == 3  # Failed calls may retry, but remain bounded by stalls.
+    assert len(calls) == 2  # Recovery suppresses a third unproductive retry, even with no directory.
     assert notebook["status"] == "stalled"
     assert "调查未完成" in notebook["summary"]
 
