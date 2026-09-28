@@ -12,6 +12,8 @@ import re
 from decimal import Context, Decimal, DecimalException, ROUND_HALF_EVEN, localcontext
 from typing import Callable
 
+from .action_errors import ActionError, safe_reference
+
 
 MAX_EXPRESSION_LENGTH = 500
 MAX_AST_NODES = 120
@@ -146,10 +148,18 @@ def calculate_workpaper(arguments: dict, resolve_citation: Callable[[str, str], 
         subject = _text(item.get("subject", ""), "subject", 200, required=False)
         try:
             citation = resolve_citation(sid, qid)
-        except Exception as exc:
-            raise ValueError(f"citation could not be resolved for variable {name}; "
-                             f"请先read_source阅读{sid}，从该来源实际返回的quote_options选择quote_id。"
-                             "目录或企业档案中的数字不是已读引文；来源不在授权范围时不可使用。") from exc
+        except ActionError as exc:
+            raise exc.at(f"variables.{name}", prefix=f"citation could not be resolved for variable {name}; ") from None
+        except Exception:
+            reference = safe_reference(sid)
+            raise ActionError(
+                "citation_resolution_failed", f"citation could not be resolved for variable {name}; "
+                f"请先read_source阅读{reference or '实际返回的来源'}（仅限当前授权且实际存在的来源），"
+                "从该来源实际返回的quote_options选择quote_id。"
+                "目录或企业档案中的数字不是已读引文；来源不在授权范围时不可使用。",
+                repair={"instruction": "引文校验未完成，核对授权来源及已读回执；不能猜测引文，也不能认定材料不存在。",
+                        "actions": []}, field_path=f"variables.{name}",
+            ) from None
         if not isinstance(citation, dict) or citation.get("source_id") != sid or citation.get("quote_id") != qid:
             raise ValueError(f"citation identity does not match variable {name}")
         quote = _text(citation.get("quote"), "quote", 5000)

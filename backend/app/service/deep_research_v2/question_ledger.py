@@ -8,11 +8,35 @@ from copy import deepcopy
 from difflib import SequenceMatcher
 import re
 
+from .action_errors import ActionError, resolve_at, safe_reference
+
 
 def _text(value, name, limit, required=True):
     if not isinstance(value, str) or len(value) > limit or (required and not value.strip()):
         raise ValueError(f"{name} 必须为{'非空' if required else ''}文本，最多{limit}字")
     return value.strip()
+
+
+def calculation_reference_error(notebook, message, field_path, *, required=False):
+    available = list(dict.fromkeys(
+        c["id"] for c in notebook.get("calculations", [])
+        if isinstance(c, dict) and isinstance(c.get("id"), str) and re.fullmatch(r"c[1-9][0-9]*", c["id"])
+    ))[:12]
+    return ActionError(
+        "calculation_required" if required else "calculation_reference_invalid", message,
+        repair={"available_calculation_ids": available,
+                "instruction": "由调查员从已有底稿中选择确实支持本次判断的 ID；没有适用底稿则用已读引文调用 calculate。不能猜测、自动替换或删除错误 ID，也不能因此将问题标为 answered。",
+                "actions": []}, field_path=field_path,
+    )
+
+
+def validate_calculation_ids(notebook, ids, message):
+    if not isinstance(ids, list) or len(ids) > 6:
+        raise calculation_reference_error(notebook, message, "calculation_ids")
+    known = {c["id"] for c in notebook.get("calculations", [])}
+    for index, cid in enumerate(ids):
+        if not isinstance(cid, str) or cid not in known:
+            raise calculation_reference_error(notebook, message, f"calculation_ids[{index}]")
 
 
 def create_plan(notebook, arguments):
@@ -57,25 +81,35 @@ def address_question(notebook, arguments, resolve_citation):
     if not isinstance(refs, list) or len(refs) > 6 or (status == "answered" and not refs):
         raise ValueError("已回答的问题必须关联1至6条已读原文引文；不能仅凭摘要标记完成")
     citations = []
-    for ref in refs:
+    for index, ref in enumerate(refs):
         if not isinstance(ref, dict):
             raise ValueError("引文必须指定source_id与quote_id")
-        citation = resolve_citation(ref.get("source_id"), ref.get("quote_id"))
+        citation = resolve_at(resolve_citation, ref.get("source_id"), ref.get("quote_id"), f"citations[{index}]")
         if citation not in citations:
             citations.append(citation)
     ids = arguments.get("calculation_ids", [])
     calculations = {c["id"]: c for c in notebook.get("calculations", [])}
-    if not isinstance(ids, list) or len(ids) > 6 or any(not isinstance(c, str) or c not in calculations for c in ids):
-        raise ValueError("calculation_ids必须引用已有计算底稿，最多6条")
+    validate_calculation_ids(notebook, ids, "calculation_ids必须引用已有计算底稿，最多6条")
     ids = list(dict.fromkeys(ids))
-    for cid in ids:
-        for variable in calculations[cid].get("variables", {}).values():
+    for index, cid in enumerate(ids):
+        for name, variable in calculations[cid].get("variables", {}).items():
             # Recheck scope and read membership even for an earlier workpaper.
-            resolved = resolve_citation(variable.get("source_id"), variable.get("quote_id"))
+            resolved = resolve_at(resolve_citation, variable.get("source_id"), variable.get("quote_id"),
+                                  f"calculation_ids[{index}].variables.{name}")
             if resolved.get("quote") != variable.get("quote"):
-                raise ValueError("计算底稿引文已失效")
+                raise ActionError(
+                    "citation_changed", "计算底稿引文已失效，不能继续引用旧底稿。",
+                    repair={"source_id": safe_reference(variable.get("source_id")),
+                            "quote_id": safe_reference(variable.get("quote_id")),
+                            "instruction": "核对当前已读原文后重新调用 calculate，再由调查员选择有效底稿；不能代改旧底稿或强行宣布问题完成。",
+                            "actions": []},
+                    field_path=f"calculation_ids[{index}].variables.{name}",
+                )
     if status == "answered" and question["calculation_required"] and not ids:
-        raise ValueError("该问题需要计算：先调用calculate，再关联calculation_ids；资料不足请blocked并写明缺口")
+        raise calculation_reference_error(
+            notebook, "该问题需要计算：先调用calculate，再关联calculation_ids；资料不足请blocked并写明缺口",
+            "calculation_ids", required=True,
+        )
     update = {"status": status, "answer": answer, "limitations": limitations,
               "citations": citations, "calculation_ids": ids}
     normalize = lambda s: re.sub(r"\W", "", s).casefold()

@@ -451,7 +451,7 @@ def test_scope_revocation_blocks_cached_read_citation_and_calculation():
 
 
 @pytest.mark.parametrize("read_all", [False, True])
-def test_recovery_tools_allow_remaining_reading_but_not_rereading_everything(read_all):
+def test_recovery_recommends_remaining_reading_without_banning_revisits(read_all):
     tool, sid, _ = make_tools()
     execute(tool, "read_source", {"source_id": sid})
     if read_all:
@@ -469,6 +469,7 @@ def test_recovery_tools_allow_remaining_reading_but_not_rereading_everything(rea
         execute=tool.execute, notebook=tool.notebook, critique=False,
         budget=InvestigationBudget(max_steps=4, max_seconds=5)))
     assert result["status"] == "completed" and contexts[2]["recovery"]["active"]
-    assert ("read_next" in contexts[2]["tools"]) is (not read_all)
-    assert ("read_source" in contexts[2]["tools"]) is (not read_all)
+    assert "read_next" in contexts[2]["tools"] and "read_source" in contexts[2]["tools"]
+    assert bool(contexts[2]["action_options"]["read_candidates"]) is (not read_all)
+    assert ("read_next" in contexts[2]["recovery"]["next_options"]) is (not read_all)
     assert "calculate" in contexts[2]["tools"] and "record_finding" in contexts[2]["tools"]

@@ -14,6 +14,7 @@ from time import monotonic
 from uuid import UUID
 
 from .investigator import investigate, InvestigationBudget
+from .action_errors import ActionError, safe_reference
 from ..rag_evidence_bridge import collect_analysis_evidence, finalize_rag_evidence
 from ..statement_scope import UNKNOWN, resolve_in_chunk
 
@@ -79,16 +80,62 @@ class InvestigationTools:
         UUID(str(source.get("doc_id")))
         return entry
 
-    def resolve_citation(self, source_id, quote_id):
+    def _unavailable_citation(self):
+        # Unknown and revoked sources deliberately have the same public shape.
+        # Do not enumerate the notebook: it may retain formerly authorized data.
+        actions = ([{"action": "list_materials", "arguments": {}}]
+                   if "list_materials" in self.definitions() else [])
+        return ActionError(
+            "citation_source_unavailable", "来源 ID 不存在或不在当前授权范围，不能引用。",
+            repair={"instruction": "从本次授权目录或检索实际返回的来源 ID 选择；不要猜测，也不要继续引用旧授权来源。",
+                    "actions": actions},
+        )
+
+    def _citation_source(self, source_id, quote_id):
         if not isinstance(source_id, str) or source_id not in self.sources:
-            raise ValueError("来源 ID 不存在")
+            raise self._unavailable_citation()
         source = self.sources[source_id]
-        self._scope(source)
+        try:
+            self._scope(source)
+        except Exception:
+            # Scope failures must not disclose source metadata or exception text.
+            raise self._unavailable_citation() from None
         if not source.get("read"):
-            raise ValueError("请先 read_source 阅读原文")
+            raise ActionError(
+                "citation_source_unread", "请先 read_source 阅读原文；目录和检索摘要不是已读引文。",
+                repair={"source_id": safe_reference(source_id), "quote_id": safe_reference(quote_id),
+                        "instruction": "执行下列阅读动作后，从实际返回的 quote_options 选择引文；不要代填或沿用猜测的 quote_id。",
+                        "actions": [{"action": "read_source", "arguments": {"source_id": source_id}}]},
+            )
+        return source
+
+    def _invalid_quote(self, source_id, quote_id, source):
+        # Only call after the same source has passed current scope/read checks.
+        options, available, size = {}, [], 0
+        for qid, quote in source.get("quote_options", {}).items():
+            if (not safe_reference(qid) or not isinstance(quote, str) or not quote
+                    or not any(quote in text for text in source.get("read_texts", []))):
+                continue
+            available.append(qid)
+            if len(options) < 4 and len(quote) <= 1200 and size + len(quote) <= 4000:
+                options[qid] = quote
+                size += len(quote)
+            if len(available) >= 120:
+                break
+        return ActionError(
+            "citation_quote_not_found", "引文不匹配，请选择该已读来源实际返回的 quote_id。",
+            repair={"source_id": safe_reference(source_id), "quote_id": safe_reference(quote_id),
+                    "instruction": "仅从该来源已读 quote_options 选择支持本次判断的引文；ID 列表不是原文，示例不相关时核对原阅读回执，不能猜测或自动替换。",
+                    "available_quote_ids": available, "quote_options": options,
+                    "actions": ([{"action": "read_source", "arguments": {"source_id": source_id}}]
+                                if not available else [])},
+        )
+
+    def resolve_citation(self, source_id, quote_id):
+        source = self._citation_source(source_id, quote_id)
         quote = source.get("quote_options", {}).get(quote_id) if isinstance(quote_id, str) else None
-        if not isinstance(quote, str) or not any(quote in t for t in source.get("read_texts", [])):
-            raise ValueError("引文不匹配，请选择该已读来源的 quote_id")
+        if not isinstance(quote, str) or not quote or not any(quote in t for t in source.get("read_texts", [])):
+            raise self._invalid_quote(source_id, quote_id, source)
         return {"source_id": source_id, "quote_id": quote_id, "quote": quote,
                 "title": source.get("title"), "url": source.get("url")}
 
@@ -188,9 +235,7 @@ class InvestigationTools:
             return self.record_finding(args)
         sid = args.get("source_id")
         if not isinstance(sid, str) or sid not in self.sources:
-            return {"ok": False, "progress": False, "error": "来源 ID 不存在，请从返回目录选择，不要猜测", "sources": [
-                {"source_id": k, "title": v.get("title"), "read": v.get("read", False)}
-                for k, v in self.sources.items()]}
+            return self._unavailable_citation().as_result()
         source = self.sources[sid]
         if action == "extract_evidence":
             self._scope(source)
@@ -241,20 +286,15 @@ class InvestigationTools:
                 refs = [{"source_id": args.get("source_id"), "quote_id": q} for q in ids]
             else:
                 sid, quote = args.get("source_id"), args.get("quote")
-                source = self.sources.get(sid) if isinstance(sid, str) else None
-                if not source:
-                    raise ValueError("来源 ID 不存在")
-                self._scope(source)
-                if not source.get("read"):
-                    raise ValueError("请先 read_source 阅读原文")
+                source = self._citation_source(sid, None)
                 if not isinstance(quote, str) or not 6 <= len(quote) <= 1200 or not any(quote in t for t in source.get("read_texts", [])):
-                    return {"ok": False, "progress": False, "error": "引文不匹配，请选择已读来源的quote_id"}
+                    return self._invalid_quote(sid, None, source).at("quote").as_result()
                 refs = [{"source_id": sid, "quote": quote}]
         if not isinstance(refs, list) or not 1 <= len(refs) <= 6:
             raise ValueError("citations 必须含 1 至 6 条引文")
         citations = []
         try:
-            for ref in refs:
+            for index, ref in enumerate(refs):
                 if not isinstance(ref, dict):
                     raise ValueError("引文应为对象")
                 if "quote_id" in ref:
@@ -265,15 +305,14 @@ class InvestigationTools:
                     raise ValueError("多引文请使用各来源的 quote_id")
                 if citation not in citations:
                     citations.append(citation)
+        except ActionError as exc:
+            return exc.at(f"citations[{index}]").as_result()
         except ValueError as exc:
             return {"ok": False, "progress": False, "error": str(exc),
                     "note": "使用已读引文 ID；可以修改参数，不必重复读取。"}
         calculation_ids = args.get("calculation_ids", [])
-        if not isinstance(calculation_ids, list) or len(calculation_ids) > 6 or any(
-            not isinstance(c, str) or c not in {p["id"] for p in self.notebook.get("calculations", [])}
-            for c in calculation_ids
-        ):
-            raise ValueError("calculation_ids 必须引用已有计算底稿")
+        from .question_ledger import validate_calculation_ids
+        validate_calculation_ids(self.notebook, calculation_ids, "calculation_ids 必须引用已有计算底稿")
         first = citations[0]
         finding = {"claim": claim, "kind": kind, "citations": citations,
                    "calculation_ids": list(dict.fromkeys(calculation_ids)),

@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from time import monotonic
 from typing import Any, Awaitable, Callable
 from .analysis_quality import ANALYSIS_RULES
+from .action_errors import ActionError, DETERMINISTIC_ERROR_CODES
+from .action_selection import action_options, selectable_tools
 
 
 @dataclass(frozen=True)
@@ -55,7 +57,8 @@ value保留原文数值符号：例如原文“减费用80”，变量expense.va
 source_inventory 是工具维护的来源目录，read_evidence 是已读原文；不要重复读取其中已读的同一片段。
 不要为了获得理想字段而丢弃已经读到的有效证据。
 支持证据、反证和信息缺口应分别记录；没有证据不能声称没有风险。
-工具返回的验证拒绝原因可以用来指导下一次阅读或检索。不要重复完全相同的行动。
+action_options提供当前可继续阅读的位置和待答问题，不强制固定顺序；无需重新建立已有计划。
+验证失败时检查observation的error_code、field_path和repair，先修复失败前提再重试；不能自动删掉失败引文或伪称完成。
 检索没有返回新来源时，不要只改写同一问题反复检索；现有工具无法补齐的内容应
 先阅读目录中相关的未读来源。只有核对目录和原文后才能请求真正缺少的材料。
 严格区分未提供、已命中未读、已读未核实、抽取失败；后三者绝不能写成未提供。
@@ -177,6 +180,8 @@ async def investigate(
     stalled = 0
     reviewed = False
     seen: set[str] = set()
+    failed_requests: dict[str, dict[str, Any]] = {}
+    failure_counts: dict[str, int] = {}
     observation: dict[str, Any] = {}
 
     async def bounded(awaitable):
@@ -185,20 +190,15 @@ async def investigate(
 
     prior_steps = int(notebook.get("steps_used", 0))
     for step in range(prior_steps, budget.max_steps):
-        action, arguments, reason = None, {}, ""
+        action, arguments, reason, key = None, {}, "", None
         notebook["steps_used"] = step + 1
         if monotonic() - started >= budget.max_seconds:
             notebook["status"] = "time_limit"
             break
         inventory = evidence_context(notebook)
         recovering = stalled >= max(1, budget.max_stalled_steps - 1)
-        all_read = bool(inventory["source_inventory"]) and all(
-            s["status"] == "read_unverified" and not s["navigation"].get("unread_chunk_indices")
-            and s.get("next_offset") is None for s in inventory["source_inventory"])
-        recovery_tools = {"record_finding", "calculate", "address_question"} if all_read else {"read_source", "read_next", "record_finding", "calculate", "address_question"}
-        available_tools = ({k: v for k, v in tools.items() if k in recovery_tools} if recovering else tools)
-        if notebook.get("plan_required") and not notebook.get("investigation_plan"):
-            available_tools = {k: v for k, v in tools.items() if k == "plan_investigation"}
+        available_tools = selectable_tools(notebook, tools)
+        options = action_options(notebook, available_tools, inventory, observation)
         context = {
             "brief": brief, "tools": available_tools,
             "questions": notebook["questions"],
@@ -208,12 +208,12 @@ async def investigate(
             "remaining_steps": budget.max_steps - step,
             "remaining_seconds": round(max(0, budget.max_seconds - (monotonic() - started)), 1),
             **inventory,
+            "action_options": options,
             "recovery": {
                 "active": recovering,
                 "consecutive_no_progress": stalled,
-                "instruction": ("全部来源已读且连续无进展：只允许calculate、address_question、记录有引文的发现或finish；不要重新读取或搜索。"
-                                if recovering and all_read else "连续无进展时停止重复检索；可选择相关未读片段、计算或记录发现，也可列明限制并finish。缓存重读和近重复发现不算进展。"),
-                "next_options": (list(available_tools) + ["finish"] if recovering else []),
+                "instruction": "连续无进展时先处理具体错误或选相关未读位置、计算、答复；新检索仍可用，已读缓存不默认推荐。必要重访和近重复结果不算进展；无法继续时如实partial finish。",
+                "next_options": (options["next_options"] if recovering else []),
             },
         }
         try:
@@ -266,12 +266,31 @@ async def investigate(
                 break
 
             if action not in available_tools:
+                if action == "plan_investigation" and notebook.get("investigation_plan"):
+                    raise ActionError("plan_already_created", "调查计划已建立，请继续处理原问题，不重复建计划。",
+                                      repair={"instruction": "查看 investigation_plan 与 action_options，选择阅读、计算或逐项 address_question。",
+                                              "actions": []})
                 raise ValueError("工具不可用，请使用 tools 中列出的工具")
             key = json.dumps([action, arguments], sort_keys=True, ensure_ascii=False)
+            # Do not execute identical deterministic validation failures until
+            # evidence/state progresses. Keep their original repair hints.
+            # Transient unsuccessful calls get one retry, not a global tool ban.
+            if key in failed_requests and (failed_requests[key].get("error_code") in DETERMINISTIC_ERROR_CODES
+                                           or failure_counts.get(key, 0) >= 2):
+                observation = {**failed_requests[key], "retry_suppressed": True, "executed": False,
+                               "note": "失败前提尚未改变；先按 repair 修复，或选择另一行动。"}
+                notebook["actions"].append({"action": "retry_suppressed", "attempted_action": action,
+                                            "arguments": arguments, "reason": reason, "result": observation})
+                notebook["actions"] = notebook["actions"][-24:]
+                stalled += 1
+                if stalled >= budget.max_stalled_steps:
+                    notebook["status"] = "stalled"
+                    break
+                continue
             # These commands are stateful: identical source IDs can address a
             # new page or its extraction. Their tools own coverage/cache
             # deduplication; the loop still limits consecutive no-progress.
-            repeat_safe = action in ("read_next", "extract_evidence", "address_question") or (action == "read_source" and not recovering)
+            repeat_safe = action in ("read_next", "read_source", "extract_evidence", "address_question")
             if key in seen and not repeat_safe:
                 raise ValueError("该行动已执行。请查看 source_inventory，选择相关的 retrieved_unread 来源；已读原文在 read_evidence 中，不需重复读取。若无相关未读材料则结束。")
             emit({"title": f"调查行动：{action}", "subtitle": reason})
@@ -280,14 +299,29 @@ async def investigate(
                 raise ValueError("工具未返回结构化结果")
             if observation.get("ok", True):
                 seen.add(key)
+            else:
+                failed_requests[key] = observation
+                failure_counts[key] = failure_counts.get(key, 0) + 1
+            made_progress = observation.get("ok", True) and observation.get("progress")
+            if made_progress:
+                failed_requests.clear()
+                failure_counts.clear()
             # Keep bounded receipts; full sources live separately in the notebook.
             receipt = {"action": action, "arguments": arguments, "reason": reason, "result": observation}
             notebook["actions"].append(receipt)
             notebook["actions"] = notebook["actions"][-24:]
-            stalled = 0 if observation.get("progress") else stalled + 1
+            stalled = 0 if made_progress else stalled + 1
         except asyncio.TimeoutError:
             observation = {"ok": False, "error": "本次调用超时，不代表没有相关材料"}
             notebook["actions"].append({"action": "timeout", "result": observation})
+            stalled += 1
+        except ActionError as exc:
+            observation = exc.as_result()
+            if key is not None:
+                failed_requests[key] = observation
+                failure_counts[key] = failure_counts.get(key, 0) + 1
+            notebook["actions"].append({"action": "invalid_action", "attempted_action": action,
+                                        "arguments": arguments, "reason": reason, "result": observation})
             stalled += 1
         except (ValueError, TypeError) as exc:
             observation = {"ok": False, "error": str(exc)[:400]}
@@ -300,6 +334,7 @@ async def investigate(
             observation = {"ok": False, "error": f"调用失败：{type(exc).__name__}"}
             notebook["actions"].append({"action": "failed_call", "result": observation})
             stalled += 1
+        notebook["actions"] = notebook["actions"][-24:]
         if stalled >= budget.max_stalled_steps:
             notebook["status"] = "stalled"
             break

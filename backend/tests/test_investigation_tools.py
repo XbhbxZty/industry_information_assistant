@@ -92,7 +92,9 @@ def test_extraction_cancellation_propagates():
 def test_cannot_read_unknown_source(invalid):
     tools, _ = setup_tools()
     result = asyncio.run(tools.execute("read_source", {"source_id": invalid}))
-    assert not result["ok"] and result["sources"]
+    assert not result["ok"] and result["error_code"] == "citation_source_unavailable"
+    assert "sources" not in result  # A retained notebook may include revoked sources.
+    assert result["repair"]["actions"] == [{"action": "list_materials", "arguments": {}}]
 
 
 def test_revoked_scope_and_forged_quote_are_rejected():

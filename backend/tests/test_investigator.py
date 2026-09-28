@@ -11,7 +11,8 @@ def test_cached_reads_lead_to_bounded_closeout_options():
     calls = []
     async def choose(prompt, context):
         if context["recovery"]["active"]:
-            assert set(context["tools"]) == {"record_finding"}
+            assert set(context["tools"]) == {"read_source", "record_finding"}
+            assert not context["action_options"]["read_candidates"]
             assert context["recovery"]["next_options"] == ["record_finding", "finish"]
             return {"action": "finish", "arguments": {"summary": "已有原文，仍需核验"}}
         return {"action": "read_source", "arguments": {"source_id": "s1"}}
@@ -107,7 +108,7 @@ def test_repeated_action_stops_without_repeating_io_or_claiming_completion():
         return {"ok": False, "progress": False, "error": "索引不可用"}
     notebook = asyncio.run(investigate(brief={}, tools={"search": ""}, choose=choose,
                                       execute=execute, notebook={}))
-    assert len(calls) == 2  # Recovery suppresses a third unproductive retry, even with no directory.
+    assert len(calls) == 2  # Suppress this request's third retry, not every new search.
     assert notebook["status"] == "stalled"
     assert "调查未完成" in notebook["summary"]
 
