@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 from service.deep_research_v2.analysis_quality import (
     CHECKS, COMPACT_REVIEW_PROMPT, apply_analysis_revision,
     enforce_analysis_review, parse_compact_review, resolve_prior_analysis_issues,
+    report_quote_spans, report_with_quote_ids,
 )
 from service.deep_research_v2.agents.critic import CriticMaster
 from service.deep_research_v2.agents.writer import LeadWriter
@@ -148,7 +149,7 @@ def test_valid_question_problem_routes_for_focused_reading_and_reopens_only_same
     assert event["question_checks"] == raw["question_checks"] and event["analysis_review_validated"]
     prompt = critic.call_llm.call_args.kwargs
     assert "question_checks" in prompt["system_prompt"]
-    assert json.loads(prompt["user_prompt"])["claims_to_audit"]["investigation_plan"][0]["id"] == "p1"
+    assert json.loads(prompt["user_prompt"])["claims_to_audit"]["question_ids"] == ["p1"]
 
 
 def test_wording_problem_routes_to_writer_not_new_research():
@@ -313,6 +314,117 @@ def test_archived_t01_exploratory_assertion_is_explicitly_in_review_not_exempted
     asyncio.run(critic._review_agent_content(review_state, report))
     prompt = critic.call_llm.call_args.kwargs
     context = json.loads(prompt["user_prompt"])
-    assert context["claims_to_audit"]["summary"] == archived["agent_investigation"]["summary"]
+    from service.deep_research_v2.investigation_report import plain
+    assert plain(archived["agent_investigation"]["summary"]) in context["report"]
+    assert "summary" not in context["claims_to_audit"]
     assert "绝不豁免" in prompt["system_prompt"] and "否定主因" in prompt["system_prompt"]
     assert "来源写出的答案冒充报告" in COMPACT_REVIEW_PROMPT
+
+
+def anchored_wire(report=REPORT):
+    raw = wire_review()
+    anchor_id = next(iter(report_quote_spans(report)))
+    for row in raw["checks"] + raw["question_checks"]:
+        row.pop("report_quote")
+        row["report_quote_id"] = anchor_id
+    return raw, anchor_id
+
+
+def test_report_ids_reference_exact_current_report_not_rendered_view_or_external_quotes():
+    report = "# 调查\n\n  - 当前答复：\\(current\\_cash-prior\\_cash\\) \\* 100 = -160%。\n  - 依据：来源声称现金流已完成勾稽。\n  - 来源：某材料\n  - 地址：https://example.test\n"
+    spans = report_quote_spans(report)
+    assert len(spans) == 1
+    anchor_id, span = next(iter(spans.items()))
+    assert span["quote"] == report[span["start"]:span["end"]]
+    assert span["quote"].startswith("- 当前答复：") and "\\_cash" in span["quote"]
+    annotated = report_with_quote_ids(report)
+    assert annotated.replace(f"[{anchor_id}] ", "") == report
+    assert "来源声称现金流已完成勾稽" in annotated  # Visible evidence, not an assertion anchor.
+
+
+def test_id_only_receipts_resolve_to_exact_report_quotes_before_strict_validation():
+    report = "- 当前答复：\\(current\\_cash - prior\\_cash\\) \\* 100 = -160%。"
+    raw, key = anchored_wire(report)
+    result = parse(raw, report)
+    assert all(row["report_quote"] == report for row in result["analysis_checks"] + result["question_checks"])
+    assert all(row["report_quote_id"] == key for row in result["analysis_checks"])
+    validated = enforce_analysis_review(result, report, plan())
+    assert validated["analysis_review_validated"] and not validated["issues"]
+    assert all("report_quote" not in row for row in raw["checks"]), "input must not be mutated"
+
+
+def test_non_analysis_issue_can_use_same_report_id_protocol():
+    raw, key = anchored_wire()
+    raw["issues"] = [{"type": "logic_error", "severity": "major", "report_quote_id": key,
+                       "reason": "报告该判断尚无足够依据", "fix": "明确撤回判断或说明限制"}]
+    result = parse(raw)
+    assert result["issues"][0]["evidence"] == REPORT
+    assert result["issues"][0]["report_quote_id"] == key
+    assert result["overall_assessment"]["verdict"] == "needs_revision"
+
+
+@pytest.mark.parametrize("bad_id", ["q1", "s1", "rq_unknown", "", None, [], True])
+def test_unknown_source_or_malformed_ids_are_never_salvaged_as_report_locations(bad_id):
+    raw, _ = anchored_wire()
+    raw["checks"][0]["report_quote_id"] = bad_id
+    with pytest.raises(ValueError, match="unknown_report_quote_id"):
+        parse(raw)
+
+
+def test_report_id_is_bound_to_full_report_digest_not_reused_after_revision():
+    raw, _ = anchored_wire()
+    revised = REPORT + "\n修订后新增限制。"
+    with pytest.raises(ValueError, match="unknown_report_quote_id"):
+        parse(raw, revised)
+    assert set(report_quote_spans(REPORT)).isdisjoint(report_quote_spans(revised))
+
+
+@pytest.mark.parametrize("quote", ["", "不在报告里的改写", REPORT[:-1]])
+def test_supplied_quote_cannot_disagree_with_selected_id(quote):
+    raw, _ = anchored_wire()
+    raw["question_checks"][0]["report_quote"] = quote
+    with pytest.raises(ValueError, match="conflicting_report_quote"):
+        parse(raw)
+
+
+def test_id_and_matching_quote_are_accepted_but_free_quotes_stay_strict():
+    raw, _ = anchored_wire()
+    raw["checks"][0]["report_quote"] = REPORT
+    assert parse(raw)["analysis_checks"][0]["report_quote"] == REPORT
+    literal = wire_review()
+    literal["checks"][0]["report_quote"] = "对原文作了近义改写"
+    with pytest.raises(ValueError, match="unlocated_quote"):
+        parse(literal)
+
+
+def test_enforcement_rechecks_report_ids_even_after_initial_parse():
+    raw, _ = anchored_wire()
+    parsed = parse(raw)
+    parsed["analysis_checks"][0]["report_quote_id"] = "rq_old_report"
+    result = enforce_analysis_review(parsed, REPORT, plan())
+    assert result["degraded"] and result["issues"][0]["issue_type"] == "review_not_executed"
+
+
+def test_critic_transmits_one_annotated_actual_report_without_unrendered_answer_duplicates():
+    raw, _ = anchored_wire()
+    critic, data = CriticStub(raw), state()
+    data["agent_investigation"]["summary"] = "不在交付报告中的内部摘要"
+    data["agent_investigation"]["investigation_plan"][0]["answer"] = "未渲染的内部答案，不能作为报告原文"
+    result = asyncio.run(critic._review_agent_content(data, REPORT))
+    assert result["question_checks"][0]["report_quote"] == REPORT
+    context = json.loads(critic.call_llm.call_args.kwargs["user_prompt"])
+    assert "[rq_" in context["report"] and REPORT in context["report"]
+    assert "不在交付报告中的内部摘要" not in json.dumps(context, ensure_ascii=False)
+    assert "未渲染的内部答案" not in json.dumps(context, ensure_ascii=False)
+    assert "agent_appendix" not in context
+    assert context["investigation_plan"][0]["done_when"] == plan()[0]["done_when"]
+    critic.call_llm.assert_awaited_once()
+
+
+def test_quote_ids_do_not_relax_existing_report_truncation_failure():
+    report = REPORT + "\n" + "过长正文" * 5000
+    raw, _ = anchored_wire(report)
+    critic = CriticStub(raw)
+    result = asyncio.run(critic._review_agent_content(state(), report))
+    assert result["review_failure"] == "review_report_truncated"
+    critic.call_llm.assert_awaited_once()

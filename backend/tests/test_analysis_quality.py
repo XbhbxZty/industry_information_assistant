@@ -182,7 +182,9 @@ def test_critic_receives_agent_tail_beyond_ordinary_report_window():
     assert "cashflow_attribution" in system
     assert critic.call_llm.call_args.kwargs["return_meta"] is True
     parsed_context = json.loads(prompt)
-    assert parsed_context["claims_to_audit"]["summary"] == "尾部需要复核"
+    assert "尾部需要复核" in parsed_context["report"]
+    assert "summary" not in parsed_context["claims_to_audit"]
+    assert "agent_appendix" not in parsed_context
 
 
 @pytest.mark.parametrize("finish", ["length", "content_filter", "", "tool_calls"])

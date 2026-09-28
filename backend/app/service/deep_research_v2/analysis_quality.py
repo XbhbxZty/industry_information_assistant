@@ -1,10 +1,13 @@
 """Analysis review protocol, not a text scanner or a factual verification engine."""
 from copy import deepcopy
+import hashlib
 import json
 import math
+import re
 
 
 CHECKS = ("question_coverage", "period_basis", "cashflow_attribution", "receipt_reconciliation")
+REPORT_REVIEW_LIMIT = 18000
 
 ANALYSIS_RULES = """
 量化分析纪律（与核查清单的独立核实状态分开）：
@@ -83,10 +86,71 @@ issue表示答案错误、漏掉必要计算/分类/问题，或虚称完成。�
 """
 
 
+REPORT_QUOTE_PROTOCOL = """
+报告report中[rq_...]是服务端为本次真实报告片段添加的定位元数据，不是报告正文。
+优先用片段ID定位，避免复制Markdown转义字符出错：checks、question_checks可将report_quote替换为
+report_quote_id；issues可将quote替换为report_quote_id。其他字段不变。不要同时提供空引文和ID。
+服务端将ID回填为该报告的精确原文；若同时提供文字引文，文字必须与该ID完整片段逐字一致。
+仅选择报告中的判断、当前答复、限制或调查员概述，不得拿来源原文代替报告已经完成的分析。
+问题漏答可引用其“当前答复：本轮尚未形成答复”或总概述。不要把问题标题/完成条件当成已给出的答案。
+不能猜测ID、改写ID或使用来源q1/s1等引文ID。仍可不用ID而提供报告真实连续原文，验证不会放宽。
+"""
+
+
+def report_quote_spans(report):
+    """Index only exact delivered-report slices, bound to this report version.
+
+    This is structural location, not a correctness scanner. Source-reference
+    lines stay visible in the report but are not offered as assertion anchors.
+    No notebook text or source excerpt can manufacture a report location.
+    """
+    digest = hashlib.sha256(report.encode("utf-8")).hexdigest()[:16]
+    spans = {}
+    for line in re.finditer(r"[^\r\n]+", report):
+        quote = line.group().strip()
+        if not quote or quote.startswith(("#", "<!--")):
+            continue
+        if quote.startswith(("- 依据：", "- 原文：", "- 来源：", "- 地址：", "依据：", "原文：", "来源：", "地址：")):
+            continue
+        if all(char in "-|: " for char in quote):
+            continue
+        start = line.start() + len(line.group()) - len(line.group().lstrip())
+        end = start + len(quote)
+        if end > REPORT_REVIEW_LIMIT:
+            continue
+        key = f"rq_{digest}_{start:x}"
+        spans[key] = {"start": start, "end": end, "quote": report[start:end]}
+    return spans
+
+
+def report_with_quote_ids(report):
+    """Replace the prompt's report copy with the same text plus stable locators."""
+    spans = report_quote_spans(report)
+    chunks, cursor = [], 0
+    for key, span in spans.items():
+        start, end = span["start"], span["end"]
+        chunks.extend([report[cursor:start], f"[{key}] ", report[start:end]])
+        cursor = end
+    chunks.append(report[cursor:REPORT_REVIEW_LIMIT])
+    return "".join(chunks)
+
+
+def _resolve_report_anchor(row, spans, quote_key):
+    if not isinstance(row, dict) or "report_quote_id" not in row:
+        return row
+    key = row["report_quote_id"]
+    if not isinstance(key, str) or key not in spans:
+        raise ValueError("review_unknown_report_quote_id")
+    quote = spans[key]["quote"]
+    if quote_key in row and row[quote_key] != quote:
+        raise ValueError("review_conflicting_report_quote")
+    return {**row, quote_key: quote}
+
+
 def _valid_audit_row(row, report, *, question=False):
     if not isinstance(row, dict):
         return False
-    expected = {"id", "status", "reason", "report_quote"}
+    expected = {"id", "status", "reason", "report_quote", "report_quote_id"}
     if question:
         expected |= {"needs_more_evidence", "followup_question"}
     if set(row) - expected:
@@ -98,6 +162,10 @@ def _valid_audit_row(row, report, *, question=False):
         return False
     if status in ("supported", "issue") and not quote.strip():
         return False
+    if "report_quote_id" in row:
+        key = row["report_quote_id"]
+        if not isinstance(key, str) or report_quote_spans(report).get(key, {}).get("quote") != quote:
+            return False
     if question:
         search, followup = row.get("needs_more_evidence"), row.get("followup_question")
         if type(search) is not bool or not isinstance(followup, str) or len(followup) > 300:
@@ -149,8 +217,12 @@ def parse_compact_review(content, meta, report, investigation_plan=None):
              "subject_attribution_error", "post_cutoff_evidence", "missing_source", "logic_error",
              "bias", "hallucination", "outdated", "incomplete"}
     issues = []
+    spans = report_quote_spans(report)
     for issue in raw["issues"]:
-        if not isinstance(issue, dict) or set(issue) != {"type", "severity", "quote", "reason", "fix"}:
+        issue = _resolve_report_anchor(issue, spans, "quote")
+        if (not isinstance(issue, dict)
+                or set(issue) - {"type", "severity", "quote", "reason", "fix", "report_quote_id"}
+                or not {"type", "severity", "quote", "reason", "fix"} <= set(issue)):
             raise ValueError("review_invalid_issue")
         if issue["type"] not in types or issue["severity"] not in {"critical", "major", "minor"}:
             raise ValueError("review_invalid_issue_type")
@@ -161,18 +233,21 @@ def parse_compact_review(content, meta, report, investigation_plan=None):
         issues.append({"target_section": "全局", "location": issue["quote"][:100],
                        "issue_type": issue["type"], "severity": issue["severity"],
                        "evidence": issue["quote"], "description": issue["reason"],
-                       "suggestion": issue["fix"], "requires_new_search": False})
+                       "suggestion": issue["fix"], "requires_new_search": False,
+                       **({"report_quote_id": issue["report_quote_id"]} if "report_quote_id" in issue else {})})
     checks = raw["checks"]
     if not isinstance(checks, list) or len(checks) != len(CHECKS):
         raise ValueError("review_invalid_checks")
     if (any(not isinstance(c, dict) or not isinstance(c.get("id"), str) for c in checks)
             or sorted(c["id"] for c in checks) != sorted(CHECKS)):
         raise ValueError("review_invalid_check_ids")
+    checks = [_resolve_report_anchor(row, spans, "report_quote") for row in checks]
     question_checks = raw.get("question_checks", [])
     if (not isinstance(question_checks, list) or len(question_checks) != len(question_ids)
             or any(not isinstance(c, dict) or not isinstance(c.get("id"), str) for c in question_checks)
             or sorted(c["id"] for c in question_checks) != sorted(question_ids)):
         raise ValueError("review_invalid_question_checks")
+    question_checks = [_resolve_report_anchor(row, spans, "report_quote") for row in question_checks]
     for rows, is_question in ((checks, False), (question_checks, True)):
         for row in rows:
             quote = row.get("report_quote")

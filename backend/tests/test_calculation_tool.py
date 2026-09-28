@@ -132,6 +132,15 @@ def test_worded_subtraction_keeps_source_operand_sign_and_explains_repair():
         single("80", quote, expression="0")
 
 
+def test_unread_citation_rejection_explains_reading_without_leaking_resolver_error():
+    def unread(*_):
+        raise ValueError("private resolver diagnostic")
+    with pytest.raises(ValueError, match="请先read_source阅读s1") as error:
+        calculate_workpaper(request(), unread)
+    assert "quote_options" in str(error.value)
+    assert "private resolver diagnostic" not in str(error.value)
+
+
 @pytest.mark.parametrize("expression", [
     "__import__('os').system('echo bad') + amount", "amount.__class__", "amount[0]",
     "amount ** 100", "amount // 1", "amount % 1", "[amount for _ in range(1)]",

@@ -147,7 +147,9 @@ def calculate_workpaper(arguments: dict, resolve_citation: Callable[[str, str], 
         try:
             citation = resolve_citation(sid, qid)
         except Exception as exc:
-            raise ValueError(f"citation could not be resolved for variable {name}") from exc
+            raise ValueError(f"citation could not be resolved for variable {name}; "
+                             f"请先read_source阅读{sid}，从该来源实际返回的quote_options选择quote_id。"
+                             "目录或企业档案中的数字不是已读引文；来源不在授权范围时不可使用。") from exc
         if not isinstance(citation, dict) or citation.get("source_id") != sid or citation.get("quote_id") != qid:
             raise ValueError(f"citation identity does not match variable {name}")
         quote = _text(citation.get("quote"), "quote", 5000)

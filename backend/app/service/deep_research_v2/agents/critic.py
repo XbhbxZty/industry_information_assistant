@@ -812,25 +812,22 @@ class CriticMaster(BaseAgent):
         """One compact, bounded review call; keep legacy workflow protocol unchanged."""
         import asyncio
         import json
-        from ..analysis_quality import COMPACT_REVIEW_PROMPT, QUESTION_REVIEW_PROTOCOL, parse_compact_review
+        from ..analysis_quality import (COMPACT_REVIEW_PROMPT, QUESTION_REVIEW_PROTOCOL,
+            REPORT_QUOTE_PROTOCOL, REPORT_REVIEW_LIMIT, report_with_quote_ids, parse_compact_review)
         from ..investigator import evidence_context
-        from ..investigation_report import append_investigation_report
-        appendix = append_investigation_report("", state.get("agent_investigation") or {})
-        context = {"query": state["query"], "report": report[:18000],
-                   "report_truncated": len(report) > 18000,
+        context = {"query": state["query"], "report": report_with_quote_ids(report),
+                   "report_truncated": len(report) > REPORT_REVIEW_LIMIT,
                    "checklist": self._format_checklist_for_review(state),
                    "as_of": state.get("as_of"), **evidence_context(state.get("agent_investigation") or {})}
         notebook = state.get("agent_investigation") or {}
         context["claims_to_audit"] = {
-            "summary": notebook.get("summary"),
-            "findings": [{"claim": f.get("claim"), "source_id": f.get("source_id"),
-                          "citations": f.get("citations", []), "calculation_ids": f.get("calculation_ids", [])}
-                         for f in notebook.get("findings", [])[:20]],
-            "calculations": notebook.get("calculations", [])[:12],
-            "investigation_plan": notebook.get("investigation_plan", []),
+            "scope": "只审查report实际交付的判断、当前答复、概述及限制，探索性和未核实标签不豁免推理检查。",
+            "question_ids": [q.get("id") for q in notebook.get("investigation_plan") or []],
         }
-        if appendix.strip() not in context["report"]:
-            context["agent_appendix"] = appendix
+        # Answers already occur in the actual rendered report. Keep completion
+        # criteria/evidence for comparison without a second unescaped answer.
+        context["investigation_plan"] = [{k: v for k, v in q.items() if k not in ("answer", "limitations")}
+                                         for q in context.get("investigation_plan") or []]
         # Evidence quotes must refer to actual delivered text, never only to a source.
         # Keep the established substantive review boundaries; compact only the response protocol.
         review_boundaries = self.REVIEW_PROMPT.split("## 研究问题", 1)[0].format(
@@ -838,7 +835,7 @@ class CriticMaster(BaseAgent):
         try:
             content, meta = await asyncio.wait_for(self.call_llm(
                 system_prompt=review_boundaries + COMPACT_REVIEW_PROMPT + (
-                    QUESTION_REVIEW_PROTOCOL if notebook.get("investigation_plan") else ""),
+                    QUESTION_REVIEW_PROTOCOL if notebook.get("investigation_plan") else "") + REPORT_QUOTE_PROTOCOL,
                 user_prompt=json.dumps(context, ensure_ascii=False), json_mode=True,
                 temperature=self._cfg_temperature(), max_tokens=self._cfg_max_tokens(),
                 timeout=60, max_retries=0, return_meta=True,
