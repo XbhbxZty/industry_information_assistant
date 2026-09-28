@@ -1,0 +1,883 @@
+{
+  "found": true,
+  "status": "completed",
+  "phase": "completed",
+  "state": {
+    "research_strategy": "agent",
+    "as_of": "2026-05-18",
+    "subject_name": "岐澜精工传动有限公司",
+    "company_name": "岐澜精工传动有限公司",
+    "phase": "completed",
+    "iteration": 0,
+    "agent_investigation": {
+      "brief": {
+        "as_of": "2026-05-18",
+        "query": "请对岐澜精工传动有限公司拟申请的1500万元、12个月流动资金贷款开展截至2026年5月18日的尽职调查。只使用我选择的本地材料与企业档案，不要检索互联网。请逐项交代固定二十项核查清单的核实情况，区分已观察事实、推断与仍缺失的信息，说明经营现金流、应收账龄与期后回款之间的勾稽关系，并为关键结论标注可追溯来源。风险等级与授信额度以规则引擎的测算为准，不要在正文里改写等级或金额。",
+        "subject": "岐澜精工传动有限公司",
+        "known_facts": [
+          {
+            "source": "工商登记信息",
+            "content": "岐澜精工传动有限公司，统一社会信用代码 91990099MA9XFICT03，有限责任公司（自然人投资或控股），成立于 2013-04-11，注册资本 6000万元人民币，实缴资本 6000万元人民币，法定代表人 钟叙白，登记状态：存续。注册地址：岐澜市经开区纬三路 28 号。"
+          },
+          {
+            "source": "工商登记信息",
+            "content": "岐澜精工传动有限公司经营范围：精密齿轮、谐波减速器传动部件的研发、生产与销售；精密模具设计与制造；机械设备维修；货物及技术进出口。"
+          },
+          {
+            "source": "工商登记信息",
+            "content": "岐澜精工传动有限公司参保人数变化：2023年 412 人、2024年 438 人、2025年 466 人。"
+          },
+          {
+            "source": "工商登记信息",
+            "content": "岐澜精工传动有限公司股东 钟叙白（自然人）持股 52.00%，认缴出资 （未提供）。"
+          },
+          {
+            "source": "工商登记信息",
+            "content": "岐澜精工传动有限公司股东 岐澜智造股权投资合伙企业（有限合伙）（有限合伙）持股 28.00%，认缴出资 （未提供）。"
+          },
+          {
+            "source": "工商登记信息",
+            "content": "岐澜精工传动有限公司股东 沅嘉装备制造产业基金（私募基金）持股 20.00%，认缴出资 （未提供）。"
+          },
+          {
+            "source": "审计报告（岐澜正衡会计师事务所）",
+            "content": "岐澜精工传动有限公司2023年度财务数据：营业收入 7180.0万元，净利润 742.0万元，总资产 9760.0万元，总负债 4480.0万元，资产负债率 45.9%，应收账款 2090.0万元，经营性现金流净额 604.0万元。（已审计（标准无保留意见））"
+          },
+          {
+            "source": "审计报告（岐澜正衡会计师事务所）",
+            "content": "岐澜精工传动有限公司2024年度财务数据：营业收入 8150.0万元，净利润 880.0万元，总资产 10620.0万元，总负债 4990.0万元，资产负债率 47.0%，应收账款 2380.0万元，经营性现金流净额 693.0万元。（已审计（标准无保留意见））"
+          },
+          {
+            "source": "审计报告（岐澜正衡会计师事务所）",
+            "content": "岐澜精工传动有限公司2025年度财务数据：营业收入 9260.0万元，净利润 1032.0万元，总资产 11840.0万元，总负债 5540.0万元，资产负债率 46.8%，应收账款 2615.0万元，经营性现金流净额 815.0万元。（已审计（标准无保留意见））"
+          },
+          {
+            "source": "司法公开信息",
+            "content": "岐澜精工传动有限公司涉诉记录：案号 （2025）岐0104民初2137号，身份为原告，案由/事由 买卖合同纠纷，涉案金额 86.0万元，立案日期 2025-09-12，当前状态：已结案（调解，对方已履行）。"
+          },
+          {
+            "source": "招投标公开信息",
+            "content": "岐澜精工传动有限公司中标记录：岐澜市轨道交通装备谐波减速器部件采购，中标金额 1240.0万元，中标日期 2025-11-06。"
+          },
+          {
+            "source": "招投标公开信息",
+            "content": "岐澜精工传动有限公司中标记录：沅嘉重工精密齿轮年度框架采购，中标金额 880.0万元，中标日期 2026-03-19。"
+          }
+        ],
+        "followup_questions": []
+      },
+      "status": "completed",
+      "actions": [
+        {
+          "action": "list_materials",
+          "reason": "服务端提供本次授权材料目录，供AI自主选择",
+          "result": {
+            "ok": true,
+            "note": "目录只证明材料已登记；pending/failed 是处理状态，不是材料不存在。请自主选择相关材料阅读。",
+            "progress": true,
+            "documents": [
+              {
+                "kb_id": "24697716-a373-4e94-829d-c3ef3ede26c1",
+                "title": "01_申请与主体确认.txt",
+                "doc_id": "ba0644e4-cc99-4a71-ab39-4af0f6c80500",
+                "source_id": "s1",
+                "chunk_count": 2,
+                "index_status": "completed"
+              },
+              {
+                "kb_id": "24697716-a373-4e94-829d-c3ef3ede26c1",
+                "title": "02_工商登记与股权结构.txt",
+                "doc_id": "4d281bd2-da6d-4e0f-baf1-692b46bf25fa",
+                "source_id": "s2",
+                "chunk_count": 3,
+                "index_status": "completed"
+              },
+              {
+                "kb_id": "24697716-a373-4e94-829d-c3ef3ede26c1",
+                "title": "03_审计报告摘要.txt",
+                "doc_id": "623ae78a-c994-4d69-9480-1c8dcd7d1b2c",
+                "source_id": "s3",
+                "chunk_count": 3,
+                "index_status": "completed"
+              },
+              {
+                "kb_id": "24697716-a373-4e94-829d-c3ef3ede26c1",
+                "title": "04_司法与征信查询.txt",
+                "doc_id": "675b248f-7a8f-4fd5-882f-670ca9950f22",
+                "source_id": "s4",
+                "chunk_count": 2,
+                "index_status": "completed"
+              },
+              {
+                "kb_id": "24697716-a373-4e94-829d-c3ef3ede26c1",
+                "title": "05_关联关系与对外担保.txt",
+                "doc_id": "cd9f6866-f24b-4dc0-ab4b-1be77807279b",
+                "source_id": "s5",
+                "chunk_count": 3,
+                "index_status": "completed"
+              },
+              {
+                "kb_id": "24697716-a373-4e94-829d-c3ef3ede26c1",
+                "title": "06_舆情与监管处罚.txt",
+                "doc_id": "a77b32e7-cd0e-4169-90c8-1d0e679a0492",
+                "source_id": "s6",
+                "chunk_count": 2,
+                "index_status": "completed"
+              },
+              {
+                "kb_id": "24697716-a373-4e94-829d-c3ef3ede26c1",
+                "title": "07_经营与中标记录.txt",
+                "doc_id": "ca67b90f-e1d6-453b-afb0-6f2c3b751a64",
+                "source_id": "s7",
+                "chunk_count": 2,
+                "index_status": "completed"
+              },
+              {
+                "kb_id": "24697716-a373-4e94-829d-c3ef3ede26c1",
+                "title": "08_应收账龄与期后回款.txt",
+                "doc_id": "0f1d3974-75dd-4707-a9d3-4028534c742a",
+                "source_id": "s8",
+                "chunk_count": 3,
+                "index_status": "completed"
+              }
+            ],
+            "truncated": false
+          },
+          "arguments": {}
+        },
+        {
+          "action": "read_source",
+          "reason": "应收账龄与期后回款是核查清单中经营现金流勾稽关系的核心材料，直接影响‘应收账款周转效率’‘期后回款覆盖率’‘长账龄债权清收进展’等关键项；需优先阅读以建立债权-现金闭环分析基础。",
+          "result": {
+            "ok": true,
+            "text": "材料编号：QL-08\n材料性质：虚构测试材料；财务部应收辅助账与收款台账摘录，不是银行流水。\n主体：岐澜精工传动有限公司\n统一社会信用代码：91990099MA9XFICT03\n文件日期：2026-05-16；账龄时点：2025-12-31；回款统计截止日：2026-05-15；金额单位：万元。\n\n一、应收账款账龄结构\n2024 年末应收账款 2380，其中 1 年以内 2065，1 至 2 年 275，2 年以上 40。\n2025 年末应收账款 2615，其中 1 年以内 2180，1 至 2 年 380，2 年以上 55。\n一年以上应收账款合计：2024 年末 315，2025 年末 435；占应收账款余额比例由 13.24% 上升至 16.63%。\n一年以上应收明细（2025 年末）：客户庚 210，客户辛 135，客户壬 90，合计 435。\n上述三户均在正常经营，无诉讼、无争议函件；客户庚、客户辛已签署书面还款安排（编号 QL-RP-2026-01、QL-RP-2026-02）。",
+            "title": "08_应收账龄与期后回款.txt",
+            "offset": 0,
+            "progress": true,
+            "source_id": "s8",
+            "truncated": false,
+            "navigation": {
+              "note": "仅当前片段算已读；未读片段不能视作未提供。",
+              "index_truncated": false,
+              "next_chunk_index": 1,
+              "known_chunk_count": 3,
+              "unread_chunk_indices": [
+                1,
+                2
+              ]
+            },
+            "chunk_index": 0,
+            "next_offset": null,
+            "total_chars": 451,
+            "content_kind": "document_chunk",
+            "quote_options": {
+              "q1": "材料编号：QL-08",
+              "q2": "材料性质：虚构测试材料；财务部应收辅助账与收款台账摘录，不是银行流水。",
+              "q3": "主体：岐澜精工传动有限公司",
+              "q4": "统一社会信用代码：91990099MA9XFICT03",
+              "q5": "文件日期：2026-05-16；账龄时点：2025-12-31；回款统计截止日：2026-05-15；金额单位：万元。",
+              "q6": "一、应收账款账龄结构",
+              "q7": "2024 年末应收账款 2380，其中 1 年以内 2065，1 至 2 年 275，2 年以上 40。",
+              "q8": "2025 年末应收账款 2615，其中 1 年以内 2180，1 至 2 年 380，2 年以上 55。",
+              "q9": "一年以上应收账款合计：2024 年末 315，2025 年末 435；占应收账款余额比例由 13.24% 上升至 16.63%。",
+              "q10": "一年以上应收明细（2025 年末）：客户庚 210，客户辛 135，客户壬 90，合计 435。",
+              "q11": "上述三户均在正常经营，无诉讼、无争议函件；客户庚、客户辛已签署书面还款安排（编号 QL-RP-2026-01、QL-RP-2026-02）。"
+            },
+            "evidence_feedback": {
+              "note": "原文已读，未自动抽取或核实字段；确需核查时调用extract_evidence。",
+              "status": "not_requested"
+            }
+          },
+          "arguments": {
+            "source_id": "s8",
+            "chunk_index": 0
+          }
+        },
+        {
+          "action": "read_next",
+          "reason": "当前仅读取了s8的第0片段，而材料标题为'08_应收账龄与期后回款.txt'，且navigation显示尚有未读片段[1,2]；问题聚焦于期后回款金额及长账龄覆盖情况，该信息极可能位于后续片段（如二、期后回款明细部分），需继续阅读以完成债权-现金闭环验证。",
+          "result": {
+            "ok": true,
+            "text": "；客户庚、客户辛已签署书面还款安排（编号 QL-RP-2026-01、QL-RP-2026-02）。\n\n二、期后回款台账（2026-01-01 至 2026-05-15，共 4 笔）\nR01：2026-01-22，客户庚收款 210，台账标注冲抵 2025 年末一年以上应收。\nR02：2026-03-06，客户辛收款 90，台账标注冲抵 2025 年末一年以上应收。\nR03：2026-04-10，客户癸收款 380，台账标注为 2026 年新订单预收款，与 2025 年末应收无关。\nR04：2026-05-09，客户庚收款 1560，台账标注冲抵 2025 年末一年以内应收。\n四笔收款合计 2240。其中冲抵 2025 年末应收 1860（一年以上 300、一年以内 1560），新订单预收 380。\n\n三、回款覆盖测算\n2025 年末一年以上应收 435，期后已冲抵 300，覆盖率 68.97%，剩余 135（客户辛 45、客户壬 90）。\n2025 年末应收账款 2615，期后已冲抵 1860，剩余 755。\n新订单预收 380 不得计入原有应收的回收，不参与上述覆盖率计算。",
+            "title": "08_应收账龄与期后回款.txt",
+            "offset": 0,
+            "progress": true,
+            "source_id": "s9",
+            "truncated": false,
+            "navigation": {
+              "note": "仅当前片段算已读；未读片段不能视作未提供。",
+              "index_truncated": false,
+              "next_chunk_index": 2,
+              "known_chunk_count": 3,
+              "unread_chunk_indices": [
+                2
+              ]
+            },
+            "chunk_index": 1,
+            "next_offset": null,
+            "total_chars": 496,
+            "content_kind": "document_chunk",
+            "quote_options": {
+              "q1": "；客户庚、客户辛已签署书面还款安排（编号 QL-RP-2026-01、QL-RP-2026-02）。",
+              "q2": "二、期后回款台账（2026-01-01 至 2026-05-15，共 4 笔）",
+              "q3": "R01：2026-01-22，客户庚收款 210，台账标注冲抵 2025 年末一年以上应收。",
+              "q4": "R02：2026-03-06，客户辛收款 90，台账标注冲抵 2025 年末一年以上应收。",
+              "q5": "R03：2026-04-10，客户癸收款 380，台账标注为 2026 年新订单预收款，与 2025 年末应收无关。",
+              "q6": "R04：2026-05-09，客户庚收款 1560，台账标注冲抵 2025 年末一年以内应收。",
+              "q7": "四笔收款合计 2240。",
+              "q8": "其中冲抵 2025 年末应收 1860（一年以上 300、一年以内 1560），新订单预收 380。",
+              "q9": "三、回款覆盖测算",
+              "q10": "2025 年末一年以上应收 435，期后已冲抵 300，覆盖率 68.97%，剩余 135（客户辛 45、客户壬 90）。",
+              "q11": "2025 年末应收账款 2615，期后已冲抵 1860，剩余 755。",
+              "q12": "新订单预收 380 不得计入原有应收的回收，不参与上述覆盖率计算。"
+            },
+            "evidence_feedback": {
+              "note": "原文已读，未自动抽取或核实字段；确需核查时调用extract_evidence。",
+              "status": "not_requested"
+            }
+          },
+          "arguments": {
+            "source_id": "s8"
+          }
+        },
+        {
+          "action": "read_next",
+          "reason": "当前已读 s8（第0片）和 s9（第1片，实为s8的第1片），但 navigation 显示 s8 共有 3 片，尚有第2片未读；材料标题明确为'08_应收账龄与期后回款.txt'，且第2片可能含补充说明、台账原始凭证备注、对还款安排执行情况的更新或银行流水核对结论等关键佐证，需读完全部片段以完成‘应收账龄结构—期后回款—覆盖率’闭环验证，避免因截断导致误判覆盖真实性或债权可回收性。",
+          "result": {
+            "ok": true,
+            "text": "已冲抵 1860，剩余 755。\n新订单预收 380 不得计入原有应收的回收，不参与上述覆盖率计算。\n\n四、坏账准备\n2025 年末坏账准备余额 131，计提比例 5.01%，与账龄组合计提政策一致，报告期内无单项全额计提。\n\n五、限制说明\n以上为虚构测试数据，取自企业内部台账，未提供逐笔银行回单，匹配关系尚待独立核实。剩余 755 的回收仍存在不确定性，应作为放款后监控事项。",
+            "title": "08_应收账龄与期后回款.txt",
+            "offset": 0,
+            "progress": true,
+            "source_id": "s10",
+            "truncated": false,
+            "navigation": {
+              "note": "仅当前片段算已读；未读片段不能视作未提供。",
+              "index_truncated": false,
+              "next_chunk_index": null,
+              "known_chunk_count": 3,
+              "unread_chunk_indices": []
+            },
+            "chunk_index": 2,
+            "next_offset": null,
+            "total_chars": 190,
+            "content_kind": "document_chunk",
+            "quote_options": {
+              "q1": "已冲抵 1860，剩余 755。",
+              "q2": "新订单预收 380 不得计入原有应收的回收，不参与上述覆盖率计算。",
+              "q3": "四、坏账准备",
+              "q4": "2025 年末坏账准备余额 131，计提比例 5.01%，与账龄组合计提政策一致，报告期内无单项全额计提。",
+              "q5": "五、限制说明",
+              "q6": "以上为虚构测试数据，取自企业内部台账，未提供逐笔银行回单，匹配关系尚待独立核实。",
+              "q7": "剩余 755 的回收仍存在不确定性，应作为放款后监控事项。"
+            },
+            "evidence_feedback": {
+              "note": "原文已读，未自动抽取或核实字段；确需核查时调用extract_evidence。",
+              "status": "not_requested"
+            }
+          },
+          "arguments": {
+            "source_id": "s8"
+          }
+        },
+        {
+          "action": "record_finding",
+          "reason": "已完整阅读s8/s9/s10（即全部3个片段）并交叉验证：账龄结构（s8-q10）、期后回款明细（s9-q3/q4）、覆盖率计算（s9-q10）及限制说明（s10-q6/q7）形成闭环证据链，可确证长账龄余额、对应回款、覆盖率及未覆盖风险。该发现直接回应全部三个待查问题，且引文可精确定位。",
+          "result": {
+            "ok": true,
+            "note": "只确认引文存在，分析结论未自动核实，也不改变评分",
+            "finding": {
+              "url": "local://kb/24697716-a373-4e94-829d-c3ef3ede26c1/0f1d3974-75dd-4707-a9d3-4028534c742a",
+              "kind": "support",
+              "claim": "截至2026年5月15日，岐澜精工传动有限公司2025年末一年以上应收账款余额为435万元，期后回款中明确冲抵该部分的金额为300万元（客户庚210万元、客户辛90万元），覆盖率为68.97%；剩余135万元（客户辛45万元、客户壬90万元）尚未回收，且材料明确提示‘匹配关系尚待独立核实’‘剩余回收存在不确定性’。",
+              "quote": "一年以上应收明细（2025 年末）：客户庚 210，客户辛 135，客户壬 90，合计 435。",
+              "title": "08_应收账龄与期后回款.txt",
+              "verified": false,
+              "citations": [
+                {
+                  "url": "local://kb/24697716-a373-4e94-829d-c3ef3ede26c1/0f1d3974-75dd-4707-a9d3-4028534c742a",
+                  "quote": "一年以上应收明细（2025 年末）：客户庚 210，客户辛 135，客户壬 90，合计 435。",
+                  "title": "08_应收账龄与期后回款.txt",
+                  "quote_id": "q10",
+                  "source_id": "s8"
+                },
+                {
+                  "url": "local://kb/24697716-a373-4e94-829d-c3ef3ede26c1/0f1d3974-75dd-4707-a9d3-4028534c742a",
+                  "quote": "R01：2026-01-22，客户庚收款 210，台账标注冲抵 2025 年末一年以上应收。",
+                  "title": "08_应收账龄与期后回款.txt",
+                  "quote_id": "q3",
+                  "source_id": "s9"
+                },
+                {
+                  "url": "local://kb/24697716-a373-4e94-829d-c3ef3ede26c1/0f1d3974-75dd-4707-a9d3-4028534c742a",
+                  "quote": "R02：2026-03-06，客户辛收款 90，台账标注冲抵 2025 年末一年以上应收。",
+                  "title": "08_应收账龄与期后回款.txt",
+                  "quote_id": "q4",
+                  "source_id": "s9"
+                },
+                {
+                  "url": "local://kb/24697716-a373-4e94-829d-c3ef3ede26c1/0f1d3974-75dd-4707-a9d3-4028534c742a",
+                  "quote": "2025 年末一年以上应收 435，期后已冲抵 300，覆盖率 68.97%，剩余 135（客户辛 45、客户壬 90）。",
+                  "title": "08_应收账龄与期后回款.txt",
+                  "quote_id": "q10",
+                  "source_id": "s9"
+                },
+                {
+                  "url": "local://kb/24697716-a373-4e94-829d-c3ef3ede26c1/0f1d3974-75dd-4707-a9d3-4028534c742a",
+                  "quote": "以上为虚构测试数据，取自企业内部台账，未提供逐笔银行回单，匹配关系尚待独立核实。",
+                  "title": "08_应收账龄与期后回款.txt",
+                  "quote_id": "q6",
+                  "source_id": "s10"
+                },
+                {
+                  "url": "local://kb/24697716-a373-4e94-829d-c3ef3ede26c1/0f1d3974-75dd-4707-a9d3-4028534c742a",
+                  "quote": "剩余 755 的回收仍存在不确定性，应作为放款后监控事项。",
+                  "title": "08_应收账龄与期后回款.txt",
+                  "quote_id": "q7",
+                  "source_id": "s10"
+                }
+              ],
+              "source_id": "s8",
+              "calculation_ids": [],
+              "citation_status": "located",
+              "inference_status": "not_reviewed"
+            },
+            "progress": true
+          },
+          "arguments": {
+            "kind": "support",
+            "claim": "截至2026年5月15日，岐澜精工传动有限公司2025年末一年以上应收账款余额为435万元，期后回款中明确冲抵该部分的金额为300万元（客户庚210万元、客户辛90万元），覆盖率为68.97%；剩余135万元（客户辛45万元、客户壬90万元）尚未回收，且材料明确提示‘匹配关系尚待独立核实’‘剩余回收存在不确定性’。",
+            "citations": [
+              {
+                "quote_id": "q10",
+                "source_id": "s8"
+              },
+              {
+                "quote_id": "q3",
+                "source_id": "s9"
+              },
+              {
+                "quote_id": "q4",
+                "source_id": "s9"
+              },
+              {
+                "quote_id": "q10",
+                "source_id": "s9"
+              },
+              {
+                "quote_id": "q6",
+                "source_id": "s10"
+              },
+              {
+                "quote_id": "q7",
+                "source_id": "s10"
+              }
+            ],
+            "calculation_ids": []
+          }
+        }
+      ],
+      "summary": "截至2026年5月18日，对岐澜精工传动有限公司1500万元、12个月流动资金贷款的尽职调查已完成核心勾稽验证。经营现金流连续三年稳健增长（2023–2025年分别为604/693/815万元），与净利润变动趋势一致；应收账款余额逐年上升但周转可控，2025年末一年以上应收435万元，期后至2026年5月15日已确认冲抵300万元（覆盖率68.97%），剩余135万元对应客户辛（45万元）与客户壬（90万元）。关键闭环证据来自已读完的s8/s9/s10（即《08_应收账龄与期后回款.txt》全部3个片段），其明确载明账龄结构、四笔期后回款明细（R01–R04）、冲抵标注及限制说明。但材料性质为‘虚构测试数据，取自企业内部台账，未提供逐笔银行回单，匹配关系尚待独立核实’（s10-q6），且未见2025年末应收账款明细账（含每笔债权发生日、合同编号、发票号、账龄起算依据），亦无2026年1月1日至5月18日加盖银行章的银行流水。因此，长账龄划分准确性、回款真实性及用途标注一致性尚未获得独立第三方验证，构成实质性信息缺口，须在放款前补足。",
+      "findings": [
+        {
+          "url": "local://kb/24697716-a373-4e94-829d-c3ef3ede26c1/0f1d3974-75dd-4707-a9d3-4028534c742a",
+          "kind": "support",
+          "claim": "截至2026年5月15日，岐澜精工传动有限公司2025年末一年以上应收账款余额为435万元，期后回款中明确冲抵该部分的金额为300万元（客户庚210万元、客户辛90万元），覆盖率为68.97%；剩余135万元（客户辛45万元、客户壬90万元）尚未回收，且材料明确提示‘匹配关系尚待独立核实’‘剩余回收存在不确定性’。",
+          "quote": "一年以上应收明细（2025 年末）：客户庚 210，客户辛 135，客户壬 90，合计 435。",
+          "title": "08_应收账龄与期后回款.txt",
+          "verified": false,
+          "citations": [
+            {
+              "url": "local://kb/24697716-a373-4e94-829d-c3ef3ede26c1/0f1d3974-75dd-4707-a9d3-4028534c742a",
+              "quote": "一年以上应收明细（2025 年末）：客户庚 210，客户辛 135，客户壬 90，合计 435。",
+              "title": "08_应收账龄与期后回款.txt",
+              "quote_id": "q10",
+              "source_id": "s8"
+            },
+            {
+              "url": "local://kb/24697716-a373-4e94-829d-c3ef3ede26c1/0f1d3974-75dd-4707-a9d3-4028534c742a",
+              "quote": "R01：2026-01-22，客户庚收款 210，台账标注冲抵 2025 年末一年以上应收。",
+              "title": "08_应收账龄与期后回款.txt",
+              "quote_id": "q3",
+              "source_id": "s9"
+            },
+            {
+              "url": "local://kb/24697716-a373-4e94-829d-c3ef3ede26c1/0f1d3974-75dd-4707-a9d3-4028534c742a",
+              "quote": "R02：2026-03-06，客户辛收款 90，台账标注冲抵 2025 年末一年以上应收。",
+              "title": "08_应收账龄与期后回款.txt",
+              "quote_id": "q4",
+              "source_id": "s9"
+            },
+            {
+              "url": "local://kb/24697716-a373-4e94-829d-c3ef3ede26c1/0f1d3974-75dd-4707-a9d3-4028534c742a",
+              "quote": "2025 年末一年以上应收 435，期后已冲抵 300，覆盖率 68.97%，剩余 135（客户辛 45、客户壬 90）。",
+              "title": "08_应收账龄与期后回款.txt",
+              "quote_id": "q10",
+              "source_id": "s9"
+            },
+            {
+              "url": "local://kb/24697716-a373-4e94-829d-c3ef3ede26c1/0f1d3974-75dd-4707-a9d3-4028534c742a",
+              "quote": "以上为虚构测试数据，取自企业内部台账，未提供逐笔银行回单，匹配关系尚待独立核实。",
+              "title": "08_应收账龄与期后回款.txt",
+              "quote_id": "q6",
+              "source_id": "s10"
+            },
+            {
+              "url": "local://kb/24697716-a373-4e94-829d-c3ef3ede26c1/0f1d3974-75dd-4707-a9d3-4028534c742a",
+              "quote": "剩余 755 的回收仍存在不确定性，应作为放款后监控事项。",
+              "title": "08_应收账龄与期后回款.txt",
+              "quote_id": "q7",
+              "source_id": "s10"
+            }
+          ],
+          "source_id": "s8",
+          "calculation_ids": [],
+          "citation_status": "located",
+          "inference_status": "not_reviewed"
+        }
+      ],
+      "documents": [
+        {
+          "kb_id": "24697716-a373-4e94-829d-c3ef3ede26c1",
+          "title": "01_申请与主体确认.txt",
+          "doc_id": "ba0644e4-cc99-4a71-ab39-4af0f6c80500",
+          "source_id": "s1",
+          "chunk_count": 2,
+          "index_status": "completed"
+        },
+        {
+          "kb_id": "24697716-a373-4e94-829d-c3ef3ede26c1",
+          "title": "02_工商登记与股权结构.txt",
+          "doc_id": "4d281bd2-da6d-4e0f-baf1-692b46bf25fa",
+          "source_id": "s2",
+          "chunk_count": 3,
+          "index_status": "completed"
+        },
+        {
+          "kb_id": "24697716-a373-4e94-829d-c3ef3ede26c1",
+          "title": "03_审计报告摘要.txt",
+          "doc_id": "623ae78a-c994-4d69-9480-1c8dcd7d1b2c",
+          "source_id": "s3",
+          "chunk_count": 3,
+          "index_status": "completed"
+        },
+        {
+          "kb_id": "24697716-a373-4e94-829d-c3ef3ede26c1",
+          "title": "04_司法与征信查询.txt",
+          "doc_id": "675b248f-7a8f-4fd5-882f-670ca9950f22",
+          "source_id": "s4",
+          "chunk_count": 2,
+          "index_status": "completed"
+        },
+        {
+          "kb_id": "24697716-a373-4e94-829d-c3ef3ede26c1",
+          "title": "05_关联关系与对外担保.txt",
+          "doc_id": "cd9f6866-f24b-4dc0-ab4b-1be77807279b",
+          "source_id": "s5",
+          "chunk_count": 3,
+          "index_status": "completed"
+        },
+        {
+          "kb_id": "24697716-a373-4e94-829d-c3ef3ede26c1",
+          "title": "06_舆情与监管处罚.txt",
+          "doc_id": "a77b32e7-cd0e-4169-90c8-1d0e679a0492",
+          "source_id": "s6",
+          "chunk_count": 2,
+          "index_status": "completed"
+        },
+        {
+          "kb_id": "24697716-a373-4e94-829d-c3ef3ede26c1",
+          "title": "07_经营与中标记录.txt",
+          "doc_id": "ca67b90f-e1d6-453b-afb0-6f2c3b751a64",
+          "source_id": "s7",
+          "chunk_count": 2,
+          "index_status": "completed"
+        },
+        {
+          "kb_id": "24697716-a373-4e94-829d-c3ef3ede26c1",
+          "title": "08_应收账龄与期后回款.txt",
+          "doc_id": "0f1d3974-75dd-4707-a9d3-4028534c742a",
+          "source_id": "s8",
+          "chunk_count": 3,
+          "index_status": "completed"
+        }
+      ],
+      "questions": [],
+      "steps_used": 6,
+      "catalog_status": "available",
+      "elapsed_seconds": 68.88,
+      "review_questions": [
+        "是否已获取2025年末应收账款明细账（含每笔债权发生日期、合同编号、发票号、账龄起算依据）？该材料是验证‘一年以上’账龄划分准确性的必要依据，当前仅依赖台账摘要（s8-q10），未见原始明细凭证。",
+        "是否已调取2026年1月1日至5月18日加盖银行章的银行流水？用于独立核验四笔期后回款（R01–R04）的真实性、到账时间及与台账标注用途（如‘冲抵一年以上应收’）的一致性；当前仅依据内部台账（s9），且材料明示‘未提供逐笔银行回单，匹配关系尚待独立核实’（s10-q6）"
+      ],
+      "catalog_truncated": false,
+      "missing_materials": [
+        "2025年末应收账款明细账（含每笔债权发生日期、合同编号、发票号、账龄起算依据）——用于验证‘一年以上’账龄划分的会计基础是否合规准确，当前仅依赖台账摘要（s8-q10），无法核验账龄起算时点是否符合会计准则（如以发票日/验收日/合同约定日为准）。",
+        "2026年1月1日至5月18日加盖银行业务章的银行流水原件（PDF或纸质扫描件）——用于独立核验R01–R04四笔收款的真实性、到账时间、付款方户名与台账一致性，并验证‘冲抵一年以上应收’等用途标注是否具备银行凭证支持，当前材料明示‘未提供逐笔银行回单，匹配关系尚待独立核实’（s10-q6）"
+      ]
+    },
+    "quality_review": {
+      "score": 9.0,
+      "verdict": "pass",
+      "degraded": false,
+      "analysis_checks": [
+        {
+          "id": "question_coverage",
+          "reason": "报告在正式章节未单独展开经营现金流、应收账龄与期后回款的勾稽分析，但探索性调查章节（不参与授信裁决）基于企业内部台账完成了长账龄覆盖率计算与分类，并明确标注'虚构测试数据，匹配关系尚待独立核实'，符合如实披露限制的原则，未遗漏必查项。",
+          "status": "supported",
+          "report_quote": "调查层补充（不参与授信裁决，由系统生成）"
+        },
+        {
+          "id": "period_basis",
+          "reason": "财务数据期间均为年度（2023、2024、2025），经营现金流同样按年度列示，无跨期或集合混用。证据日期虽标注'未确认'，但取证时间统一为2026-05-18，与截止日一致，未发现期间错误。",
+          "status": "supported",
+          "report_quote": "营业收入：2023年度 7180.0万元；2024年度 8150.0万元；2025年度 9260.0万元"
+        },
+        {
+          "id": "cashflow_attribution",
+          "reason": "报告正文未对经营现金流同比变动提出主因或贡献率断言，仅在调查员概述中定性提及'与净利润变动趋势一致'；原文未提供两期各调节项，因此不存在基于不完整信息的归因违规。",
+          "status": "supported",
+          "report_quote": "经营现金流连续三年稳健增长（2023–2025年分别为604/693/815万元），与净利润变动趋势一致"
+        },
+        {
+          "id": "receipt_reconciliation",
+          "reason": "报告正式章节未进行回款逐笔分类与勾稽，但探索性章节基于企业内部台账完成了R01–R04四笔收款的分类（长账龄冲抵、一年以内冲抵、新订单预收），并明确列出限制'未提供逐笔银行回单，匹配关系尚待独立核实'；符合'如实披露不能完成计算或分类时可以supported'的纪律。",
+          "status": "supported",
+          "report_quote": "四笔收款合计 2240。其中冲抵 2025 年末应收 1860（一年以上 300、一年以内 1560），新订单预收 380。"
+        }
+      ]
+    },
+    "critic_feedback": [],
+    "errors": [],
+    "risk_assessment": {
+      "level": "低风险",
+      "gate_kinds": [],
+      "completeness": {
+        "scenario": {
+          "name": "",
+          "rate": 0.0,
+          "total": 0,
+          "verified": 0,
+          "unverified_fields": []
+        },
+        "by_category": {
+          "basic": {
+            "rate": 1.0,
+            "total": 3,
+            "verified": 3,
+            "capability_gaps": 0
+          },
+          "equity": {
+            "rate": 1.0,
+            "total": 3,
+            "verified": 3,
+            "capability_gaps": 0
+          },
+          "opinion": {
+            "rate": 1.0,
+            "total": 2,
+            "verified": 2,
+            "capability_gaps": 0
+          },
+          "judicial": {
+            "rate": 1.0,
+            "total": 4,
+            "verified": 4,
+            "capability_gaps": 0
+          },
+          "relation": {
+            "rate": 1.0,
+            "total": 3,
+            "verified": 3,
+            "capability_gaps": 0
+          },
+          "financial": {
+            "rate": 1.0,
+            "total": 4,
+            "verified": 4,
+            "capability_gaps": 0
+          },
+          "operation": {
+            "rate": 1.0,
+            "total": 1,
+            "verified": 1,
+            "capability_gaps": 0
+          }
+        },
+        "verified_rate": 1.0,
+        "required_total": 15,
+        "capability_gaps": [],
+        "required_verified": 15,
+        "unverified_fields": [],
+        "conflicting_fields": []
+      },
+      "credit_advice": "可考虑核准授信",
+      "gates_applied": [],
+      "composite_score": 4.0,
+      "triggered_rules": [
+        {
+          "score": 0.0,
+          "detail": "资产负债率 46.8%，处于安全区间（≤50%）",
+          "evidence": [
+            "fact_13d85697",
+            "fact_37d55cb7",
+            "fact_9ce4c3a7"
+          ],
+          "field_id": "debt_ratio",
+          "dimension": "financial"
+        },
+        {
+          "score": 0.0,
+          "detail": "净利率 11.1%，盈利能力良好",
+          "evidence": [
+            "fact_13d85697",
+            "fact_37d55cb7",
+            "fact_9ce4c3a7"
+          ],
+          "field_id": "net_profit",
+          "dimension": "financial"
+        },
+        {
+          "score": 0.0,
+          "detail": "营收较基期增长 29.0%",
+          "evidence": [
+            "fact_13d85697",
+            "fact_37d55cb7",
+            "fact_9ce4c3a7"
+          ],
+          "field_id": "revenue",
+          "dimension": "financial"
+        },
+        {
+          "score": 0.0,
+          "detail": "经营性现金流各期均为正",
+          "evidence": [
+            "fact_13d85697",
+            "fact_37d55cb7",
+            "fact_9ce4c3a7"
+          ],
+          "field_id": "cash_flow",
+          "dimension": "financial"
+        },
+        {
+          "score": 0.0,
+          "detail": "未发现失信被执行人记录",
+          "evidence": [],
+          "field_id": "dishonesty",
+          "dimension": "judicial"
+        },
+        {
+          "score": 0.0,
+          "detail": "未发现被执行记录",
+          "evidence": [],
+          "field_id": "enforcement",
+          "dimension": "judicial"
+        },
+        {
+          "score": 0.0,
+          "detail": "1 笔涉诉均为原告方，不构成负面",
+          "evidence": [
+            "fact_65bdcc58"
+          ],
+          "field_id": "litigation",
+          "dimension": "judicial"
+        },
+        {
+          "score": 40.0,
+          "detail": "对外担保 1 笔，合计 300 万元",
+          "evidence": [],
+          "field_id": "guarantee",
+          "dimension": "relation"
+        },
+        {
+          "score": 0.0,
+          "detail": "未发现担保圈涉入情况",
+          "evidence": [],
+          "field_id": "guarantee_circle",
+          "dimension": "relation"
+        },
+        {
+          "score": 0.0,
+          "detail": "登记状态：存续",
+          "evidence": [
+            "fact_571116eb",
+            "fact_01ceb00d"
+          ],
+          "field_id": "operating_status",
+          "dimension": "operation"
+        },
+        {
+          "score": 0.0,
+          "detail": "中标记录 2 条",
+          "evidence": [
+            "fact_737f7e8b",
+            "fact_1b96d265",
+            "fact_6d599223"
+          ],
+          "field_id": "bidding_record",
+          "dimension": "operation"
+        },
+        {
+          "score": 0.0,
+          "detail": "已确认负面舆情 0 条",
+          "evidence": [],
+          "field_id": "negative_news",
+          "dimension": "opinion"
+        },
+        {
+          "score": 0.0,
+          "detail": "监管处罚 0 条",
+          "evidence": [],
+          "field_id": "regulatory_penalty",
+          "dimension": "opinion"
+        }
+      ],
+      "dimension_scores": {
+        "opinion": 0.0,
+        "judicial": 0.0,
+        "relation": 20.0,
+        "financial": 0.0,
+        "operation": 0.0
+      },
+      "dimensions_excluded": [],
+      "credit_recommendation": {
+        "basis": [
+          {
+            "value": 1852.0,
+            "detail": "2025年度营业收入 9260 万元 × 20%",
+            "method": "营收法"
+          },
+          {
+            "value": 2445.0,
+            "detail": "经营性现金流净额 815 万元 × 3.0",
+            "method": "现金流法"
+          }
+        ],
+        "reason": "",
+        "range_low": 1319.0,
+        "conditions": [
+          "对外担保 1 笔合计 300 万元属或有负债，须持续监控被担保方履约情况"
+        ],
+        "deductions": [
+          {
+            "item": "对外担保（或有负债）",
+            "amount": 300.0,
+            "detail": "1 笔合计 300 万元，被担保方违约时须代偿，全额扣减"
+          }
+        ],
+        "range_high": 1785.0,
+        "adjustments": [
+          {
+            "detail": "2 个口径取最小值，采用营收法",
+            "factor": "口径选取",
+            "multiplier": 1.0
+          },
+          {
+            "detail": "按 低风险 系数 1.0 调整",
+            "factor": "风险等级（低风险）",
+            "multiplier": 1.0
+          }
+        ],
+        "advice_text": "建议授信额度 1319–1785 万元（测算中值 1552 万元）；申请金额 1500 万元，在建议区间内",
+        "recommendable": true,
+        "based_on_level": "低风险",
+        "application_gap": -52.0,
+        "suggested_amount": 1552.0,
+        "unavailable_bases": [
+          {
+            "method": "净资产法",
+            "reason": "资产总额与负债总额均不在核查清单内，无可核实来源；净资产为二者之差，因此本口径不参与测算（不等于测算结果为零）"
+          }
+        ],
+        "application_amount": 1500.0
+      },
+      "requires_human_review": false
+    },
+    "completeness": {
+      "scenario": {
+        "name": "",
+        "rate": 0.0,
+        "total": 0,
+        "verified": 0,
+        "unverified_fields": []
+      },
+      "by_category": {
+        "basic": {
+          "rate": 1.0,
+          "total": 3,
+          "verified": 3,
+          "capability_gaps": 0
+        },
+        "equity": {
+          "rate": 1.0,
+          "total": 3,
+          "verified": 3,
+          "capability_gaps": 0
+        },
+        "opinion": {
+          "rate": 1.0,
+          "total": 2,
+          "verified": 2,
+          "capability_gaps": 0
+        },
+        "judicial": {
+          "rate": 1.0,
+          "total": 4,
+          "verified": 4,
+          "capability_gaps": 0
+        },
+        "relation": {
+          "rate": 1.0,
+          "total": 3,
+          "verified": 3,
+          "capability_gaps": 0
+        },
+        "financial": {
+          "rate": 1.0,
+          "total": 4,
+          "verified": 4,
+          "capability_gaps": 0
+        },
+        "operation": {
+          "rate": 1.0,
+          "total": 1,
+          "verified": 1,
+          "capability_gaps": 0
+        }
+      },
+      "verified_rate": 1.0,
+      "required_total": 15,
+      "capability_gaps": [],
+      "required_verified": 15,
+      "unverified_fields": [],
+      "conflicting_fields": []
+    },
+    "rag_evidence_summary": {
+      "rejected": 0,
+      "verified": 0,
+      "conflicting": 0,
+      "rejection_reasons": {},
+      "rejection_breakdown": []
+    },
+    "search_failures": [],
+    "section_failures": []
+  },
+  "research_outcome": {
+    "version": 1,
+    "credit_status": "available",
+    "rating_status": "available",
+    "report_status": "ready",
+    "quality_status": "passed",
+    "execution_status": "finished",
+    "restriction_reasons": [],
+    "investigation_status": "completed",
+    "requires_human_review": false,
+    "outstanding_issue_count": 0
+  },
+  "kb_scope": [
+    {
+      "kb_id": "24697716-a373-4e94-829d-c3ef3ede26c1",
+      "kb_name": "E2E-STAGE2-QL-20260928T100116Z-e43fad34f296"
+    }
+  ]
+}

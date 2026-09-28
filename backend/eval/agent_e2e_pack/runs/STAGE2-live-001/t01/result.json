@@ -1,0 +1,44 @@
+{
+  "scenario": "t01",
+  "session_id": "stage2-t01-28d827d0215044daa760b6a1b6b62802",
+  "started_at": "2026-09-28T09:55:56.382782+00:00",
+  "pipeline_pass": false,
+  "quality_verdict": "not_scored",
+  "approvals_submitted": false,
+  "model_calls_stubbed": false,
+  "terminal_status": "failed",
+  "event_counts": {},
+  "source_manifest": [
+    {
+      "filename": "01_subject_and_request.txt",
+      "bytes": 958,
+      "sha256": "ce4e9321567b193164e6bd06ee31f325934aaf0c74fb70074e7dc2072d96e85e"
+    },
+    {
+      "filename": "02_financial_statements.txt",
+      "bytes": 1172,
+      "sha256": "da72a0b6b74801007b201dd89f44a0945e94ce32ee48ebc173f807f32e572a7a"
+    },
+    {
+      "filename": "03_management_explanation.txt",
+      "bytes": 702,
+      "sha256": "1add50429322b25b0bdb1bb2609723cfdee8038f10a6532012cfd962d5f01560"
+    },
+    {
+      "filename": "04_receivable_aging.txt",
+      "bytes": 775,
+      "sha256": "eb67aeaf614b74670e9dfaec7677c7e776668fd91aa62a242434e1a682bb7253"
+    },
+    {
+      "filename": "05_receipts_until_cutoff.txt",
+      "bytes": 811,
+      "sha256": "eeea0eb912a253b013698a89c7dbb9da62be6a454810e1ab8a50b339e63e7014"
+    }
+  ],
+  "kb_id": "1b275ae5-25d6-4718-8c06-88e6a2b4a882",
+  "kb_name": "E2E-STAGE2-T01-20260928T095555Z-07d1b47966b4",
+  "failure": "RuntimeError: HTTP 500 at POST /knowledge-bases/1b275ae5-25d6-4718-8c06-88e6a2b4a882/documents",
+  "failed_stage": "upload_and_index",
+  "finished_at": "2026-09-28T09:55:56.413824+00:00",
+  "elapsed_seconds": 0.031
+}

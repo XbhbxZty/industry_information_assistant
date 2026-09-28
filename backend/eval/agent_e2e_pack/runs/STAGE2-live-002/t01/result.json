@@ -1,0 +1,218 @@
+{
+  "scenario": "t01",
+  "session_id": "stage2-t01-d91df8ea1d7d4541a6c9a153ebd0ed7d",
+  "started_at": "2026-09-28T10:01:16.967911+00:00",
+  "pipeline_pass": true,
+  "quality_verdict": "not_scored",
+  "approvals_submitted": false,
+  "model_calls_stubbed": false,
+  "terminal_status": "awaiting_review",
+  "event_counts": {
+    "research_start": 1,
+    "company_profile_loaded": 1,
+    "field_checks_updated": 2,
+    "phase": 5,
+    "research_step": 14,
+    "checkpoint_saved": 4,
+    "agent_investigation": 8,
+    "risk_assessment": 1,
+    "investigation": 1,
+    "cross_layer_verdict": 1,
+    "thought": 2,
+    "report_draft": 2,
+    "review": 1,
+    "human_review_required": 1
+  },
+  "source_manifest": [
+    {
+      "filename": "01_subject_and_request.txt",
+      "bytes": 958,
+      "sha256": "ce4e9321567b193164e6bd06ee31f325934aaf0c74fb70074e7dc2072d96e85e"
+    },
+    {
+      "filename": "02_financial_statements.txt",
+      "bytes": 1172,
+      "sha256": "da72a0b6b74801007b201dd89f44a0945e94ce32ee48ebc173f807f32e572a7a"
+    },
+    {
+      "filename": "03_management_explanation.txt",
+      "bytes": 702,
+      "sha256": "1add50429322b25b0bdb1bb2609723cfdee8038f10a6532012cfd962d5f01560"
+    },
+    {
+      "filename": "04_receivable_aging.txt",
+      "bytes": 775,
+      "sha256": "eb67aeaf614b74670e9dfaec7677c7e776668fd91aa62a242434e1a682bb7253"
+    },
+    {
+      "filename": "05_receipts_until_cutoff.txt",
+      "bytes": 811,
+      "sha256": "eeea0eb912a253b013698a89c7dbb9da62be6a454810e1ab8a50b339e63e7014"
+    }
+  ],
+  "kb_id": "647dd262-afc1-4e03-95b5-c4027f56df37",
+  "kb_name": "E2E-STAGE2-T01-20260928T100116Z-e43fad34f296",
+  "uploaded_documents": [
+    {
+      "id": "b8127a6f-28ce-441c-9f32-98db8e052cb3",
+      "filename": "01_subject_and_request.txt"
+    },
+    {
+      "id": "285514c3-59a2-40e0-a876-753aa712cef5",
+      "filename": "02_financial_statements.txt"
+    },
+    {
+      "id": "b1f18bff-7cff-426c-887a-d5d62242b8dd",
+      "filename": "03_management_explanation.txt"
+    },
+    {
+      "id": "a51927fc-2813-40d3-afb5-8e755739e765",
+      "filename": "04_receivable_aging.txt"
+    },
+    {
+      "id": "f36e8151-b041-4211-bede-99c216130824",
+      "filename": "05_receipts_until_cutoff.txt"
+    }
+  ],
+  "indexed_documents": [
+    {
+      "id": "f36e8151-b041-4211-bede-99c216130824",
+      "filename": "05_receipts_until_cutoff.txt",
+      "status": "completed",
+      "chunk_count": 1
+    },
+    {
+      "id": "a51927fc-2813-40d3-afb5-8e755739e765",
+      "filename": "04_receivable_aging.txt",
+      "status": "completed",
+      "chunk_count": 1
+    },
+    {
+      "id": "b1f18bff-7cff-426c-887a-d5d62242b8dd",
+      "filename": "03_management_explanation.txt",
+      "status": "completed",
+      "chunk_count": 1
+    },
+    {
+      "id": "285514c3-59a2-40e0-a876-753aa712cef5",
+      "filename": "02_financial_statements.txt",
+      "status": "completed",
+      "chunk_count": 1
+    },
+    {
+      "id": "b8127a6f-28ce-441c-9f32-98db8e052cb3",
+      "filename": "01_subject_and_request.txt",
+      "status": "completed",
+      "chunk_count": 1
+    }
+  ],
+  "index_readback": [
+    {
+      "document_id": "b8127a6f-28ce-441c-9f32-98db8e052cb3",
+      "filename": "01_subject_and_request.txt",
+      "readable_chunks": 1
+    },
+    {
+      "document_id": "285514c3-59a2-40e0-a876-753aa712cef5",
+      "filename": "02_financial_statements.txt",
+      "readable_chunks": 1
+    },
+    {
+      "document_id": "b1f18bff-7cff-426c-887a-d5d62242b8dd",
+      "filename": "03_management_explanation.txt",
+      "readable_chunks": 1
+    },
+    {
+      "document_id": "a51927fc-2813-40d3-afb5-8e755739e765",
+      "filename": "04_receivable_aging.txt",
+      "readable_chunks": 1
+    },
+    {
+      "document_id": "f36e8151-b041-4211-bede-99c216130824",
+      "filename": "05_receipts_until_cutoff.txt",
+      "readable_chunks": 1
+    }
+  ],
+  "request": {
+    "query": "请对海岫精密部件有限公司拟申请的800万元、12个月流动资金贷款开展截至2026年2月20日的尽职调查。只使用我选择的本地材料。重点判断2025年经营现金流转负是否主要由提前备货解释，核查回款改善能否缓释风险。请区分已观察事实、推断、相互矛盾的陈述和仍缺失的信息，给出可追溯依据及按优先级排列的补件清单。不要代替人工审批。",
+    "session_id": "stage2-t01-d91df8ea1d7d4541a6c9a153ebd0ed7d",
+    "kb_name": "E2E-STAGE2-T01-20260928T100116Z-e43fad34f296",
+    "search_modes": [
+      "local"
+    ],
+    "version": "v2",
+    "as_of": "2026-02-20",
+    "subject_name": "海岫精密部件有限公司",
+    "due_diligence": true,
+    "research_strategy": "agent",
+    "max_iterations": 2
+  },
+  "profile_note": "No profile supplied/installed by runner. Server may match its existing companies.json; archive the actual result, not an assumed 15/15.",
+  "stream_http_status": 200,
+  "terminal_event": {
+    "type": "human_review_required",
+    "research_outcome": {
+      "version": 1,
+      "execution_status": "awaiting_review",
+      "investigation_status": "completed",
+      "quality_status": "passed",
+      "report_status": "partial",
+      "rating_status": "insufficient",
+      "credit_status": "unavailable",
+      "requires_human_review": true,
+      "outstanding_issue_count": 0,
+      "restriction_reasons": []
+    },
+    "session_id": "stage2-t01-d91df8ea1d7d4541a6c9a153ebd0ed7d",
+    "company_name": "海岫精密部件有限公司",
+    "profile_ref": null,
+    "level": "数据不足，无法评级",
+    "composite_score": 0.0,
+    "credit_advice": "信息不足，不得出具授信建议；建议补齐必查项后重新评估",
+    "gates_applied": [
+      "总体核实率 0% 低于 60%，不具备评级条件",
+      "司法维度必查项未核实（litigation、enforcement、dishonesty），等级下限提升至中风险",
+      "financial 维度核实率不足 50%，不参与加权且等级下限提升",
+      "judicial 维度核实率不足 50%，不参与加权且等级下限提升",
+      "relation 维度核实率不足 50%，不参与加权且等级下限提升",
+      "operation 维度核实率不足 50%（必要评分输入 operating_status 未核实），不参与加权且等级下限提升",
+      "opinion 维度核实率不足 50%，不参与加权且等级下限提升"
+    ],
+    "verified_rate": 0.0,
+    "unverified_fields": [
+      "registration",
+      "business_scope",
+      "operating_status",
+      "shareholders",
+      "actual_controller",
+      "revenue",
+      "net_profit",
+      "debt_ratio",
+      "litigation",
+      "enforcement",
+      "dishonesty",
+      "guarantee",
+      "guarantee_circle",
+      "negative_news",
+      "regulatory_penalty"
+    ],
+    "conflicting_fields": [],
+    "critical_issues": [],
+    "errors": []
+  },
+  "checkpoint_status": "paused",
+  "research_outcome": {
+    "version": 1,
+    "credit_status": "unavailable",
+    "rating_status": "insufficient",
+    "report_status": "partial",
+    "quality_status": "passed",
+    "execution_status": "awaiting_review",
+    "restriction_reasons": [],
+    "investigation_status": "completed",
+    "requires_human_review": true,
+    "outstanding_issue_count": 0
+  },
+  "finished_at": "2026-09-28T10:04:40.853588+00:00",
+  "elapsed_seconds": 203.891
+}

@@ -1,0 +1,37 @@
+{
+  "run_id": "20260928T095555Z-07d1b47966b4",
+  "started_at": "2026-09-28T09:55:55.558911+00:00",
+  "base_url": "http://127.0.0.1:18000",
+  "runner_checkout_commit": "da18bcd35581781c5996b1ed32ce70107c34f0b0",
+  "runner_checkout_dirty": true,
+  "server_revision_declared_by_operator": "da18bcd35581781c5996b1ed32ce70107c34f0b0",
+  "version_note": "Runner checkout is not proof of server revision; operator must start/restart the server from this checkout.",
+  "scope": "new synthetic account and knowledge bases only",
+  "cases": [
+    {
+      "scenario": "t01",
+      "session_id": "stage2-t01-28d827d0215044daa760b6a1b6b62802",
+      "kb_id": "1b275ae5-25d6-4718-8c06-88e6a2b4a882",
+      "pipeline_pass": false,
+      "quality_verdict": "not_scored",
+      "terminal_status": "failed",
+      "research_outcome": null,
+      "elapsed_seconds": 0.031,
+      "failure": "RuntimeError: HTTP 500 at POST /knowledge-bases/1b275ae5-25d6-4718-8c06-88e6a2b4a882/documents"
+    }
+  ],
+  "limits": {
+    "research_seconds_per_case": 900,
+    "upload_index_seconds_per_case": 300,
+    "max_iterations": 2
+  },
+  "unauthenticated_http_status": 401,
+  "account": {
+    "id": "39e168b3-a8ce-45ee-a932-c85390bc0766",
+    "alias": "fresh_stage2_test_account",
+    "is_superuser": false
+  },
+  "finished_at": "2026-09-28T09:55:56.414824+00:00",
+  "pipeline_pass": false,
+  "retention_note": "Fresh synthetic account/KB/checkpoints remain for audit; no existing data was removed. Credentials were kept only in process memory."
+}
