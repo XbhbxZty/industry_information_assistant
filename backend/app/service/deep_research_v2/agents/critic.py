@@ -544,7 +544,14 @@ class CriticMaster(BaseAgent):
                 self.logger.warning(f"quality_score 越界: {score}，裁剪到 [1,10]")
                 score = min(10.0, max(1.0, score))
             state["quality_score"] = score
-            state["unresolved_issues"] = len([i for i in review_result.get("issues", []) if i.get("severity") in ["critical", "major"]])
+            from ..research_outcome import outstanding_issues
+            state["unresolved_issues"] = len(outstanding_issues(state))
+            state["quality_review"] = {
+                "verdict": review_result.get("overall_assessment", {}).get("verdict"),
+                "score": score,
+                "analysis_checks": review_result.get("analysis_checks", []),
+                "degraded": bool(review_result.get("degraded")),
+            }
 
             # 发送审核结果
             self.add_message(state, "review", {

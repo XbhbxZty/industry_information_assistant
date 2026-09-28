@@ -295,6 +295,11 @@ class DataAnalyst(BaseAgent):
             state.get("company_profile"), state.get("field_checks"),
             state.get("evidence_store"), as_of=state.get("as_of", "") or "",
         )
+        # A caught execution error must remain distinguishable from missing
+        # materials, without publishing evidence-bearing diagnostic rows.
+        state["risk_evaluation_status"] = {
+            key: evaluation.diagnostics[key] for key in ("status", "stage")
+        }
         result = evaluation.assessment
         if result is None:
             # 未识别到尽调对象，退化为普通研究流程，没有清单可评——

@@ -227,6 +227,11 @@ class _InterruptingGraph:
 class _Checkpoint:
     def __init__(self):
         self.statuses: list[str] = []
+        self.saved = None
+
+    def save_checkpoint(self, session_id, state, user_id=None, ui_state=None, final_report=None):
+        self.saved = {"state": copy.deepcopy(state), "ui": copy.deepcopy(ui_state)}
+        return "checkpoint-test"
 
     def update_status(self, _session_id, status, error_message=None):
         self.statuses.append(status)
@@ -249,3 +254,6 @@ def test_human_review_required_uses_current_state_not_interrupt_payload():
     assert required["profile_ref"]["id"] != "forged"
     assert set(required["profile_ref"]) == set(_public_ref())
     assert "private_checkpoint_field" not in required
+    assert graph.checkpoint_service.statuses == ["paused"]
+    assert graph.checkpoint_service.saved["ui"]["research_outcome"]["execution_status"] == "awaiting_review"
+    assert not any(e["type"] == "research_complete" for e in events)

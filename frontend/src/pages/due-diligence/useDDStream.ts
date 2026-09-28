@@ -2,6 +2,7 @@
 // 本文件为「尽调智核」迭代中新增，不含原课程项目代码。
 import { useCallback, useRef, useState } from 'react'
 import { parseAgentNotebook, type AgentNotebook } from './agent-notebook'
+import { extractResearchOutcome, type ResearchOutcome } from './outcome'
 import {
   startDueDiligence,
   submitReview,
@@ -45,6 +46,7 @@ export interface DDState {
   errors: string[]
   errorMessage: string
   agentNotebook: AgentNotebook | null
+  researchOutcome: ResearchOutcome | null
 }
 
 const EMPTY: DDState = {
@@ -53,6 +55,7 @@ const EMPTY: DDState = {
   reviewRequest: null, profileRef: null, report: '', investigation: null,
   errors: [], errorMessage: '',
   agentNotebook: null,
+  researchOutcome: null,
 }
 
 interface DDStreamEvent {
@@ -78,6 +81,7 @@ interface DDStreamEvent {
   /** SSE 公开的冻结档案审计引用。 */
   profile_ref?: unknown
   agent_investigation?: unknown
+  research_outcome?: unknown
 }
 
 function asEvent(value: unknown): DDStreamEvent {
@@ -158,10 +162,11 @@ export function useDDStream() {
     const t = json?.type
     if (!t) return
     const profileRef = extractProfileRef(json)
+    const researchOutcome = extractResearchOutcome(json)
     // profile_ref 是运行快照的一部分。事件没带该字段时只更新其它状态，
     // 绝不能把此前已恢复的引用误写成 null；新任务和 reset 才负责清空它。
     const patchWithProfileRef = (next: Partial<DDState>) => {
-      patch(profileRef ? { ...next, profileRef } : next)
+      patch({ ...next, ...(profileRef ? { profileRef } : {}), ...(researchOutcome ? { researchOutcome } : {}) })
     }
 
     switch (t) {
@@ -230,7 +235,7 @@ export function useDDStream() {
       //    否则复核卡片弹出来时，右侧是空的，复核人只能凭等级和闸门签字。
       case 'report_draft': {
         const c = eventPayload(json)
-        if (typeof c.content === 'string') patch({ report: c.content })
+        patchWithProfileRef(typeof c.content === 'string' ? { report: c.content } : {})
         break
       }
 
@@ -271,7 +276,7 @@ export function useDDStream() {
         // `json` 来自不可信 SSE；先移除原始字段，再只回填经过结构校验的 ref，
         // 防止半截 profile_ref 通过复核卡片继续扩散。
         const reviewRequestPayload = Object.fromEntries(
-          Object.entries(reviewPayload).filter(([key]) => key !== 'profile_ref'),
+          Object.entries(reviewPayload).filter(([key]) => key !== 'profile_ref' && key !== 'research_outcome'),
         )
         patchWithProfileRef({
           phase: 'awaiting_review',
@@ -325,6 +330,7 @@ export function useDDStream() {
           risk: json.risk_assessment || prev.risk,
           investigation: json.investigation || prev.investigation,
           agentNotebook: parseAgentNotebook(json.agent_investigation) || prev.agentNotebook,
+          researchOutcome: researchOutcome ?? prev.researchOutcome,
           // 必须与已累积的 warning 合并。终局事件只带 state["errors"]，
           // 流式过程中推来的告警不在其中，直接覆盖会让它们凭空消失。
           errors: Array.from(new Set([...prev.errors, ...(json.errors || [])])),
@@ -334,7 +340,7 @@ export function useDDStream() {
         break
 
       case 'research_cancelled':
-        patch({ phase: 'cancelled', stage: '已取消' })
+        patchWithProfileRef({ phase: 'cancelled', stage: '已取消' })
         break
 
       case 'error':

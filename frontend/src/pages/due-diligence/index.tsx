@@ -9,6 +9,7 @@ import { useLocation } from 'react-router-dom'
 import { ChecklistTable, CompletenessBar, ReviewCard, RiskCard } from './components'
 import { InvestigationPanel } from './investigation'
 import { useDDStream } from './useDDStream'
+import { describeResearchOutcome } from './outcome'
 import styles from './index.module.scss'
 
 const { Title, Text } = Typography
@@ -63,6 +64,7 @@ export default function DueDiligencePage() {
 
   const running = state.phase === 'running'
   const idle = state.phase === 'idle'
+  const outcomeNotice = describeResearchOutcome(state.researchOutcome)
 
   return (
     <div className={styles.page}>
@@ -249,6 +251,25 @@ export default function DueDiligencePage() {
 
           <Col span={24}>
             <Space direction="vertical" size={12} style={{ width: '100%' }}>
+              {(state.researchOutcome || state.risk || state.report) && (
+                <Alert
+                  type={outcomeNotice.type} showIcon
+                  message={outcomeNotice.title}
+                  description={
+                    <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                      <Text>{outcomeNotice.explanation}</Text>
+                      <Space wrap size={4}>
+                        {outcomeNotice.dimensions.map(item => <Tag key={item}>{item}</Tag>)}
+                      </Space>
+                      {Boolean(state.researchOutcome?.restriction_reasons.length) && (
+                        <ul style={{ margin: 0, paddingLeft: 18 }}>
+                          {state.researchOutcome?.restriction_reasons.map((reason, index) => <li key={index}>{reason}</li>)}
+                        </ul>
+                      )}
+                    </Space>
+                  }
+                />
+              )}
               {state.phase === 'awaiting_review' && state.reviewRequest && (
                 <ReviewCard req={state.reviewRequest} onSubmit={review} submitting={false} />
               )}
@@ -279,7 +300,8 @@ export default function DueDiligencePage() {
               <CompletenessBar data={state.completeness} />
               <ChecklistTable checks={state.fieldChecks} />
               {state.report && (
-                <Card size="small" title="尽职调查报告" className={styles.report}>
+                <Card size="small" title={`尽职调查报告 · ${outcomeNotice.title}`} className={styles.report}>
+                  <Text type="secondary">{outcomeNotice.explanation}</Text>
                   {/* gfm 必须开启：报告里的评级块、额度测算与溯源附录都是表格 */}
                   <Markdown className={styles.markdown} value={state.report} gfm />
                 </Card>

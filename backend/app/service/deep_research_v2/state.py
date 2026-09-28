@@ -410,6 +410,9 @@ class ResearchState(TypedDict):
     # 人工复核覆盖等级后要按它重算额度（BC-70）；
     # 它也回答了一个此前无法回答的审计问题——评分依据的到底是哪份数据。
     scoring_view: Dict[str, Any]
+    quality_review: Dict[str, Any]          # quality receipt, independent of risk
+    agent_failures: List[Dict[str, Any]]    # execution failures, not material gaps
+    risk_evaluation_status: Dict[str, str]  # bounded evaluator status/stage only
 
     # 结构化证据库（v0.6）：{evidence_id: StructuredEvidence}
     # 由结构化适配器写入，供重放校验按 evidence_ids 回查。

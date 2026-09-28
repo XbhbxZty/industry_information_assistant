@@ -63,6 +63,7 @@ except ImportError:
     )
 from .agents import ChiefArchitect, DeepScout, CodeWizard, CriticMaster, LeadWriter, DataAnalyst
 from .agents.writer import _canonicalize_risk_block
+from .research_outcome import build_research_outcome, append_outcome_notice
 
 try:
     from service.risk_scorecard import apply_human_review, needs_human_review, render_markdown
@@ -145,6 +146,7 @@ def build_complete_event(state: Dict[str, Any], references: List[Dict[str, Any]]
     from .investigation_tools import public_notebook
     return {
         "type": "research_complete",
+        "research_outcome": build_research_outcome(state, "finished"),
         "agent_investigation": public_notebook(state.get("agent_investigation") or {}),
         "final_report": state.get("final_report", ""),
         "quality_score": state.get("quality_score", 0.0),
@@ -998,6 +1000,7 @@ class DeepResearchGraph:
             # Agent 自身异常不终止编排：确定性产出（评级/清单）必须能活到终局
             logger.error(f"[Graph] agent {agent.name} error: {e}", exc_info=True)
             state.setdefault("errors", []).append(f"{agent.name} 执行失败: {e}")
+            state.setdefault("agent_failures", []).append({"agent": agent.name, "error_type": type(e).__name__})
         # 消息已经流出去了，state 里不必再留一份（检查点会因此显著变小）
         state["messages"] = []
         return True
@@ -1012,7 +1015,8 @@ class DeepResearchGraph:
         if state.get("_cancelled"):
             return
         state["_cancelled"] = True
-        self._emit({"type": "research_cancelled", "message": "研究已取消"})
+        self._emit({"type": "research_cancelled", "message": "研究已取消",
+                    "research_outcome": build_research_outcome(state, "cancelled")})
 
     def _enter(self, state: ResearchState, phase: str, label: str) -> bool:
         """节点入口：取消检查 + 推 phase 事件。返回 False 表示应当立即终止"""
@@ -1069,7 +1073,7 @@ class DeepResearchGraph:
     async def _visualize_node(self, state: ResearchState):
         state = dict(state)
         if self._cancelled(state):
-            self._emit({"type": "research_cancelled", "message": "研究已取消"})
+            self._mark_cancelled(state)
             return state
         if not await self._run_agent(self.wizard, state):
             return state
@@ -1100,6 +1104,14 @@ class DeepResearchGraph:
         state["phase"] = ResearchPhase.REVIEWING.value
         if not await self._run_agent(self.critic, state):
             return state
+        # Add delivery limits before the node is sealed, never after a review
+        # finalizer. Financial approval does not resolve analysis defects.
+        if state.get("due_diligence_mode"):
+            outcome = build_research_outcome(state)
+            state["final_report"] = append_outcome_notice(state.get("final_report", ""), outcome)
+            self._emit({"type": "report_draft", "content": {
+                "content": state["final_report"], "research_outcome": outcome,
+            }})
         return state
 
     async def _re_research_node(self, state: ResearchState):
@@ -1221,6 +1233,7 @@ class DeepResearchGraph:
         ]
         return {
             "type": "human_review_required",
+            "research_outcome": build_research_outcome(state, "awaiting_review"),
             "session_id": state.get("session_id", ""),
             "company_name": state.get("company_name", ""),
             "profile_ref": public_profile_ref(state.get("admin_profile_ref")),
@@ -1597,6 +1610,9 @@ class DeepResearchGraph:
         # 否则复核人看到的界面与他签字时看到的不一致。
         if state.get("investigation"):
             ui["investigation"] = state["investigation"]
+        from .investigation_tools import public_notebook
+        ui["agent_investigation"] = public_notebook(state.get("agent_investigation") or {})
+        ui["research_outcome"] = build_research_outcome(state)
 
         kg = state.get("knowledge_graph") or {}
         if kg.get("nodes") or kg.get("edges"):
@@ -2086,10 +2102,12 @@ class DeepResearchGraph:
                     # before changing its status; otherwise a later claimed
                     # resume would compare the interrupt snapshot with an
                     # earlier writer checkpoint and (correctly) reject it.
+                    pause_ui = self._build_ui_state(final_state)
+                    pause_ui["research_outcome"] = build_research_outcome(final_state, "awaiting_review")
                     saved = self._save_checkpoint(
                         final_state,
                         final_state.get("_user_id"),
-                        self._build_ui_state(final_state),
+                        pause_ui,
                     )
                     if not saved:
                         raise ValueError("待复核检查点保存失败")
