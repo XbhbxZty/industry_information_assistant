@@ -1,0 +1,78 @@
+{
+  "run_id": "20260928T122813Z-df54ea9f1b77",
+  "started_at": "2026-09-28T12:28:13.614361+00:00",
+  "base_url": "http://127.0.0.1:18000",
+  "runner_checkout_commit": "6cd14ffccf7c229e301cf0280a3623e4497186b6",
+  "runner_checkout_dirty": true,
+  "server_revision_declared_by_operator": "6cd14ffccf7c229e301cf0280a3623e4497186b6",
+  "version_note": "Runner checkout is not proof of server revision; operator must start/restart the server from this checkout.",
+  "scope": "new synthetic account and knowledge bases only",
+  "cases": [
+    {
+      "scenario": "t01",
+      "session_id": "stage2-t01-3b8c130b904e427ba15f06dcc14cad63",
+      "kb_id": "af01aeae-6934-4cc9-9ec4-90b79c0de2b2",
+      "pipeline_pass": true,
+      "quality_verdict": "not_scored",
+      "terminal_status": "awaiting_review",
+      "research_outcome": {
+        "version": 1,
+        "credit_status": "unavailable",
+        "rating_status": "insufficient",
+        "report_status": "restricted",
+        "quality_status": "needs_revision",
+        "execution_status": "awaiting_review",
+        "restriction_reasons": [
+          "仍有 6 个核心问题尚未调查完成，不能以流程结束替代问题回答。",
+          "仍有 2 项重大或阻断级复核问题未解决，末轮高分不能覆盖历史问题。",
+          "自主调查未正常完成（stalled），不得将未读或未核实视为材料不存在。"
+        ],
+        "investigation_status": "stalled",
+        "requires_human_review": true,
+        "outstanding_issue_count": 2
+      },
+      "elapsed_seconds": 386.859,
+      "failure": null
+    },
+    {
+      "scenario": "ql",
+      "session_id": "stage2-ql-9fcf5815bd4c4146bb8e6fd4ed2a8def",
+      "kb_id": "53eaee0a-ec11-42ac-818a-34ab7d7dbf08",
+      "pipeline_pass": true,
+      "quality_verdict": "not_scored",
+      "terminal_status": "completed",
+      "research_outcome": {
+        "version": 1,
+        "credit_status": "available",
+        "rating_status": "available",
+        "report_status": "restricted",
+        "quality_status": "needs_revision",
+        "execution_status": "finished",
+        "restriction_reasons": [
+          "仍有 6 个核心问题尚未调查完成，不能以流程结束替代问题回答。",
+          "仍有 2 项重大或阻断级复核问题未解决，末轮高分不能覆盖历史问题。",
+          "自主调查未正常完成（stalled），不得将未读或未核实视为材料不存在。"
+        ],
+        "investigation_status": "stalled",
+        "requires_human_review": false,
+        "outstanding_issue_count": 2
+      },
+      "elapsed_seconds": 350.985,
+      "failure": null
+    }
+  ],
+  "limits": {
+    "research_seconds_per_case": 900,
+    "upload_index_seconds_per_case": 300,
+    "max_iterations": 2
+  },
+  "unauthenticated_http_status": 401,
+  "account": {
+    "id": "075380f3-6a8f-4660-b78d-e86840b11c4c",
+    "alias": "fresh_stage2_test_account",
+    "is_superuser": false
+  },
+  "finished_at": "2026-09-28T12:40:32.306388+00:00",
+  "pipeline_pass": true,
+  "retention_note": "Fresh synthetic account/KB/checkpoints remain for audit; no existing data was removed. Credentials were kept only in process memory."
+}

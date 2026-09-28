@@ -1,0 +1,1074 @@
+{
+  "found": true,
+  "status": "paused",
+  "phase": "revising",
+  "state": {
+    "research_strategy": "agent",
+    "as_of": "2026-02-20",
+    "subject_name": "海岫精密部件有限公司",
+    "company_name": "海岫精密部件有限公司",
+    "phase": "revising",
+    "iteration": 2,
+    "agent_investigation": {
+      "brief": {
+        "as_of": "2026-02-20",
+        "query": "请对海岫精密部件有限公司拟申请的800万元、12个月流动资金贷款开展截至2026年2月20日的尽职调查。只使用我选择的本地材料。重点判断2025年经营现金流转负是否主要由提前备货解释，核查回款改善能否缓释风险。请区分已观察事实、推断、相互矛盾的陈述和仍缺失的信息，给出可追溯依据及按优先级排列的补件清单。不要代替人工审批。",
+        "subject": "海岫精密部件有限公司",
+        "known_facts": [],
+        "followup_questions": []
+      },
+      "status": "stalled",
+      "actions": [
+        {
+          "action": "list_materials",
+          "reason": "服务端提供本次授权材料目录，供AI自主选择",
+          "result": {
+            "ok": true,
+            "note": "目录只证明材料已登记；pending/failed 是处理状态，不是材料不存在。请自主选择相关材料阅读。",
+            "progress": true,
+            "documents": [
+              {
+                "kb_id": "af01aeae-6934-4cc9-9ec4-90b79c0de2b2",
+                "title": "01_subject_and_request.txt",
+                "doc_id": "483ff67c-61bb-4ed5-9453-d37177557002",
+                "source_id": "s1",
+                "chunk_count": 1,
+                "index_status": "completed"
+              },
+              {
+                "kb_id": "af01aeae-6934-4cc9-9ec4-90b79c0de2b2",
+                "title": "02_financial_statements.txt",
+                "doc_id": "a2d2e5a3-ea2d-422a-a1c0-a1eb8a31232a",
+                "source_id": "s2",
+                "chunk_count": 1,
+                "index_status": "completed"
+              },
+              {
+                "kb_id": "af01aeae-6934-4cc9-9ec4-90b79c0de2b2",
+                "title": "03_management_explanation.txt",
+                "doc_id": "0cbe0ce2-4a8c-4342-ae69-60637e1f1a1a",
+                "source_id": "s3",
+                "chunk_count": 1,
+                "index_status": "completed"
+              },
+              {
+                "kb_id": "af01aeae-6934-4cc9-9ec4-90b79c0de2b2",
+                "title": "04_receivable_aging.txt",
+                "doc_id": "57229172-7ee0-4015-aa74-2499f276d8e5",
+                "source_id": "s4",
+                "chunk_count": 1,
+                "index_status": "completed"
+              },
+              {
+                "kb_id": "af01aeae-6934-4cc9-9ec4-90b79c0de2b2",
+                "title": "05_receipts_until_cutoff.txt",
+                "doc_id": "eb5b6ac5-86e3-470f-b1f2-dc9aa5e26fe7",
+                "source_id": "s5",
+                "chunk_count": 1,
+                "index_status": "completed"
+              }
+            ],
+            "truncated": false
+          },
+          "arguments": {}
+        },
+        {
+          "action": "plan_investigation",
+          "reason": "用户问题聚焦两个核心判断：（1）2025年经营现金流转负的主因是否为提前备货；（2）回款改善是否构成有效风险缓释。需拆解为可验证的量化比较、分类覆盖与因果印证问题。计划必须覆盖同比变动、营运资金各分项贡献、回款结构与可持续性，并强制要求计算支撑——避免定性替代定量。所有问题均以2026-02-20为截止日、以2025年为分析主体，符合研究截止日2026-02-20约束。",
+          "result": {
+            "ok": true,
+            "progress": true,
+            "investigation_plan": [
+              {
+                "id": "p1",
+                "answer": "",
+                "status": "open",
+                "question": "2025年经营现金流量净额是否为负？其金额、同比变动及与净利润的差异幅度是多少？",
+                "citations": [],
+                "done_when": "从经审计/正式财务报表中提取2025年及2024年经营现金流量净额、净利润，计算差额、同比变动额及经营现金流/净利润比率；所有数值须标注来源文档、行项目、单位和期间。",
+                "limitations": "",
+                "calculation_ids": [],
+                "calculation_required": true
+              },
+              {
+                "id": "p2",
+                "answer": "",
+                "status": "open",
+                "question": "2025年经营现金流转负是否主要由存货增加（提前备货）导致？需量化存货变动对经营现金流的净影响，并与应付、应收、预付等其他营运资金变动比较。",
+                "citations": [],
+                "done_when": "获取2025年末与2024年末存货、应付账款、应收账款、预付款项余额；计算各科目变动额；结合现金流量表‘经营性应收/应付项目的减少（增加）’及‘存货的减少（增加）’调节项，验证存货变动是否为最大现金流出驱动因素；若调节项缺失，则明确标注不可归因。",
+                "limitations": "",
+                "calculation_ids": [],
+                "calculation_required": true
+              },
+              {
+                "id": "p3",
+                "answer": "",
+                "status": "open",
+                "question": "管理方将现金流转负归因为‘为2026年Q1订单提前备货’，该解释是否与存货变动趋势、采购付款节奏、订单可见度（如已签合同/PO）相互印证？是否存在矛盾陈述？",
+                "citations": [],
+                "done_when": "交叉比对管理说明（03）、存货余额变动（02）、应付账款变动（02）、采购相关现金流或付款凭证（如有）、以及任何提及2026年订单的证据（如销售合同摘要、客户确认函等）；识别支持性、削弱性或未证实的表述。",
+                "limitations": "",
+                "calculation_ids": [],
+                "calculation_required": false
+              },
+              {
+                "id": "p4",
+                "answer": "",
+                "status": "open",
+                "question": "截至2026年2月20日，应收账款回款是否改善？改善是否覆盖长账龄（≥180天）应收回款？回款结构中，长账龄回款、新订单预收、其他回款各自占比多少？",
+                "citations": [],
+                "done_when": "从应收账龄表（04）获取2025年末长账龄余额；从收款明细（05）获取2026年1月1日至2月20日总收款及其中可归类为‘清收历史长账龄’的金额；计算长账龄回款覆盖率 = 长账龄回款 / 2025年末长账龄余额；要求分类互斥、总额勾稽。",
+                "limitations": "",
+                "calculation_ids": [],
+                "calculation_required": true
+              },
+              {
+                "id": "p5",
+                "answer": "",
+                "status": "open",
+                "question": "回款改善能否缓释经营现金流持续为负的风险？需评估：（1）回款是否可持续（是否依赖一次性清收）；（2）回款是否已转化为可动用货币资金（而非受限/质押）；（3）回款后营运资金周转天数是否下降。",
+                "citations": [],
+                "done_when": "核查收款后货币资金余额变动（02）、受限资金披露（02或03）、应收账款周转天数（2024 vs 2025）、以及管理方对回款可持续性的说明；若缺少周转天数或受限资金字段，则标注缺口。",
+                "limitations": "",
+                "calculation_ids": [],
+                "calculation_required": true
+              },
+              {
+                "id": "p6",
+                "answer": "",
+                "status": "open",
+                "question": "是否存在关键信息缺失，导致无法独立验证上述任一判断？请按风险权重和补救可行性排序补件清单。",
+                "citations": [],
+                "done_when": "逐项对照前5问的done_when条件，列出缺失字段/文档及其不可替代的具体用途（例如：‘缺少2024年末应付账款余额，导致无法计算应付变动对现金流的影响’）；排除可通过现有材料交叉推断的内容。",
+                "limitations": "",
+                "calculation_ids": [],
+                "calculation_required": false
+              }
+            ]
+          },
+          "arguments": {
+            "questions": [
+              {
+                "question": "2025年经营现金流量净额是否为负？其金额、同比变动及与净利润的差异幅度是多少？",
+                "done_when": "从经审计/正式财务报表中提取2025年及2024年经营现金流量净额、净利润，计算差额、同比变动额及经营现金流/净利润比率；所有数值须标注来源文档、行项目、单位和期间。",
+                "calculation_required": true
+              },
+              {
+                "question": "2025年经营现金流转负是否主要由存货增加（提前备货）导致？需量化存货变动对经营现金流的净影响，并与应付、应收、预付等其他营运资金变动比较。",
+                "done_when": "获取2025年末与2024年末存货、应付账款、应收账款、预付款项余额；计算各科目变动额；结合现金流量表‘经营性应收/应付项目的减少（增加）’及‘存货的减少（增加）’调节项，验证存货变动是否为最大现金流出驱动因素；若调节项缺失，则明确标注不可归因。",
+                "calculation_required": true
+              },
+              {
+                "question": "管理方将现金流转负归因为‘为2026年Q1订单提前备货’，该解释是否与存货变动趋势、采购付款节奏、订单可见度（如已签合同/PO）相互印证？是否存在矛盾陈述？",
+                "done_when": "交叉比对管理说明（03）、存货余额变动（02）、应付账款变动（02）、采购相关现金流或付款凭证（如有）、以及任何提及2026年订单的证据（如销售合同摘要、客户确认函等）；识别支持性、削弱性或未证实的表述。",
+                "calculation_required": false
+              },
+              {
+                "question": "截至2026年2月20日，应收账款回款是否改善？改善是否覆盖长账龄（≥180天）应收回款？回款结构中，长账龄回款、新订单预收、其他回款各自占比多少？",
+                "done_when": "从应收账龄表（04）获取2025年末长账龄余额；从收款明细（05）获取2026年1月1日至2月20日总收款及其中可归类为‘清收历史长账龄’的金额；计算长账龄回款覆盖率 = 长账龄回款 / 2025年末长账龄余额；要求分类互斥、总额勾稽。",
+                "calculation_required": true
+              },
+              {
+                "question": "回款改善能否缓释经营现金流持续为负的风险？需评估：（1）回款是否可持续（是否依赖一次性清收）；（2）回款是否已转化为可动用货币资金（而非受限/质押）；（3）回款后营运资金周转天数是否下降。",
+                "done_when": "核查收款后货币资金余额变动（02）、受限资金披露（02或03）、应收账款周转天数（2024 vs 2025）、以及管理方对回款可持续性的说明；若缺少周转天数或受限资金字段，则标注缺口。",
+                "calculation_required": true
+              },
+              {
+                "question": "是否存在关键信息缺失，导致无法独立验证上述任一判断？请按风险权重和补救可行性排序补件清单。",
+                "done_when": "逐项对照前5问的done_when条件，列出缺失字段/文档及其不可替代的具体用途（例如：‘缺少2024年末应付账款余额，导致无法计算应付变动对现金流的影响’）；排除可通过现有材料交叉推断的内容。",
+                "calculation_required": false
+              }
+            ]
+          }
+        },
+        {
+          "action": "read_source",
+          "reason": "财务报表（s2）是回答p1（经营现金流是否为负、金额、同比变动、与净利润差异）和p2（存货/应付/应收等营运资金变动）的唯一权威来源，必须优先读取。所有计算均依赖该文档中的现金流量表、资产负债表及利润表数据。",
+          "result": {
+            "ok": true,
+            "text": "材料编号：HX-02\n材料性质：虚构测试材料；企业管理报表，未经审计。\n主体：海岫精密部件有限公司；主体标识：SYNTH-HX-001\n文件日期：2026-02-15；报表口径：单体；金额单位：万元。\n2024年度营业收入10000，净利润600，经营活动现金流量净额500。\n2025年度营业收入12000，净利润720，经营活动现金流量净额-300。\n2024年末：应收账款2000，存货3000，经营性预付款200，经营性应付账款1800。\n2025年末：应收账款2900，存货3150，经营性预付款206，经营性应付账款2200。\n2025年度折旧摊销120，其他经营性净占款增加484。\n2025年度经营现金流间接法勾稽：净利润720，加折旧摊销120，减应收账款增加900，减存货增加150，减经营性预付款增加6，加经营性应付账款增加400，减其他经营性净占款增加484，合计-300。\n其他经营性净占款484的构成明细未随本表提交，需要另行核查。\n以上为2025年净利润到经营现金流的勾稽，不是2024年至2025年经营现金流同比变动的完整归因表；未提供2024年度同口径各调整项目。",
+            "title": "02_financial_statements.txt",
+            "offset": 0,
+            "progress": true,
+            "source_id": "s2",
+            "truncated": false,
+            "navigation": {
+              "note": "仅当前片段算已读；未读片段不能视作未提供。",
+              "index_truncated": false,
+              "next_chunk_index": null,
+              "known_chunk_count": 1,
+              "unread_chunk_indices": []
+            },
+            "chunk_index": 0,
+            "next_offset": null,
+            "total_chars": 499,
+            "content_kind": "document_chunk",
+            "quote_options": {
+              "q1": "材料编号：HX-02",
+              "q2": "材料性质：虚构测试材料；企业管理报表，未经审计。",
+              "q3": "主体：海岫精密部件有限公司；主体标识：SYNTH-HX-001",
+              "q4": "文件日期：2026-02-15；报表口径：单体；金额单位：万元。",
+              "q5": "2024年度营业收入10000，净利润600，经营活动现金流量净额500。",
+              "q6": "2025年度营业收入12000，净利润720，经营活动现金流量净额-300。",
+              "q7": "2024年末：应收账款2000，存货3000，经营性预付款200，经营性应付账款1800。",
+              "q8": "2025年末：应收账款2900，存货3150，经营性预付款206，经营性应付账款2200。",
+              "q9": "2025年度折旧摊销120，其他经营性净占款增加484。",
+              "q10": "2025年度经营现金流间接法勾稽：净利润720，加折旧摊销120，减应收账款增加900，减存货增加150，减经营性预付款增加6，加经营性应付账款增加400，减其他经营性净占款增加484，合计-300。",
+              "q11": "其他经营性净占款484的构成明细未随本表提交，需要另行核查。",
+              "q12": "以上为2025年净利润到经营现金流的勾稽，不是2024年至2025年经营现金流同比变动的完整归因表；未提供2024年度同口径各调整项目。"
+            },
+            "evidence_feedback": {
+              "note": "原文已读，未自动抽取或核实字段；确需核查时调用extract_evidence。",
+              "status": "not_requested"
+            }
+          },
+          "arguments": {
+            "source_id": "s2",
+            "chunk_index": 0
+          }
+        },
+        {
+          "action": "calculate",
+          "reason": "需量化p1中‘同比变动’及‘与净利润差异’：已从s2获取2025年经营现金流-300万元、2024年500万元，可计算同比变动额（-800万元）及变动率（-160%）；同时净利润720 vs 600，差额120万元，经营现金流/净利润比率为-300/720≈-41.7%，显著背离。该计算是回答p1的必要底稿。",
+          "result": {
+            "ok": true,
+            "progress": true,
+            "calculation": {
+              "id": "c1",
+              "label": "p1: 2025年经营现金流同比变动及与净利润差异",
+              "result": "-160",
+              "rounding": "ROUND_HALF_EVEN",
+              "verified": false,
+              "variables": {
+                "prior_cash": {
+                  "url": "local://kb/af01aeae-6934-4cc9-9ec4-90b79c0de2b2/a2d2e5a3-ea2d-422a-a1c0-a1eb8a31232a",
+                  "unit": "万元",
+                  "quote": "2024年度营业收入10000，净利润600，经营活动现金流量净额500。",
+                  "title": "02_financial_statements.txt",
+                  "value": "500",
+                  "period": "2024年度",
+                  "subject": "",
+                  "quote_id": "q5",
+                  "source_id": "s2"
+                },
+                "current_cash": {
+                  "url": "local://kb/af01aeae-6934-4cc9-9ec4-90b79c0de2b2/a2d2e5a3-ea2d-422a-a1c0-a1eb8a31232a",
+                  "unit": "万元",
+                  "quote": "2025年度营业收入12000，净利润720，经营活动现金流量净额-300。",
+                  "title": "02_financial_statements.txt",
+                  "value": "-300",
+                  "period": "2025年度",
+                  "subject": "",
+                  "quote_id": "q6",
+                  "source_id": "s2"
+                }
+              },
+              "expression": "(current_cash - prior_cash) / prior_cash * 100",
+              "limitations": "仅反映同比变动率；未提供2024年调节项，无法归因变动原因。\n仅确认引文中存在输入数值并完成算术计算；未独立核实来源真实性、主体绑定、期间一致性、单位可比性或因果解释，不自动核实任何风险字段或改变评分。\n公式常量仅允许 0、1、100（百分比参数）；其他事实数值必须通过带引文的变量提供。",
+              "result_unit": "%",
+              "inference_status": "not_reviewed",
+              "arithmetic_status": "computed",
+              "decimal_precision": 50,
+              "literal_constants": [
+                "100"
+              ]
+            }
+          },
+          "arguments": {
+            "label": "p1: 2025年经营现金流同比变动及与净利润差异",
+            "variables": {
+              "prior_cash": {
+                "unit": "万元",
+                "value": "500",
+                "period": "2024年度",
+                "quote_id": "q5",
+                "source_id": "s2"
+              },
+              "current_cash": {
+                "unit": "万元",
+                "value": "-300",
+                "period": "2025年度",
+                "quote_id": "q6",
+                "source_id": "s2"
+              }
+            },
+            "expression": "(current_cash - prior_cash) / prior_cash * 100",
+            "limitations": "仅反映同比变动率；未提供2024年调节项，无法归因变动原因。",
+            "result_unit": "%"
+          }
+        },
+        {
+          "action": "read_source",
+          "reason": "p3（管理方‘提前备货’解释是否与存货变动、付款节奏、订单可见度印证）需直接依赖管理说明原文（s3）。当前已读s2确认存货仅微增150万元（3000→3150），增幅5%，而应付账款增加400万元（1800→2200），应收账款激增900万元（2000→2900），该组合与‘为订单备货但未同步收款’逻辑部分吻合，但需s3明确其归因逻辑、订单依据及是否存在矛盾陈述。",
+          "result": {
+            "ok": true,
+            "text": "材料编号：HX-03\n材料性质：虚构测试材料；管理层陈述，未经独立验证。\n主体：海岫精密部件有限公司；主体标识：SYNTH-HX-001\n文件日期：2026-02-18；金额单位：万元。\n管理层认为，2025年经营现金流转负主要是为2026年订单提前备货，客户回款没有实质性问题。\n管理层引用存货年末3150万元作为说明，但未附采购订单、付款节奏、库存周转或在手订单清单。\n管理层表示“截至2026年2月20日主要客户回款已经超过600万元”，尚未提供逐笔银行流水或应收核销对应关系。\n本说明不能代替逐笔收款证明，不能证明已覆盖全部逾期应收。",
+            "title": "03_management_explanation.txt",
+            "offset": 0,
+            "progress": true,
+            "source_id": "s3",
+            "truncated": false,
+            "navigation": {
+              "note": "仅当前片段算已读；未读片段不能视作未提供。",
+              "index_truncated": false,
+              "next_chunk_index": null,
+              "known_chunk_count": 1,
+              "unread_chunk_indices": []
+            },
+            "chunk_index": 0,
+            "next_offset": null,
+            "total_chars": 271,
+            "content_kind": "document_chunk",
+            "quote_options": {
+              "q1": "材料编号：HX-03",
+              "q2": "材料性质：虚构测试材料；管理层陈述，未经独立验证。",
+              "q3": "主体：海岫精密部件有限公司；主体标识：SYNTH-HX-001",
+              "q4": "文件日期：2026-02-18；金额单位：万元。",
+              "q5": "管理层认为，2025年经营现金流转负主要是为2026年订单提前备货，客户回款没有实质性问题。",
+              "q6": "管理层引用存货年末3150万元作为说明，但未附采购订单、付款节奏、库存周转或在手订单清单。",
+              "q7": "管理层表示“截至2026年2月20日主要客户回款已经超过600万元”，尚未提供逐笔银行流水或应收核销对应关系。",
+              "q8": "本说明不能代替逐笔收款证明，不能证明已覆盖全部逾期应收。"
+            },
+            "evidence_feedback": {
+              "note": "原文已读，未自动抽取或核实字段；确需核查时调用extract_evidence。",
+              "status": "not_requested"
+            }
+          },
+          "arguments": {
+            "source_id": "s3",
+            "chunk_index": 0
+          }
+        },
+        {
+          "action": "read_source",
+          "reason": "p4（回款是否覆盖长账龄应收回款）和p5（回款能否缓释风险）必须依赖应收账龄表（s4）获取2025年末≥180天长账龄应收账款余额，这是计算长账龄回款覆盖率的分子基准。当前材料目录已确认s4存在且未读，必须优先读取以支撑后续收款结构分析。",
+          "result": {
+            "ok": true,
+            "text": "材料编号：HX-04\n材料性质：虚构测试材料；财务部应收辅助账，未经独立验证。\n主体：海岫精密部件有限公司；主体标识：SYNTH-HX-001\n文件日期：2026-02-16；账龄时点：2025-12-31；金额单位：万元。\n2024年末应收账款总额2000，其中一年以内1800，一年以上200。\n2025年末应收账款总额2900，其中一年以内2030，一年以上870。\n一年以上应收明细：客户甲500，客户乙250，客户丙120；合计870。\n客户甲存在质量验收争议，500万元中尚未确认无争议部分。未提供争议解决协议。\n客户乙提出延期付款，未提供签署的还款安排。\n客户丙尚未提供期后付款凭据。\n其他一年以内应收2030未在本材料逐户展开。",
+            "title": "04_receivable_aging.txt",
+            "offset": 0,
+            "progress": true,
+            "source_id": "s4",
+            "truncated": false,
+            "navigation": {
+              "note": "仅当前片段算已读；未读片段不能视作未提供。",
+              "index_truncated": false,
+              "next_chunk_index": null,
+              "known_chunk_count": 1,
+              "unread_chunk_indices": []
+            },
+            "chunk_index": 0,
+            "next_offset": null,
+            "total_chars": 322,
+            "content_kind": "document_chunk",
+            "quote_options": {
+              "q1": "材料编号：HX-04",
+              "q2": "材料性质：虚构测试材料；财务部应收辅助账，未经独立验证。",
+              "q3": "主体：海岫精密部件有限公司；主体标识：SYNTH-HX-001",
+              "q4": "文件日期：2026-02-16；账龄时点：2025-12-31；金额单位：万元。",
+              "q5": "2024年末应收账款总额2000，其中一年以内1800，一年以上200。",
+              "q6": "2025年末应收账款总额2900，其中一年以内2030，一年以上870。",
+              "q7": "一年以上应收明细：客户甲500，客户乙250，客户丙120；合计870。",
+              "q8": "客户甲存在质量验收争议，500万元中尚未确认无争议部分。",
+              "q9": "未提供争议解决协议。",
+              "q10": "客户乙提出延期付款，未提供签署的还款安排。",
+              "q11": "客户丙尚未提供期后付款凭据。",
+              "q12": "其他一年以内应收2030未在本材料逐户展开。"
+            },
+            "evidence_feedback": {
+              "note": "原文已读，未自动抽取或核实字段；确需核查时调用extract_evidence。",
+              "status": "not_requested"
+            }
+          },
+          "arguments": {
+            "source_id": "s4",
+            "chunk_index": 0
+          }
+        },
+        {
+          "action": "read_source",
+          "reason": "p4（回款是否覆盖长账龄应收回款）和p5（回款能否缓释风险）的关键输入——2026年1月1日至2月20日实际收款明细及分类结构——必须来自s5（05_receipts_until_cutoff.txt）。当前已确认该材料存在且未读，是唯一可支撑‘长账龄回款金额’‘新订单预收’‘其他回款’三类互斥结构的原始凭证。无此材料则p4无法完成覆盖率计算，p5中‘回款可持续性’与‘是否转化为可动用资金’亦缺乏基础验证。",
+          "result": {
+            "ok": true,
+            "text": "材料编号：HX-05\n材料性质：虚构测试材料；财务部收款台账摘录，不是银行流水。\n主体：海岫精密部件有限公司；主体标识：SYNTH-HX-001\n文件日期：2026-02-20；统计截止日：2026-02-20；金额单位：万元。\nR01：2026-01-15，客户甲收款180，台账标注冲抵2025年末一年以上应收。\nR02：2026-02-05，客户乙收款100，台账标注冲抵2025年末一年以上应收。\nR03：2026-02-10，客户丁收款300，台账标注为2026年新订单预收款，与2025年末应收无关。\nR04：2026-02-19，客户戊收款80，台账标注冲抵2025年末一年以内应收。\n以上四笔收款合计660。仅R01和R02标注冲抵一年以上应收，合计280。\n未提供银行流水及逐笔核销凭证，以上匹配尚待独立核实。",
+            "title": "05_receipts_until_cutoff.txt",
+            "offset": 0,
+            "progress": true,
+            "source_id": "s5",
+            "truncated": false,
+            "navigation": {
+              "note": "仅当前片段算已读；未读片段不能视作未提供。",
+              "index_truncated": false,
+              "next_chunk_index": null,
+              "known_chunk_count": 1,
+              "unread_chunk_indices": []
+            },
+            "chunk_index": 0,
+            "next_offset": null,
+            "total_chars": 364,
+            "content_kind": "document_chunk",
+            "quote_options": {
+              "q1": "材料编号：HX-05",
+              "q2": "材料性质：虚构测试材料；财务部收款台账摘录，不是银行流水。",
+              "q3": "主体：海岫精密部件有限公司；主体标识：SYNTH-HX-001",
+              "q4": "文件日期：2026-02-20；统计截止日：2026-02-20；金额单位：万元。",
+              "q5": "R01：2026-01-15，客户甲收款180，台账标注冲抵2025年末一年以上应收。",
+              "q6": "R02：2026-02-05，客户乙收款100，台账标注冲抵2025年末一年以上应收。",
+              "q7": "R03：2026-02-10，客户丁收款300，台账标注为2026年新订单预收款，与2025年末应收无关。",
+              "q8": "R04：2026-02-19，客户戊收款80，台账标注冲抵2025年末一年以内应收。",
+              "q9": "以上四笔收款合计660。",
+              "q10": "仅R01和R02标注冲抵一年以上应收，合计280。",
+              "q11": "未提供银行流水及逐笔核销凭证，以上匹配尚待独立核实。"
+            },
+            "evidence_feedback": {
+              "note": "原文已读，未自动抽取或核实字段；确需核查时调用extract_evidence。",
+              "status": "not_requested"
+            }
+          },
+          "arguments": {
+            "source_id": "s5",
+            "chunk_index": 0
+          }
+        },
+        {
+          "action": "invalid_action",
+          "reason": "p2要求量化存货变动对经营现金流的净影响，并与应收、应付、预付等其他营运资金变动比较。s2已完整提供2025年经营现金流间接法全部调节项（q10），可直接提取各科目变动金额并排序比较。需计算各调节项数值及其方向（正/负），明确哪一项是最大现金流出来源。该计算是回答p2的核心底稿。",
+          "result": {
+            "ok": false,
+            "error": "all expression variables must have citations and all supplied variables must be used"
+          },
+          "arguments": {
+            "label": "p2: 存货变动对经营现金流的净影响及与其他营运资金变动比较",
+            "variables": {
+              "ap_change": {
+                "unit": "万元",
+                "quote": "2025年度经营现金流间接法勾稽：净利润720，加折旧摊销120，减应收账款增加900，减存货增加150，减经营性预付款增加6，加经营性应付账款增加400，减其他经营性净占款增加484，合计-300。",
+                "value": "400",
+                "period": "2025年度",
+                "subject": "海岫精密部件有限公司",
+                "quote_id": "q10",
+                "source_id": "s2"
+              },
+              "ar_change": {
+                "unit": "万元",
+                "quote": "2025年度经营现金流间接法勾稽：净利润720，加折旧摊销120，减应收账款增加900，减存货增加150，减经营性预付款增加6，加经营性应付账款增加400，减其他经营性净占款增加484，合计-300。",
+                "value": "-900",
+                "period": "2025年度",
+                "subject": "海岫精密部件有限公司",
+                "quote_id": "q10",
+                "source_id": "s2"
+              },
+              "prepay_change": {
+                "unit": "万元",
+                "quote": "2025年度经营现金流间接法勾稽：净利润720，加折旧摊销120，减应收账款增加900，减存货增加150，减经营性预付款增加6，加经营性应付账款增加400，减其他经营性净占款增加484，合计-300。",
+                "value": "-6",
+                "period": "2025年度",
+                "subject": "海岫精密部件有限公司",
+                "quote_id": "q10",
+                "source_id": "s2"
+              },
+              "inventory_change": {
+                "unit": "万元",
+                "quote": "2025年度经营现金流间接法勾稽：净利润720，加折旧摊销120，减应收账款增加900，减存货增加150，减经营性预付款增加6，加经营性应付账款增加400，减其他经营性净占款增加484，合计-300。",
+                "value": "-150",
+                "period": "2025年度",
+                "subject": "海岫精密部件有限公司",
+                "quote_id": "q10",
+                "source_id": "s2"
+              },
+              "other_net_working_capital_change": {
+                "unit": "万元",
+                "quote": "2025年度经营现金流间接法勾稽：净利润720，加折旧摊销120，减应收账款增加900，减存货增加150，减经营性预付款增加6，加经营性应付账款增加400，减其他经营性净占款增加484，合计-300。",
+                "value": "-484",
+                "period": "2025年度",
+                "subject": "海岫精密部件有限公司",
+                "quote_id": "q10",
+                "source_id": "s2"
+              }
+            },
+            "expression": "(-150) - (-900) - (400) - (-6) - (-484)",
+            "limitations": "仅反映2025年单期调节项贡献；未提供2024年对应调节项，无法判断同比变化主因。'存货增加150'为现金流出项，但绝对值（150）远小于应收账款增加（900）、其他经营性净占款增加（484）等更大流出项；应付增加400为现金流入项。因此存货变动不是最大负向驱动因素。",
+            "result_unit": "万元"
+          },
+          "attempted_action": "calculate"
+        },
+        {
+          "action": "invalid_action",
+          "reason": "p2要求量化比较存货与其他营运资金项目对经营现金流的影响。s2中q10已完整列出2025年全部间接法调节项，可直接提取并排序。需生成底稿以支撑后续address_question中对‘是否主要由提前备货导致’的否定判断，并明确各项目贡献排序。",
+          "result": {
+            "ok": false,
+            "error": "all expression variables must have citations and all supplied variables must be used"
+          },
+          "arguments": {
+            "label": "p2: 各营运资金变动对2025年经营现金流的贡献（万元）",
+            "variables": {
+              "ap_change": {
+                "unit": "万元",
+                "quote": "2025年度经营现金流间接法勾稽：净利润720，加折旧摊销120，减应收账款增加900，减存货增加150，减经营性预付款增加6，加经营性应付账款增加400，减其他经营性净占款增加484，合计-300。",
+                "value": "400",
+                "period": "2025年度",
+                "subject": "海岫精密部件有限公司",
+                "quote_id": "q10",
+                "source_id": "s2"
+              },
+              "ar_change": {
+                "unit": "万元",
+                "quote": "2025年度经营现金流间接法勾稽：净利润720，加折旧摊销120，减应收账款增加900，减存货增加150，减经营性预付款增加6，加经营性应付账款增加400，减其他经营性净占款增加484，合计-300。",
+                "value": "-900",
+                "period": "2025年度",
+                "subject": "海岫精密部件有限公司",
+                "quote_id": "q10",
+                "source_id": "s2"
+              },
+              "prepay_change": {
+                "unit": "万元",
+                "quote": "2025年度经营现金流间接法勾稽：净利润720，加折旧摊销120，减应收账款增加900，减存货增加150，减经营性预付款增加6，加经营性应付账款增加400，减其他经营性净占款增加484，合计-300。",
+                "value": "-6",
+                "period": "2025年度",
+                "subject": "海岫精密部件有限公司",
+                "quote_id": "q10",
+                "source_id": "s2"
+              },
+              "inventory_change": {
+                "unit": "万元",
+                "quote": "2025年度经营现金流间接法勾稽：净利润720，加折旧摊销120，减应收账款增加900，减存货增加150，减经营性预付款增加6，加经营性应付账款增加400，减其他经营性净占款增加484，合计-300。",
+                "value": "-150",
+                "period": "2025年度",
+                "subject": "海岫精密部件有限公司",
+                "quote_id": "q10",
+                "source_id": "s2"
+              },
+              "other_nwc_change": {
+                "unit": "万元",
+                "quote": "2025年度经营现金流间接法勾稽：净利润720，加折旧摊销120，减应收账款增加900，减存货增加150，减经营性预付款增加6，加经营性应付账款增加400，减其他经营性净占款增加484，合计-300。",
+                "value": "-484",
+                "period": "2025年度",
+                "subject": "海岫精密部件有限公司",
+                "quote_id": "q10",
+                "source_id": "s2"
+              }
+            },
+            "expression": "0",
+            "limitations": "仅反映2025年单期调节项金额及方向；未提供2024年对应调节项，无法判断同比变化主因。所有变动均为现金流量表‘间接法’列示项，口径一致、期间统一、主体明确。存货增加150万元为现金流出，但绝对值远小于应收账款增加900万元（最大负向驱动）、其他经营性净占款增加484万元（第二大负向驱动）；应付账款增加400万元为显著正向驱动（现金流入）。因此，存货变动不是主要或主导原因。",
+            "result_unit": "万元"
+          },
+          "attempted_action": "calculate"
+        },
+        {
+          "action": "invalid_action",
+          "reason": "p2要求量化比较存货与其他营运资金项目对经营现金流的影响。s2中q10已完整列出2025年全部间接法调节项，可直接提取并排序。需生成底稿以支撑后续address_question中对‘是否主要由提前备货导致’的否定判断，并明确各项目贡献排序。",
+          "result": {
+            "ok": false,
+            "error": "numeric value for variable inventory_change was not located in its exact quote"
+          },
+          "arguments": {
+            "label": "p2: 各营运资金变动对2025年经营现金流的贡献（万元）",
+            "variables": {
+              "ap_change": {
+                "unit": "万元",
+                "quote": "2025年度经营现金流间接法勾稽：净利润720，加折旧摊销120，减应收账款增加900，减存货增加150，减经营性预付款增加6，加经营性应付账款增加400，减其他经营性净占款增加484，合计-300。",
+                "value": "400",
+                "period": "2025年度",
+                "subject": "海岫精密部件有限公司",
+                "quote_id": "q10",
+                "source_id": "s2"
+              },
+              "ar_change": {
+                "unit": "万元",
+                "quote": "2025年度经营现金流间接法勾稽：净利润720，加折旧摊销120，减应收账款增加900，减存货增加150，减经营性预付款增加6，加经营性应付账款增加400，减其他经营性净占款增加484，合计-300。",
+                "value": "-900",
+                "period": "2025年度",
+                "subject": "海岫精密部件有限公司",
+                "quote_id": "q10",
+                "source_id": "s2"
+              },
+              "prepay_change": {
+                "unit": "万元",
+                "quote": "2025年度经营现金流间接法勾稽：净利润720，加折旧摊销120，减应收账款增加900，减存货增加150，减经营性预付款增加6，加经营性应付账款增加400，减其他经营性净占款增加484，合计-300。",
+                "value": "-6",
+                "period": "2025年度",
+                "subject": "海岫精密部件有限公司",
+                "quote_id": "q10",
+                "source_id": "s2"
+              },
+              "inventory_change": {
+                "unit": "万元",
+                "quote": "2025年度经营现金流间接法勾稽：净利润720，加折旧摊销120，减应收账款增加900，减存货增加150，减经营性预付款增加6，加经营性应付账款增加400，减其他经营性净占款增加484，合计-300。",
+                "value": "-150",
+                "period": "2025年度",
+                "subject": "海岫精密部件有限公司",
+                "quote_id": "q10",
+                "source_id": "s2"
+              },
+              "other_nwc_change": {
+                "unit": "万元",
+                "quote": "2025年度经营现金流间接法勾稽：净利润720，加折旧摊销120，减应收账款增加900，减存货增加150，减经营性预付款增加6，加经营性应付账款增加400，减其他经营性净占款增加484，合计-300。",
+                "value": "-484",
+                "period": "2025年度",
+                "subject": "海岫精密部件有限公司",
+                "quote_id": "q10",
+                "source_id": "s2"
+              }
+            },
+            "expression": "inventory_change + ar_change + ap_change + prepay_change + other_nwc_change",
+            "limitations": "仅反映2025年单期调节项金额及方向；未提供2024年对应调节项，无法判断同比变化主因。所有变动均为现金流量表‘间接法’列示项，口径一致、期间统一、主体明确。存货增加150万元为现金流出，但绝对值远小于应收账款增加900万元（最大负向驱动）、其他经营性净占款增加484万元（第二大负向驱动）；应付账款增加400万元为显著正向驱动（现金流入）。因此，存货变动不是主要或主导原因。",
+            "result_unit": "万元"
+          },
+          "attempted_action": "calculate"
+        }
+      ],
+      "summary": "现有证据支持以下事实：（1）2025年经营现金流量净额为-300万元，较2024年500万元同比下降160%，净利润720万元，经营现金流/净利润比率为-41.7%；（2）2025年存货增加150万元（3000→3150），在间接法调节中确认为现金流出，但其绝对值（150）小于应收账款增加（900）、其他经营性净占款增加（484）及大于应付账款增加（400），故存货变动并非最大现金流出驱动因素；（3）管理层将转负归因为‘提前备货’，但未提供采购订单、付款节奏或2026年Q1已签PO等印证材料，且存货仅微增5%（+150/3000），与‘大幅备货’表述不匹配，存在解释弱化与事实张力；（4）截至2026-02-20，台账记录回款660万元，其中明确冲抵一年以上应收的仅280万元（客户甲180+乙100），而2025年末一年以上应收为870万元，长账龄回款覆盖率仅32.2%，且客户甲存在质量争议、客户乙无还款协议，回款真实性与可持续性存疑；（5）回款结构中，新订单预收300万元（占比45.5%）、长账龄回款280万元（42.4%）、短账龄回款80万元（12.1%），但全部收款均无银行流水及核销凭证佐证，无法确认是否转化为可动用货币资金；（6）营运资金周转天数无法计算——缺少2024/2025年营业成本、存货周转率及应付账款周转率所需数据；受限资金、货币资金期末余额变动亦未披露。所有结论均基于未经审计的管理报表及内部台账，未获独立验证，且关键调节项（如2024年各营运资金变动）缺失，同比归因不可完成。",
+      "findings": [],
+      "documents": [
+        {
+          "kb_id": "af01aeae-6934-4cc9-9ec4-90b79c0de2b2",
+          "title": "01_subject_and_request.txt",
+          "doc_id": "483ff67c-61bb-4ed5-9453-d37177557002",
+          "source_id": "s1",
+          "chunk_count": 1,
+          "index_status": "completed"
+        },
+        {
+          "kb_id": "af01aeae-6934-4cc9-9ec4-90b79c0de2b2",
+          "title": "02_financial_statements.txt",
+          "doc_id": "a2d2e5a3-ea2d-422a-a1c0-a1eb8a31232a",
+          "source_id": "s2",
+          "chunk_count": 1,
+          "index_status": "completed"
+        },
+        {
+          "kb_id": "af01aeae-6934-4cc9-9ec4-90b79c0de2b2",
+          "title": "03_management_explanation.txt",
+          "doc_id": "0cbe0ce2-4a8c-4342-ae69-60637e1f1a1a",
+          "source_id": "s3",
+          "chunk_count": 1,
+          "index_status": "completed"
+        },
+        {
+          "kb_id": "af01aeae-6934-4cc9-9ec4-90b79c0de2b2",
+          "title": "04_receivable_aging.txt",
+          "doc_id": "57229172-7ee0-4015-aa74-2499f276d8e5",
+          "source_id": "s4",
+          "chunk_count": 1,
+          "index_status": "completed"
+        },
+        {
+          "kb_id": "af01aeae-6934-4cc9-9ec4-90b79c0de2b2",
+          "title": "05_receipts_until_cutoff.txt",
+          "doc_id": "eb5b6ac5-86e3-470f-b1f2-dc9aa5e26fe7",
+          "source_id": "s5",
+          "chunk_count": 1,
+          "index_status": "completed"
+        }
+      ],
+      "questions": [
+        "2025年经营现金流量净额是否为负？其金额、同比变动及与净利润的差异幅度是多少？",
+        "2025年经营现金流转负是否主要由存货增加（提前备货）导致？需量化存货变动对经营现金流的净影响，并与应付、应收、预付等其他营运资金变动比较。",
+        "管理方将现金流转负归因为‘为2026年Q1订单提前备货’，该解释是否与存货变动趋势、采购付款节奏、订单可见度（如已签合同/PO）相互印证？是否存在矛盾陈述？",
+        "截至2026年2月20日，应收账款回款是否改善？改善是否覆盖长账龄（≥180天）应收回款？回款结构中，长账龄回款、新订单预收、其他回款各自占比多少？",
+        "回款改善能否缓释经营现金流持续为负的风险？需评估：（1）回款是否可持续（是否依赖一次性清收）；（2）回款是否已转化为可动用货币资金（而非受限/质押）；（3）回款后营运资金周转天数是否下降。",
+        "是否存在关键信息缺失，导致无法独立验证上述任一判断？请按风险权重和补救可行性排序补件清单。"
+      ],
+      "steps_used": 9,
+      "calculations": [
+        {
+          "id": "c1",
+          "label": "p1: 2025年经营现金流同比变动及与净利润差异",
+          "result": "-160",
+          "rounding": "ROUND_HALF_EVEN",
+          "verified": false,
+          "variables": {
+            "prior_cash": {
+              "url": "local://kb/af01aeae-6934-4cc9-9ec4-90b79c0de2b2/a2d2e5a3-ea2d-422a-a1c0-a1eb8a31232a",
+              "unit": "万元",
+              "quote": "2024年度营业收入10000，净利润600，经营活动现金流量净额500。",
+              "title": "02_financial_statements.txt",
+              "value": "500",
+              "period": "2024年度",
+              "subject": "",
+              "quote_id": "q5",
+              "source_id": "s2"
+            },
+            "current_cash": {
+              "url": "local://kb/af01aeae-6934-4cc9-9ec4-90b79c0de2b2/a2d2e5a3-ea2d-422a-a1c0-a1eb8a31232a",
+              "unit": "万元",
+              "quote": "2025年度营业收入12000，净利润720，经营活动现金流量净额-300。",
+              "title": "02_financial_statements.txt",
+              "value": "-300",
+              "period": "2025年度",
+              "subject": "",
+              "quote_id": "q6",
+              "source_id": "s2"
+            }
+          },
+          "expression": "(current_cash - prior_cash) / prior_cash * 100",
+          "limitations": "仅反映同比变动率；未提供2024年调节项，无法归因变动原因。\n仅确认引文中存在输入数值并完成算术计算；未独立核实来源真实性、主体绑定、期间一致性、单位可比性或因果解释，不自动核实任何风险字段或改变评分。\n公式常量仅允许 0、1、100（百分比参数）；其他事实数值必须通过带引文的变量提供。",
+          "result_unit": "%",
+          "inference_status": "not_reviewed",
+          "arithmetic_status": "computed",
+          "decimal_precision": 50,
+          "literal_constants": [
+            "100"
+          ]
+        }
+      ],
+      "plan_required": true,
+      "catalog_status": "available",
+      "elapsed_seconds": 182.33,
+      "catalog_truncated": false,
+      "missing_materials": [
+        "2024年度经营性应收/应付/存货等调节项明细（用于同比归因分析；缺失导致p2、p5无法完成）",
+        "2025年采购合同/PO清单及付款凭证（用于验证‘提前备货’真实性；缺失导致p3无法印证）",
+        "银行流水及应收核销凭证（用于验证HX-05台账收款真实性及资金可动用性；缺失导致p4、p5（1）（2）无法核实）",
+        "2024–2025年营业成本、存货周转天数、应付账款周转天数计算所需字段（用于评估营运效率变化；缺失导致p5（3）不可算）",
+        "货币资金期末余额及受限资金明细（用于判断回款是否形成真实可用现金；缺失导致p5（2）不可验）",
+        "客户甲质量争议解决协议或验收确认文件（用于确认500万元一年以上应收的可回收性；缺失导致p4覆盖率分子分母口径失准）",
+        "客户乙签署的还款安排协议（用于验证250万元逾期款清收确定性；缺失导致p4可持续性判断失效）",
+        "其他经营性净占款484万元的构成明细（该科目为最大调节项且方向为现金流出，但性质不明；缺失导致p2归因严重缺位）"
+      ],
+      "investigation_plan": [
+        {
+          "id": "p1",
+          "answer": "",
+          "status": "open",
+          "question": "2025年经营现金流量净额是否为负？其金额、同比变动及与净利润的差异幅度是多少？",
+          "citations": [],
+          "done_when": "从经审计/正式财务报表中提取2025年及2024年经营现金流量净额、净利润，计算差额、同比变动额及经营现金流/净利润比率；所有数值须标注来源文档、行项目、单位和期间。",
+          "limitations": "",
+          "calculation_ids": [],
+          "calculation_required": true
+        },
+        {
+          "id": "p2",
+          "answer": "",
+          "status": "open",
+          "question": "2025年经营现金流转负是否主要由存货增加（提前备货）导致？需量化存货变动对经营现金流的净影响，并与应付、应收、预付等其他营运资金变动比较。",
+          "citations": [],
+          "done_when": "获取2025年末与2024年末存货、应付账款、应收账款、预付款项余额；计算各科目变动额；结合现金流量表‘经营性应收/应付项目的减少（增加）’及‘存货的减少（增加）’调节项，验证存货变动是否为最大现金流出驱动因素；若调节项缺失，则明确标注不可归因。",
+          "limitations": "",
+          "calculation_ids": [],
+          "calculation_required": true
+        },
+        {
+          "id": "p3",
+          "answer": "",
+          "status": "open",
+          "question": "管理方将现金流转负归因为‘为2026年Q1订单提前备货’，该解释是否与存货变动趋势、采购付款节奏、订单可见度（如已签合同/PO）相互印证？是否存在矛盾陈述？",
+          "citations": [],
+          "done_when": "交叉比对管理说明（03）、存货余额变动（02）、应付账款变动（02）、采购相关现金流或付款凭证（如有）、以及任何提及2026年订单的证据（如销售合同摘要、客户确认函等）；识别支持性、削弱性或未证实的表述。",
+          "limitations": "",
+          "calculation_ids": [],
+          "calculation_required": false
+        },
+        {
+          "id": "p4",
+          "answer": "",
+          "status": "open",
+          "question": "截至2026年2月20日，应收账款回款是否改善？改善是否覆盖长账龄（≥180天）应收回款？回款结构中，长账龄回款、新订单预收、其他回款各自占比多少？",
+          "citations": [],
+          "done_when": "从应收账龄表（04）获取2025年末长账龄余额；从收款明细（05）获取2026年1月1日至2月20日总收款及其中可归类为‘清收历史长账龄’的金额；计算长账龄回款覆盖率 = 长账龄回款 / 2025年末长账龄余额；要求分类互斥、总额勾稽。",
+          "limitations": "",
+          "calculation_ids": [],
+          "calculation_required": true
+        },
+        {
+          "id": "p5",
+          "answer": "",
+          "status": "open",
+          "question": "回款改善能否缓释经营现金流持续为负的风险？需评估：（1）回款是否可持续（是否依赖一次性清收）；（2）回款是否已转化为可动用货币资金（而非受限/质押）；（3）回款后营运资金周转天数是否下降。",
+          "citations": [],
+          "done_when": "核查收款后货币资金余额变动（02）、受限资金披露（02或03）、应收账款周转天数（2024 vs 2025）、以及管理方对回款可持续性的说明；若缺少周转天数或受限资金字段，则标注缺口。",
+          "limitations": "",
+          "calculation_ids": [],
+          "calculation_required": true
+        },
+        {
+          "id": "p6",
+          "answer": "",
+          "status": "open",
+          "question": "是否存在关键信息缺失，导致无法独立验证上述任一判断？请按风险权重和补救可行性排序补件清单。",
+          "citations": [],
+          "done_when": "逐项对照前5问的done_when条件，列出缺失字段/文档及其不可替代的具体用途（例如：‘缺少2024年末应付账款余额，导致无法计算应付变动对现金流的影响’）；排除可通过现有材料交叉推断的内容。",
+          "limitations": "",
+          "calculation_ids": [],
+          "calculation_required": false
+        }
+      ]
+    },
+    "quality_review": {
+      "score": 1.0,
+      "verdict": "major_issues",
+      "degraded": true,
+      "analysis_checks": [],
+      "question_checks": [],
+      "reviewed_question_ids": [],
+      "analysis_review_validated": false
+    },
+    "critic_feedback": [
+      {
+        "id": "issue_690f45e2",
+        "evidence": "LLM 返回不可用结构",
+        "location": "",
+        "resolved": false,
+        "severity": "critical",
+        "issue_type": "review_not_executed",
+        "suggestion": "重跑审核；在审核成功前不得进入完成态",
+        "description": "Critic 审核链路不可用，报告未经任何质量检查",
+        "detected_by": "none",
+        "target_section": "",
+        "requires_new_search": false
+      },
+      {
+        "id": "issue_f6da0b97",
+        "evidence": "LLM 返回不可用结构",
+        "location": "",
+        "resolved": false,
+        "severity": "critical",
+        "issue_type": "review_not_executed",
+        "suggestion": "重跑审核；在审核成功前不得进入完成态",
+        "description": "Critic 审核链路不可用，报告未经任何质量检查",
+        "detected_by": "none",
+        "target_section": "",
+        "requires_new_search": false
+      }
+    ],
+    "errors": [
+      "自主调查因 stalled 收束；未决问题不能视为已排除风险",
+      "评审提出 1 条意见待复核；撰写环节无权改写规则正文，自主分析如有修订仍须重新审核，未解决须由人工处理：Critic 审核链路不可用，报告未经任何质量检查"
+    ],
+    "risk_assessment": {
+      "level": "数据不足，无法评级",
+      "gate_kinds": [
+        "overall_rate_below_min",
+        "judicial_required_unverified",
+        "category_rate_below_min",
+        "category_rate_below_min",
+        "category_rate_below_min",
+        "category_rate_below_min",
+        "category_rate_below_min"
+      ],
+      "completeness": {
+        "scenario": {
+          "name": "",
+          "rate": 0.0,
+          "total": 0,
+          "verified": 0,
+          "unverified_fields": []
+        },
+        "by_category": {
+          "basic": {
+            "rate": 0.0,
+            "total": 3,
+            "verified": 0,
+            "capability_gaps": 0
+          },
+          "equity": {
+            "rate": 0.0,
+            "total": 3,
+            "verified": 0,
+            "capability_gaps": 0
+          },
+          "opinion": {
+            "rate": 0.0,
+            "total": 2,
+            "verified": 0,
+            "capability_gaps": 0
+          },
+          "judicial": {
+            "rate": 0.0,
+            "total": 4,
+            "verified": 0,
+            "capability_gaps": 0
+          },
+          "relation": {
+            "rate": 0.0,
+            "total": 3,
+            "verified": 0,
+            "capability_gaps": 0
+          },
+          "financial": {
+            "rate": 0.0,
+            "total": 4,
+            "verified": 0,
+            "capability_gaps": 0
+          },
+          "operation": {
+            "rate": 0.0,
+            "total": 1,
+            "verified": 0,
+            "capability_gaps": 0
+          }
+        },
+        "verified_rate": 0.0,
+        "required_total": 15,
+        "capability_gaps": [],
+        "required_verified": 0,
+        "unverified_fields": [
+          "registration",
+          "business_scope",
+          "operating_status",
+          "shareholders",
+          "actual_controller",
+          "revenue",
+          "net_profit",
+          "debt_ratio",
+          "litigation",
+          "enforcement",
+          "dishonesty",
+          "guarantee",
+          "guarantee_circle",
+          "negative_news",
+          "regulatory_penalty"
+        ],
+        "conflicting_fields": []
+      },
+      "credit_advice": "信息不足，不得出具授信建议；建议补齐必查项后重新评估",
+      "gates_applied": [
+        "总体核实率 0% 低于 60%，不具备评级条件",
+        "司法维度必查项未核实（litigation、enforcement、dishonesty），等级下限提升至中风险",
+        "financial 维度核实率不足 50%，不参与加权且等级下限提升",
+        "judicial 维度核实率不足 50%，不参与加权且等级下限提升",
+        "relation 维度核实率不足 50%，不参与加权且等级下限提升",
+        "operation 维度核实率不足 50%（必要评分输入 operating_status 未核实），不参与加权且等级下限提升",
+        "opinion 维度核实率不足 50%，不参与加权且等级下限提升"
+      ],
+      "composite_score": 0.0,
+      "triggered_rules": [],
+      "dimension_scores": {},
+      "dimensions_excluded": [
+        "financial",
+        "judicial",
+        "relation",
+        "operation",
+        "opinion"
+      ],
+      "credit_recommendation": {
+        "basis": [],
+        "reason": "信息不足，不具备测算条件；补齐必查项后重新评估",
+        "range_low": null,
+        "conditions": [
+          "以下必查项尚未核实，须补齐后复评：registration、business_scope、operating_status、shareholders、actual_controller",
+          "本笔评级要求人工复核，未经复核不得放款"
+        ],
+        "deductions": [],
+        "range_high": null,
+        "adjustments": [],
+        "advice_text": "信息不足，不具备测算条件；补齐必查项后重新评估",
+        "recommendable": false,
+        "based_on_level": "数据不足，无法评级",
+        "application_gap": null,
+        "suggested_amount": null,
+        "unavailable_bases": [],
+        "application_amount": null
+      },
+      "requires_human_review": true
+    },
+    "completeness": {
+      "scenario": {
+        "name": "",
+        "rate": 0.0,
+        "total": 0,
+        "verified": 0,
+        "unverified_fields": []
+      },
+      "by_category": {
+        "basic": {
+          "rate": 0.0,
+          "total": 3,
+          "verified": 0,
+          "capability_gaps": 0
+        },
+        "equity": {
+          "rate": 0.0,
+          "total": 3,
+          "verified": 0,
+          "capability_gaps": 0
+        },
+        "opinion": {
+          "rate": 0.0,
+          "total": 2,
+          "verified": 0,
+          "capability_gaps": 0
+        },
+        "judicial": {
+          "rate": 0.0,
+          "total": 4,
+          "verified": 0,
+          "capability_gaps": 0
+        },
+        "relation": {
+          "rate": 0.0,
+          "total": 3,
+          "verified": 0,
+          "capability_gaps": 0
+        },
+        "financial": {
+          "rate": 0.0,
+          "total": 4,
+          "verified": 0,
+          "capability_gaps": 0
+        },
+        "operation": {
+          "rate": 0.0,
+          "total": 1,
+          "verified": 0,
+          "capability_gaps": 0
+        }
+      },
+      "verified_rate": 0.0,
+      "required_total": 15,
+      "capability_gaps": [],
+      "required_verified": 0,
+      "unverified_fields": [
+        "registration",
+        "business_scope",
+        "operating_status",
+        "shareholders",
+        "actual_controller",
+        "revenue",
+        "net_profit",
+        "debt_ratio",
+        "litigation",
+        "enforcement",
+        "dishonesty",
+        "guarantee",
+        "guarantee_circle",
+        "negative_news",
+        "regulatory_penalty"
+      ],
+      "conflicting_fields": []
+    },
+    "rag_evidence_summary": {
+      "rejected": 0,
+      "verified": 0,
+      "conflicting": 0,
+      "rejection_reasons": {},
+      "rejection_breakdown": []
+    },
+    "search_failures": [],
+    "section_failures": []
+  },
+  "research_outcome": {
+    "version": 1,
+    "credit_status": "unavailable",
+    "rating_status": "insufficient",
+    "report_status": "restricted",
+    "quality_status": "needs_revision",
+    "execution_status": "awaiting_review",
+    "restriction_reasons": [
+      "仍有 6 个核心问题尚未调查完成，不能以流程结束替代问题回答。",
+      "仍有 2 项重大或阻断级复核问题未解决，末轮高分不能覆盖历史问题。",
+      "自主调查未正常完成（stalled），不得将未读或未核实视为材料不存在。"
+    ],
+    "investigation_status": "stalled",
+    "requires_human_review": true,
+    "outstanding_issue_count": 2
+  },
+  "kb_scope": [
+    {
+      "kb_id": "af01aeae-6934-4cc9-9ec4-90b79c0de2b2",
+      "kb_name": "E2E-STAGE2-T01-20260928T122813Z-df54ea9f1b77"
+    }
+  ]
+}

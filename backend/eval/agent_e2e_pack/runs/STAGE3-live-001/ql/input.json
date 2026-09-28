@@ -1,0 +1,196 @@
+{
+  "scenario": "ql",
+  "session_id": "stage2-ql-9fcf5815bd4c4146bb8e6fd4ed2a8def",
+  "started_at": "2026-09-28T12:34:41.311130+00:00",
+  "pipeline_pass": false,
+  "quality_verdict": "not_scored",
+  "approvals_submitted": false,
+  "model_calls_stubbed": false,
+  "terminal_status": "not_started",
+  "event_counts": {},
+  "source_manifest": [
+    {
+      "filename": "01_申请与主体确认.txt",
+      "bytes": 2176,
+      "sha256": "63462bd1d8b7afd131b36a340a7e6c3455086774212e3f5555ca08fc229e6349"
+    },
+    {
+      "filename": "02_工商登记与股权结构.txt",
+      "bytes": 2252,
+      "sha256": "90ba2b4d9df5b8501991bb781a14ee4796cfc76baa6624ad641d4ceae8620248"
+    },
+    {
+      "filename": "03_审计报告摘要.txt",
+      "bytes": 2795,
+      "sha256": "8031041a94338afb037fc171acd59168a816c488411caeb0e0a5a061cbd526cd"
+    },
+    {
+      "filename": "04_司法与征信查询.txt",
+      "bytes": 1831,
+      "sha256": "17849f0ea6bf3969887fc77f3884515b4b925b20fd6e8be3b493220b9dfddc0d"
+    },
+    {
+      "filename": "05_关联关系与对外担保.txt",
+      "bytes": 2349,
+      "sha256": "ccd697e6c720709e5f25f0d41f5a37884018dc7457f5dccf3a7d9d5e643b8b84"
+    },
+    {
+      "filename": "06_舆情与监管处罚.txt",
+      "bytes": 1466,
+      "sha256": "d2745967705dfaa8f0fe79ea12813fb65bcfb8c548f7a92023ba5d2363b1af25"
+    },
+    {
+      "filename": "07_经营与中标记录.txt",
+      "bytes": 1874,
+      "sha256": "e9f2fb2e40e939acb98ed36706599945c7f405b49e925ef9e114495f18db7ecc"
+    },
+    {
+      "filename": "08_应收账龄与期后回款.txt",
+      "bytes": 2208,
+      "sha256": "40715f0f4327e59fa969112723fb5ce2cd13cb319b154646939b163861bea94d"
+    }
+  ],
+  "kb_id": "53eaee0a-ec11-42ac-818a-34ab7d7dbf08",
+  "kb_name": "E2E-STAGE2-QL-20260928T122813Z-df54ea9f1b77",
+  "uploaded_documents": [
+    {
+      "id": "0336b9e2-a39d-4446-be11-e429a9761bb6",
+      "filename": "01_申请与主体确认.txt"
+    },
+    {
+      "id": "1c0fab7e-f835-491b-8c2e-cfc74ef1366c",
+      "filename": "02_工商登记与股权结构.txt"
+    },
+    {
+      "id": "d4444641-721d-4188-8c4d-551e8e2fd73c",
+      "filename": "03_审计报告摘要.txt"
+    },
+    {
+      "id": "c8543d0e-5e4d-497d-946d-e6955801a0af",
+      "filename": "04_司法与征信查询.txt"
+    },
+    {
+      "id": "9898ba1a-bf9b-4de6-91b7-6e752d298b9a",
+      "filename": "05_关联关系与对外担保.txt"
+    },
+    {
+      "id": "443079f2-7a5a-4faf-a97b-d3f7896a6a40",
+      "filename": "06_舆情与监管处罚.txt"
+    },
+    {
+      "id": "cb2be27c-4e51-4cb8-b1b5-601d18ae53a5",
+      "filename": "07_经营与中标记录.txt"
+    },
+    {
+      "id": "69a34c9c-eac2-409c-9a3e-e7f8c1e95173",
+      "filename": "08_应收账龄与期后回款.txt"
+    }
+  ],
+  "indexed_documents": [
+    {
+      "id": "69a34c9c-eac2-409c-9a3e-e7f8c1e95173",
+      "filename": "08_应收账龄与期后回款.txt",
+      "status": "completed",
+      "chunk_count": 3
+    },
+    {
+      "id": "cb2be27c-4e51-4cb8-b1b5-601d18ae53a5",
+      "filename": "07_经营与中标记录.txt",
+      "status": "completed",
+      "chunk_count": 2
+    },
+    {
+      "id": "443079f2-7a5a-4faf-a97b-d3f7896a6a40",
+      "filename": "06_舆情与监管处罚.txt",
+      "status": "completed",
+      "chunk_count": 2
+    },
+    {
+      "id": "9898ba1a-bf9b-4de6-91b7-6e752d298b9a",
+      "filename": "05_关联关系与对外担保.txt",
+      "status": "completed",
+      "chunk_count": 3
+    },
+    {
+      "id": "c8543d0e-5e4d-497d-946d-e6955801a0af",
+      "filename": "04_司法与征信查询.txt",
+      "status": "completed",
+      "chunk_count": 2
+    },
+    {
+      "id": "d4444641-721d-4188-8c4d-551e8e2fd73c",
+      "filename": "03_审计报告摘要.txt",
+      "status": "completed",
+      "chunk_count": 3
+    },
+    {
+      "id": "1c0fab7e-f835-491b-8c2e-cfc74ef1366c",
+      "filename": "02_工商登记与股权结构.txt",
+      "status": "completed",
+      "chunk_count": 3
+    },
+    {
+      "id": "0336b9e2-a39d-4446-be11-e429a9761bb6",
+      "filename": "01_申请与主体确认.txt",
+      "status": "completed",
+      "chunk_count": 2
+    }
+  ],
+  "index_readback": [
+    {
+      "document_id": "0336b9e2-a39d-4446-be11-e429a9761bb6",
+      "filename": "01_申请与主体确认.txt",
+      "readable_chunks": 2
+    },
+    {
+      "document_id": "1c0fab7e-f835-491b-8c2e-cfc74ef1366c",
+      "filename": "02_工商登记与股权结构.txt",
+      "readable_chunks": 3
+    },
+    {
+      "document_id": "d4444641-721d-4188-8c4d-551e8e2fd73c",
+      "filename": "03_审计报告摘要.txt",
+      "readable_chunks": 3
+    },
+    {
+      "document_id": "c8543d0e-5e4d-497d-946d-e6955801a0af",
+      "filename": "04_司法与征信查询.txt",
+      "readable_chunks": 2
+    },
+    {
+      "document_id": "9898ba1a-bf9b-4de6-91b7-6e752d298b9a",
+      "filename": "05_关联关系与对外担保.txt",
+      "readable_chunks": 3
+    },
+    {
+      "document_id": "443079f2-7a5a-4faf-a97b-d3f7896a6a40",
+      "filename": "06_舆情与监管处罚.txt",
+      "readable_chunks": 2
+    },
+    {
+      "document_id": "cb2be27c-4e51-4cb8-b1b5-601d18ae53a5",
+      "filename": "07_经营与中标记录.txt",
+      "readable_chunks": 2
+    },
+    {
+      "document_id": "69a34c9c-eac2-409c-9a3e-e7f8c1e95173",
+      "filename": "08_应收账龄与期后回款.txt",
+      "readable_chunks": 3
+    }
+  ],
+  "request": {
+    "query": "请对岐澜精工传动有限公司拟申请的1500万元、12个月流动资金贷款开展截至2026年5月18日的尽职调查。只使用我选择的本地材料与企业档案，不要检索互联网。请逐项交代固定二十项核查清单的核实情况，区分已观察事实、推断与仍缺失的信息，说明经营现金流、应收账龄与期后回款之间的勾稽关系，并为关键结论标注可追溯来源。风险等级与授信额度以规则引擎的测算为准，不要在正文里改写等级或金额。",
+    "session_id": "stage2-ql-9fcf5815bd4c4146bb8e6fd4ed2a8def",
+    "kb_name": "E2E-STAGE2-QL-20260928T122813Z-df54ea9f1b77",
+    "search_modes": [
+      "local"
+    ],
+    "version": "v2",
+    "as_of": "2026-05-18",
+    "subject_name": "岐澜精工传动有限公司",
+    "due_diligence": true,
+    "research_strategy": "agent",
+    "max_iterations": 2
+  },
+  "profile_note": "No profile supplied/installed by runner. Server may match its existing companies.json; archive the actual result, not an assumed 15/15."
+}

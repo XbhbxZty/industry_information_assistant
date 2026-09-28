@@ -1,0 +1,136 @@
+{
+  "scenario": "t01",
+  "session_id": "stage2-t01-3b8c130b904e427ba15f06dcc14cad63",
+  "started_at": "2026-09-28T12:28:14.459767+00:00",
+  "pipeline_pass": false,
+  "quality_verdict": "not_scored",
+  "approvals_submitted": false,
+  "model_calls_stubbed": false,
+  "terminal_status": "not_started",
+  "event_counts": {},
+  "source_manifest": [
+    {
+      "filename": "01_subject_and_request.txt",
+      "bytes": 958,
+      "sha256": "ce4e9321567b193164e6bd06ee31f325934aaf0c74fb70074e7dc2072d96e85e"
+    },
+    {
+      "filename": "02_financial_statements.txt",
+      "bytes": 1172,
+      "sha256": "da72a0b6b74801007b201dd89f44a0945e94ce32ee48ebc173f807f32e572a7a"
+    },
+    {
+      "filename": "03_management_explanation.txt",
+      "bytes": 702,
+      "sha256": "1add50429322b25b0bdb1bb2609723cfdee8038f10a6532012cfd962d5f01560"
+    },
+    {
+      "filename": "04_receivable_aging.txt",
+      "bytes": 775,
+      "sha256": "eb67aeaf614b74670e9dfaec7677c7e776668fd91aa62a242434e1a682bb7253"
+    },
+    {
+      "filename": "05_receipts_until_cutoff.txt",
+      "bytes": 811,
+      "sha256": "eeea0eb912a253b013698a89c7dbb9da62be6a454810e1ab8a50b339e63e7014"
+    }
+  ],
+  "kb_id": "af01aeae-6934-4cc9-9ec4-90b79c0de2b2",
+  "kb_name": "E2E-STAGE2-T01-20260928T122813Z-df54ea9f1b77",
+  "uploaded_documents": [
+    {
+      "id": "483ff67c-61bb-4ed5-9453-d37177557002",
+      "filename": "01_subject_and_request.txt"
+    },
+    {
+      "id": "a2d2e5a3-ea2d-422a-a1c0-a1eb8a31232a",
+      "filename": "02_financial_statements.txt"
+    },
+    {
+      "id": "0cbe0ce2-4a8c-4342-ae69-60637e1f1a1a",
+      "filename": "03_management_explanation.txt"
+    },
+    {
+      "id": "57229172-7ee0-4015-aa74-2499f276d8e5",
+      "filename": "04_receivable_aging.txt"
+    },
+    {
+      "id": "eb5b6ac5-86e3-470f-b1f2-dc9aa5e26fe7",
+      "filename": "05_receipts_until_cutoff.txt"
+    }
+  ],
+  "indexed_documents": [
+    {
+      "id": "eb5b6ac5-86e3-470f-b1f2-dc9aa5e26fe7",
+      "filename": "05_receipts_until_cutoff.txt",
+      "status": "completed",
+      "chunk_count": 1
+    },
+    {
+      "id": "57229172-7ee0-4015-aa74-2499f276d8e5",
+      "filename": "04_receivable_aging.txt",
+      "status": "completed",
+      "chunk_count": 1
+    },
+    {
+      "id": "0cbe0ce2-4a8c-4342-ae69-60637e1f1a1a",
+      "filename": "03_management_explanation.txt",
+      "status": "completed",
+      "chunk_count": 1
+    },
+    {
+      "id": "a2d2e5a3-ea2d-422a-a1c0-a1eb8a31232a",
+      "filename": "02_financial_statements.txt",
+      "status": "completed",
+      "chunk_count": 1
+    },
+    {
+      "id": "483ff67c-61bb-4ed5-9453-d37177557002",
+      "filename": "01_subject_and_request.txt",
+      "status": "completed",
+      "chunk_count": 1
+    }
+  ],
+  "index_readback": [
+    {
+      "document_id": "483ff67c-61bb-4ed5-9453-d37177557002",
+      "filename": "01_subject_and_request.txt",
+      "readable_chunks": 1
+    },
+    {
+      "document_id": "a2d2e5a3-ea2d-422a-a1c0-a1eb8a31232a",
+      "filename": "02_financial_statements.txt",
+      "readable_chunks": 1
+    },
+    {
+      "document_id": "0cbe0ce2-4a8c-4342-ae69-60637e1f1a1a",
+      "filename": "03_management_explanation.txt",
+      "readable_chunks": 1
+    },
+    {
+      "document_id": "57229172-7ee0-4015-aa74-2499f276d8e5",
+      "filename": "04_receivable_aging.txt",
+      "readable_chunks": 1
+    },
+    {
+      "document_id": "eb5b6ac5-86e3-470f-b1f2-dc9aa5e26fe7",
+      "filename": "05_receipts_until_cutoff.txt",
+      "readable_chunks": 1
+    }
+  ],
+  "request": {
+    "query": "请对海岫精密部件有限公司拟申请的800万元、12个月流动资金贷款开展截至2026年2月20日的尽职调查。只使用我选择的本地材料。重点判断2025年经营现金流转负是否主要由提前备货解释，核查回款改善能否缓释风险。请区分已观察事实、推断、相互矛盾的陈述和仍缺失的信息，给出可追溯依据及按优先级排列的补件清单。不要代替人工审批。",
+    "session_id": "stage2-t01-3b8c130b904e427ba15f06dcc14cad63",
+    "kb_name": "E2E-STAGE2-T01-20260928T122813Z-df54ea9f1b77",
+    "search_modes": [
+      "local"
+    ],
+    "version": "v2",
+    "as_of": "2026-02-20",
+    "subject_name": "海岫精密部件有限公司",
+    "due_diligence": true,
+    "research_strategy": "agent",
+    "max_iterations": 2
+  },
+  "profile_note": "No profile supplied/installed by runner. Server may match its existing companies.json; archive the actual result, not an assumed 15/15."
+}
