@@ -78,20 +78,24 @@ def address_question(notebook, arguments, resolve_citation):
         raise ValueError("该问题需要计算：先调用calculate，再关联calculation_ids；资料不足请blocked并写明缺口")
     update = {"status": status, "answer": answer, "limitations": limitations,
               "citations": citations, "calculation_ids": ids}
-    same_basis = (question["status"] == status and question["citations"] == citations
-                  and question["calculation_ids"] == ids)
     normalize = lambda s: re.sub(r"\W", "", s).casefold()
-    same_text = SequenceMatcher(None, normalize(question["answer"] + question["limitations"]),
-                               normalize(answer + limitations)).ratio() >= .86
-    if same_basis and same_text:
+    anchors = lambda refs: {(c.get("source_id"), c.get("quote_id"), c.get("quote")) for c in refs}
+    def already_recorded(previous):
+        return (previous.get("id") == question["id"] and previous.get("status") == status
+                and anchors(previous.get("citations", [])) == anchors(citations)
+                and set(previous.get("calculation_ids", [])) == set(ids)
+                and SequenceMatcher(None, normalize(previous.get("answer", "") + previous.get("limitations", "")),
+                                    normalize(answer + limitations)).ratio() >= .86)
+    if already_recorded(question):
         return {"ok": True, "progress": False, "question": deepcopy(question),
                 "note": "同一证据上的近重复答复不计作新进展"}
+    progress = not any(already_recorded(old) for old in notebook.get("question_updates", []))
     # Keep original attempts available to review; commit only after validation.
     history = notebook.setdefault("question_updates", [])
     history.append(deepcopy(question))
     del history[:-18]
     question.update(update)
-    return {"ok": True, "progress": True, "question": deepcopy(question),
+    return {"ok": True, "progress": progress, "question": deepcopy(question),
             "note": "仅确认回执与引用有效；回答是否充分仍需复核，不改变核实状态或评分"}
 
 

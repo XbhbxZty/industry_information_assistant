@@ -200,7 +200,7 @@ async def investigate(
             "recovery": {
                 "active": recovering,
                 "consecutive_no_progress": stalled,
-                "instruction": ("全部来源已读且连续无进展：本轮只允许记录有引文的发现或finish；不要重新读取或搜索。"
+                "instruction": ("全部来源已读且连续无进展：只允许calculate、address_question、记录有引文的发现或finish；不要重新读取或搜索。"
                                 if recovering and all_read else "连续无进展时停止重复检索；可选择相关未读片段、计算或记录发现，也可列明限制并finish。缓存重读和近重复发现不算进展。"),
                 "next_options": (list(available_tools) + ["finish"] if recovering else []),
             },

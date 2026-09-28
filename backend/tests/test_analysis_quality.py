@@ -12,9 +12,9 @@ from service.deep_research_v2.agents.critic import CriticMaster
 from service.review_verdict import derive_verdict, unresolved_blocking_issues
 
 
-def receipt():
+def receipt(quote="报告"):
     return {"overall_assessment": {"quality_score": 9, "verdict": "pass"}, "issues": [],
-            "analysis_checks": [{"id": key, "status": "supported", "reason": "已对照来源与口径"}
+            "analysis_checks": [{"id": key, "status": "supported", "reason": "已对照来源与口径", "report_quote": quote}
                                 for key in CHECKS]}
 
 
@@ -42,7 +42,7 @@ def test_missing_review_blocks_agent_dd_but_not_legacy():
      "长账龄90加短账龄40=期末应收回款130，另有预收70，总额200；不能把90代替130。"),
 ])
 def test_identified_errors_cannot_be_passed_or_lost_at_iteration_limit(key, quote, reason):
-    raw = receipt()
+    raw = receipt(quote)
     row = next(c for c in raw["analysis_checks"] if c["id"] == key)
     row.update(status="issue", reason=reason, report_quote=quote)
     result = enforce_analysis_review(raw, quote)
@@ -238,5 +238,6 @@ def test_only_complete_passing_recheck_resolves_previous_analysis_issues():
     resolve_prior_analysis_issues(prior, review)
     assert not any(i["resolved"] for i in prior)
     review["analysis_checks"] = saved
+    review = enforce_analysis_review(review, "报告")
     resolve_prior_analysis_issues(prior, review)
     assert [i["resolved"] for i in prior] == [True, True, False]

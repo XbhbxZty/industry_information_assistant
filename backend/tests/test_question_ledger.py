@@ -108,6 +108,22 @@ def test_cached_calculation_does_not_bypass_revoked_source_access():
     assert tool.notebook == before
 
 
+def test_reordered_anchors_and_status_oscillation_cannot_manufacture_progress():
+    tool, sid, read = prepared()
+    execute(tool, "calculate", calculation_args(sid, read["quote_options"]))
+    assert execute(tool, "address_question", answer(sid))["progress"]
+    for _ in range(4):
+        reordered = answer(sid)
+        reordered["citations"].reverse()
+        assert not execute(tool, "address_question", reordered)["progress"]
+    assert execute(tool, "address_question", answer(sid, status="open"))["progress"]
+    for _ in range(3):
+        assert not execute(tool, "address_question", answer(sid))["progress"]
+        assert tool.notebook["investigation_plan"][0]["status"] == "answered"
+        assert not execute(tool, "address_question", answer(sid, status="open"))["progress"]
+        assert tool.notebook["investigation_plan"][0]["status"] == "open"
+
+
 def test_blocked_without_quotes_is_a_material_gap_not_an_answer():
     tool, sid, _ = prepared()
     execute(tool, "address_question", {"question_id": "p1", "status": "blocked",

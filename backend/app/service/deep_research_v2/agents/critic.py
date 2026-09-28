@@ -399,7 +399,8 @@ class CriticMaster(BaseAgent):
 
         if state.get("research_strategy") == "agent" and state.get("due_diligence_mode") and _usable:
             from ..analysis_quality import enforce_analysis_review
-            llm_result = enforce_analysis_review(llm_result, self._content_for_review(state))
+            llm_result = enforce_analysis_review(llm_result, self._content_for_review(state),
+                (state.get("agent_investigation") or {}).get("investigation_plan"))
 
         for issue in llm_result.get("issues") or []:
             if isinstance(issue, dict):
@@ -550,6 +551,9 @@ class CriticMaster(BaseAgent):
                 "verdict": review_result.get("overall_assessment", {}).get("verdict"),
                 "score": score,
                 "analysis_checks": review_result.get("analysis_checks", []),
+                "question_checks": review_result.get("question_checks", []),
+                "reviewed_question_ids": review_result.get("reviewed_question_ids", []),
+                "analysis_review_validated": bool(review_result.get("analysis_review_validated")),
                 "degraded": bool(review_result.get("degraded")),
             }
 
@@ -564,6 +568,9 @@ class CriticMaster(BaseAgent):
                 "summary": review_result.get("overall_assessment", {}).get("summary", ""),
                 "missing_aspects": review_result.get("missing_aspects", []),
                 "analysis_checks": review_result.get("analysis_checks", []),
+                "question_checks": review_result.get("question_checks", []),
+                "reviewed_question_ids": review_result.get("reviewed_question_ids", []),
+                "analysis_review_validated": bool(review_result.get("analysis_review_validated")),
                 "degraded": bool(review_result.get("degraded")),
                 "call_meta": review_result.get("call_meta", {}),
                 "review_failure": review_result.get("review_failure"),
@@ -625,6 +632,16 @@ class CriticMaster(BaseAgent):
                 needs_new_search = self._analyze_issues_for_routing(review_result)
 
                 if needs_new_search["should_research"]:
+                    # Preserve the original question IDs, answers and evidence
+                    # while reopening only the explicit, validated follow-ups.
+                    notebook = state.get("agent_investigation") or {}
+                    followups = {row["id"]: row for row in review_result.get("question_checks", [])
+                                 if row.get("status") == "issue" and row.get("needs_more_evidence") is True}
+                    for question in notebook.get("investigation_plan", []):
+                        if question.get("id") in followups:
+                            reason = followups[question["id"]]["reason"]
+                            question.update(status="open", limitations=(
+                                str(question.get("limitations") or "") + "\n复核补查：" + reason).strip()[:600])
                     # 需要补充搜索 -> 回到研究阶段
                     state["phase"] = ResearchPhase.RE_RESEARCHING.value
                     state["pending_search_queries"] = needs_new_search["search_queries"]
@@ -652,6 +669,8 @@ class CriticMaster(BaseAgent):
         """
         issues = review_result.get("issues", [])
         missing_aspects = review_result.get("missing_aspects", [])
+        if review_result.get("degraded"):
+            return {"should_research": False, "search_queries": []}
 
         # 需要补充搜索的问题类型。
         # 注意尽调专项问题**一律不在此列**：
@@ -666,10 +685,19 @@ class CriticMaster(BaseAgent):
 
         search_queries = []
         research_issues_count = 0
+        explicit_question_followup = False
 
         for issue in issues:
             issue_type = issue.get("issue_type", "")
             severity = issue.get("severity", "minor")
+
+            # Per-question review can request focused reading through the
+            # existing loop. Protocol failures and mere wording repairs cannot.
+            if (issue_type == "analysis_quality_error" and issue.get("detected_by") == "llm"
+                    and issue.get("requires_new_search") is True and issue.get("search_query")):
+                search_queries.append(issue["search_query"])
+                research_issues_count += 1
+                explicit_question_followup = True
 
             # 检查是否是需要搜索的问题类型
             if issue_type in research_needed_types and severity in ["critical", "major"]:
@@ -685,7 +713,7 @@ class CriticMaster(BaseAgent):
 
         # 决策：如果有超过30%的严重问题需要搜索，或者有明确的搜索建议，则回到搜索阶段
         total_critical_major = len([i for i in issues if i.get("severity") in ["critical", "major"]])
-        should_research = (
+        should_research = explicit_question_followup or (
             len(search_queries) > 0 and
             (research_issues_count > 0 or len(missing_aspects) > 0) and
             (total_critical_major == 0 or research_issues_count / max(total_critical_major, 1) > 0.3)
@@ -693,7 +721,7 @@ class CriticMaster(BaseAgent):
 
         return {
             "should_research": should_research,
-            "search_queries": list(set(search_queries))[:5]  # 去重，最多5个查询
+            "search_queries": list(dict.fromkeys(search_queries))[:5]  # 保序去重，最多5个查询
         }
 
     async def _review_content(self, state: ResearchState) -> Dict[str, Any]:
@@ -784,7 +812,7 @@ class CriticMaster(BaseAgent):
         """One compact, bounded review call; keep legacy workflow protocol unchanged."""
         import asyncio
         import json
-        from ..analysis_quality import COMPACT_REVIEW_PROMPT, parse_compact_review
+        from ..analysis_quality import COMPACT_REVIEW_PROMPT, QUESTION_REVIEW_PROTOCOL, parse_compact_review
         from ..investigator import evidence_context
         from ..investigation_report import append_investigation_report
         appendix = append_investigation_report("", state.get("agent_investigation") or {})
@@ -799,6 +827,7 @@ class CriticMaster(BaseAgent):
                           "citations": f.get("citations", []), "calculation_ids": f.get("calculation_ids", [])}
                          for f in notebook.get("findings", [])[:20]],
             "calculations": notebook.get("calculations", [])[:12],
+            "investigation_plan": notebook.get("investigation_plan", []),
         }
         if appendix.strip() not in context["report"]:
             context["agent_appendix"] = appendix
@@ -808,12 +837,13 @@ class CriticMaster(BaseAgent):
             field_checks=context["checklist"], as_of_section=self._format_as_of_section(state))
         try:
             content, meta = await asyncio.wait_for(self.call_llm(
-                system_prompt=review_boundaries + COMPACT_REVIEW_PROMPT,
+                system_prompt=review_boundaries + COMPACT_REVIEW_PROMPT + (
+                    QUESTION_REVIEW_PROTOCOL if notebook.get("investigation_plan") else ""),
                 user_prompt=json.dumps(context, ensure_ascii=False), json_mode=True,
                 temperature=self._cfg_temperature(), max_tokens=self._cfg_max_tokens(),
                 timeout=60, max_retries=0, return_meta=True,
             ), timeout=70)
-            result = parse_compact_review(content, meta, report)
+            result = parse_compact_review(content, meta, report, notebook.get("investigation_plan"))
             if context["report_truncated"]:
                 raise ValueError("review_report_truncated")
             if context["cited_evidence_truncated"]:
