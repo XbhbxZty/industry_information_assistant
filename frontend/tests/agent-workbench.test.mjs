@@ -69,6 +69,12 @@ const sample = (patch = {}) => ({
     calculation_ids: ['calc1'] }],
   material_coverage: coverage(), calculations: [calculation()], ...patch,
 })
+const question = (patch = {}) => ({
+  id: 'p1', question: '回款是否覆盖长账龄应收？', done_when: '对应同一债权池，列出回款和剩余金额及口径限制。',
+  calculation_required: true, status: 'answered', answer: '依据内部台账，回款覆盖约68.97%，尚不能证明来源真实性。',
+  citations: [origin()], calculation_ids: ['calc1'], limitations: '仅依据内部台账，需独立核验银行回单与核销关系。',
+  ...patch,
+})
 
 function streamHarness(events) {
   let current
@@ -314,4 +320,122 @@ test('initial directory-only null status is visible as not_started, never as a c
   assert.equal(parseAgentNotebook({ status: null }), null)
   assert.equal(parseAgentNotebook({ ...directory, material_coverage: { catalog_status: 'available' } }), null)
   assert.equal(parseAgentNotebook({ ...directory, material_coverage: coverage({ catalog_status: 'unavailable' }) }), null)
+})
+
+test('question plan projects complete cited answers without promoting them to independent verification', () => {
+  const input = sample({ investigation_plan: [question({ private_reasoning: 'not-public' })] })
+  const parsed = parseAgentNotebook(input)
+  assert.equal(parsed.investigation_plan.length, 1)
+  assert.equal(parsed.investigation_plan[0].status, 'answered')
+  assert.equal(parsed.investigation_plan[0].private_reasoning, undefined)
+  input.investigation_plan[0].citations[0].quote = 'mutated'
+  assert.notEqual(parsed.investigation_plan[0].citations[0].quote, 'mutated')
+  const html = render(parsed)
+  for (const phrase of ['已回答', '回答条件', question().done_when, 'AI 答复', question().answer,
+    '需要引用计算底稿', '关联计算：calc1', 's1 / q1', question().limitations]) assert.ok(html.includes(phrase), phrase)
+  assert.match(html, /不代表证据已独立核实、质检通过或调查完整/)
+})
+
+test('open and blocked questions stay visibly unanswered even after the investigation loop completes', () => {
+  const parsed = parseAgentNotebook(sample({ status: 'completed', investigation_plan: [
+    question({ id: 'p1', status: 'open', answer: '', citations: [], calculation_ids: [], limitations: '' }),
+    question({ id: 'p2', status: 'blocked', answer: '', citations: [], calculation_ids: [], limitations: '缺少2024年度同口径调节明细，暂不能完成同比归因。' }),
+  ] }))
+  const html = render(parsed)
+  assert.match(html, /尚未调查/)
+  assert.match(html, /资料不足，暂不能回答/)
+  assert.match(html, /尚未形成答复/)
+  assert.match(html, /暂不能完成同比归因/)
+  assert.doesNotMatch(html, />已回答</)
+})
+
+test('unknown question states, malformed refs and unsupported answered receipts never display as answered', () => {
+  for (const patch of [
+    { id: null }, { status: 'complete' }, { status: ['answered'] }, { calculation_required: 'false' },
+    { question: '' }, { question: '问'.repeat(301) }, { done_when: '条'.repeat(401) },
+    { answer: '答'.repeat(1201) }, { answer: ' ' }, { limitations: '限'.repeat(601) },
+    { citations: [] }, { citations: [origin({ quote_id: '' })] }, { citations: [origin(), origin()] },
+    { citations: [origin({ source_id: [] })] }, { citations: 's1/q1' },
+    { calculation_ids: [] }, { calculation_ids: ['missing'] }, { calculation_ids: ['calc1', 'calc1'] },
+    { calculation_ids: [1] }, { calculation_ids: 'calc1' },
+    { status: 'blocked', limitations: '' },
+  ]) {
+    const parsed = parseAgentNotebook(sample({ investigation_plan: [question(patch)] }))
+    assert.equal(parsed.investigation_plan.length, 0, JSON.stringify(patch))
+    assert.match(parsed.display_warnings.join(''), /不能据此确认问题已全部回答/)
+    assert.doesNotMatch(render(parsed), />已回答</)
+  }
+  // A malformed underlying workpaper cannot support an apparently complete answer.
+  const invalidCalculation = parseAgentNotebook(sample({
+    calculations: [calculation({ verified: true })], investigation_plan: [question()],
+  }))
+  assert.equal(invalidCalculation.investigation_plan.length, 0)
+})
+
+test('question collection and reference limits are strict, with visible incomplete-plan notices', () => {
+  const tooMany = parseAgentNotebook(sample({ investigation_plan: Array.from({ length: 7 }, (_, index) => question({ id: `p${index + 1}` })) }))
+  assert.equal(tooMany.investigation_plan.length, 0)
+  assert.match(render(tooMany), /不能据此确认所有问题已回答/)
+  const duplicated = parseAgentNotebook(sample({ investigation_plan: [question(), question({ status: 'blocked' })] }))
+  assert.equal(duplicated.investigation_plan.length, 0)
+  assert.ok(duplicated.display_warnings.length)
+  assert.doesNotMatch(render(duplicated), />已回答</)
+  for (const patch of [
+    { citations: Array.from({ length: 7 }, (_, index) => origin({ quote_id: `q${index + 1}` })) },
+    { calculation_ids: Array.from({ length: 7 }, (_, index) => `calc${index + 1}`) },
+  ]) assert.equal(parseAgentNotebook(sample({ investigation_plan: [question(patch)] })).investigation_plan.length, 0)
+})
+
+test('non-quantitative answered questions need citations but need not fabricate a calculation', () => {
+  const parsed = parseAgentNotebook(sample({ calculations: null, investigation_plan: [question({
+    calculation_required: false, calculation_ids: [], question: '回款材料是否经过独立核实？',
+    answer: '原文明示尚待独立核实，不能以内部台账替代银行核验。',
+  })] }))
+  assert.equal(parsed.investigation_plan[0].status, 'answered')
+  assert.deepEqual(plain(parsed.calculations), [])
+  assert.deepEqual(plain(parsed.display_warnings), [])
+  assert.match(render(parsed), /未设计算底稿要求/)
+})
+
+test('question text and source content remain escaped display data', () => {
+  const parsed = parseAgentNotebook(sample({ investigation_plan: [question({
+    question: '<script>execute()</script>', answer: '<img src=x onerror=execute()>',
+    citations: [origin({ url: 'javascript:execute()' })],
+  })] }))
+  const html = render(parsed)
+  assert.match(html, /&lt;script&gt;/)
+  assert.match(html, /&lt;img/)
+  assert.doesNotMatch(html, /<script|<img|href="javascript/)
+})
+
+test('legacy final checkpoints and explicit null plans remain compatible but do not imply complete coverage', async () => {
+  for (const investigation_plan of [undefined, null, []]) {
+    const legacy = sample({ status: 'completed', investigation_plan })
+    const run = streamHarness([{ type: 'research_complete', agent_investigation: legacy, final_report: '旧报告' }])
+    await run.hook.start('旧记录兼容')
+    const parsed = run.state().agentNotebook
+    assert.deepEqual(plain(parsed.investigation_plan), [])
+    assert.deepEqual(plain(parsed.display_warnings), [])
+    assert.equal(parsed.findings.length, 1)
+    assert.equal(parsed.calculations.length, 1)
+    assert.match(render(parsed), /不能据此确认所有问题已回答/)
+  }
+})
+
+test('actual SSE hook updates question progress and preserves blocked questions in the final checkpoint', async () => {
+  const risk = { level: '数据不足，无法评级', requires_human_review: true }
+  const initial = question({ status: 'open', answer: '', citations: [], calculation_ids: [], limitations: '' })
+  const blocked = question({ id: 'p2', status: 'blocked', answer: '', citations: [], calculation_ids: [], limitations: '材料未覆盖，需补件。' })
+  const final = sample({ status: 'completed', investigation_plan: [question(), blocked] })
+  const run = streamHarness([
+    { type: 'agent_investigation', content: sample({ investigation_plan: [initial, blocked] }) },
+    { type: 'agent_investigation', content: final },
+    { type: 'research_complete', agent_investigation: final, risk_assessment: risk },
+  ])
+  await run.hook.start('逐项回答问题')
+  assert.deepEqual(plain(run.state().agentNotebook.investigation_plan.map(item => item.status)), ['answered', 'blocked'])
+  assert.deepEqual(plain(run.state().risk), risk)
+  assert.match(render(run.state().agentNotebook), /资料不足，暂不能回答/)
+  run.hook.reset()
+  assert.equal(run.state().agentNotebook, null)
 })

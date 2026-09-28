@@ -36,6 +36,16 @@ def build_research_outcome(state, execution_status=None):
         and row.get("status") in ("supported", "issue", "not_applicable")
         and isinstance(row.get("reason"), str) and bool(row["reason"].strip()) for row in rows
     ) and {row.get("id") for row in rows} == set(CHECKS)
+    plan = notebook.get("investigation_plan") or []
+    question_checks = review.get("question_checks") or []
+    if plan:
+        audit_complete = audit_complete and isinstance(question_checks, list) and len(question_checks) == len(plan) and all(
+            isinstance(row, dict) and isinstance(row.get("id"), str)
+            and row.get("status") in ("supported", "issue")
+            and isinstance(row.get("reason"), str) and bool(row["reason"].strip())
+            and isinstance(row.get("report_quote"), str) and bool(row["report_quote"].strip())
+            and row["report_quote"] in (state.get("final_report") or "") for row in question_checks
+        ) and {row.get("id") for row in question_checks} == {q.get("id") for q in plan}
     score = review.get("score")
     valid_score = type(score) in (int, float) and math.isfinite(score)
     if issues or (review and (review.get("verdict") != "pass" or not valid_score
@@ -43,13 +53,20 @@ def build_research_outcome(state, execution_status=None):
         quality = "needs_revision"
     elif review.get("degraded") or (agent_mode and not audit_complete):
         quality = "not_reviewed"
-    elif agent_mode and any(row["status"] == "issue" for row in rows):
+    elif agent_mode and (any(row["status"] == "issue" for row in rows) or (plan and any(
+            row["status"] == "issue" for row in question_checks))):
         quality = "needs_revision"
     elif review:
         quality = "passed"
     else:
         quality = "not_reviewed"
     reasons = []
+    from .question_ledger import coverage
+    question_status = coverage(notebook)
+    if agent_mode and notebook.get("plan_required") and not question_status["total"]:
+        reasons.append("尚未建立核心问题清单，不能确认用户问题已被覆盖。")
+    if agent_mode and question_status["open"]:
+        reasons.append(f"仍有 {question_status['open']} 个核心问题尚未调查完成，不能以流程结束替代问题回答。")
     if issues:
         reasons.append(f"仍有 {len(issues)} 项重大或阻断级复核问题未解决，末轮高分不能覆盖历史问题。")
     if quality == "needs_revision" and not issues:
@@ -76,7 +93,7 @@ def build_research_outcome(state, execution_status=None):
               "insufficient" if assessment.get("level") == INSUFFICIENT else "available")
     has_report = bool(state.get("final_report"))
     report_status = ("unavailable" if not has_report else "restricted" if reasons else
-                     "partial" if incomplete or rating == "insufficient" else
+                     "partial" if incomplete or rating == "insufficient" or question_status["blocked"] or notebook.get("partial") else
                      "draft" if quality == "not_reviewed" or execution != "finished" else "ready")
     recommendation = assessment.get("credit_recommendation") or {}
     return {

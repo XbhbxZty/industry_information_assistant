@@ -7,6 +7,7 @@ const STATUS = {
   not_started: '尚未开始', running: '调查中', completed: '调查结束', step_limit: '已达步骤上限',
   time_limit: '已达时间上限', stalled: '连续未取得进展', cancelled: '调查已取消',
 }
+const QUESTION_STATUS = { open: '尚未调查', answered: '已回答', blocked: '资料不足，暂不能回答' }
 
 function materialStatus(document: MaterialDocument) {
   if (document.index_status === 'failed') return '处理失败，不能视为未提供'
@@ -56,6 +57,26 @@ export function AgentWorkbench({ notebook }: { notebook: AgentNotebook | null })
         {notebook.display_warnings.length > 0 && <Alert type="warning" showIcon message="部分调查回执未能完整展示"
           description={notebook.display_warnings.map(note => <div key={note}>{note}</div>)} />}
         <Collapse size="small" style={{ width: '100%' }} items={[
+          { key: 'questions', label: `调查问题：${notebook.investigation_plan.length} 项`, children: (
+            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+              <Text type="secondary">问题状态仅表示 AI 当前答复进度，不代表证据已独立核实、质检通过或调查完整。</Text>
+              {notebook.investigation_plan.length ? <Collapse size="small" style={{ width: '100%' }} items={notebook.investigation_plan.map(item => ({
+                key: item.id,
+                label: <><Tag color={item.status === 'blocked' ? 'warning' : 'default'}>{QUESTION_STATUS[item.status]}</Tag>{item.id} · {item.question}</>,
+                children: <Space direction="vertical" size={8} style={{ width: '100%', overflowWrap: 'anywhere' }}>
+                  <Text>回答条件：{item.done_when}</Text>
+                  <Text type="secondary">{item.calculation_required ? '需要引用计算底稿' : '未设计算底稿要求'}</Text>
+                  <Text>AI 答复：{item.answer || '尚未形成答复'}</Text>
+                  {item.citations.map((origin, index) => <div key={`${origin.source_id}-${origin.quote_id}-${index}`}>
+                    <div><Text>原文：{origin.quote}</Text></div>
+                    <Text type="secondary">{origin.title || '未命名来源'} · {origin.source_id} / {origin.quote_id}</Text>
+                  </div>)}
+                  <Text type="secondary">关联计算：{item.calculation_ids.length ? item.calculation_ids.join('、') : '暂无关联计算底稿'}</Text>
+                  {item.limitations && <Text type="warning">限制与未决事项：{item.limitations}</Text>}
+                </Space>,
+              }))} /> : <Text type="secondary">此记录尚无有效的逐项调查计划，不能据此确认所有问题已回答。</Text>}
+            </Space>
+          ) },
           { key: 'materials', label: materialsTitle, children: (
             <Space direction="vertical" size={8} style={{ width: '100%' }}>
               {catalogNote && <Text type="warning">{catalogNote}</Text>}

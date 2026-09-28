@@ -18,6 +18,26 @@ def append_investigation_report(report, notebook):
              "以下为 AI 基于材料提出的分析与待核实线索，不替代上文规则评级。引文存在不等于分析结论已获独立核实。", "",
              f"调查状态：{plain(notebook.get('status', 'not_started'))}", ""]
     quoted = set()
+    if notebook.get("investigation_plan"):
+        lines.extend(["### 核心问题与完成情况（AI 分析，不代表独立核实）", ""])
+        labels = {"answered": "已回答，待复核", "blocked": "资料不足，暂不能完整回答", "open": "尚未调查完成"}
+        for question in notebook["investigation_plan"][:6]:
+            lines.append(f"- {plain(question.get('id'))} [{labels.get(question.get('status'), '状态无法确认')}] {plain(question.get('question'))}")
+            lines.append("  - 完成条件：" + plain(question.get("done_when")))
+            lines.append("  - 当前答复：" + plain(question.get("answer") or "本轮尚未形成答复"))
+            if question.get("limitations"):
+                lines.append("  - 限制与缺口：" + plain(question["limitations"]))
+            for citation in question.get("citations", [])[:6]:
+                key = (citation.get("source_id"), citation.get("quote"))
+                if key not in quoted:
+                    lines.append("  - 依据：" + plain(citation.get("quote")))
+                    quoted.add(key)
+                lines.append(f"  - 来源：{plain(citation.get('title'))}；{plain(citation.get('source_id'))}/{plain(citation.get('quote_id'))}")
+                if citation.get("url"):
+                    lines.append("    - 地址：" + plain(citation["url"]))
+            if question.get("calculation_ids"):
+                lines.append("  - 计算底稿：" + plain("、".join(question["calculation_ids"])))
+        lines.append("")
     for finding in notebook.get("findings", [])[:20]:
         lines.append(f"- [{plain(finding.get('kind'))}] {plain(finding.get('claim'))}")
         for citation in (finding.get("citations") or [finding])[:6]:
@@ -30,7 +50,7 @@ def append_investigation_report(report, notebook):
                 lines.append(f"    - 地址：{plain(citation['url'])}")
         if finding.get("calculation_ids"):
             lines.append("  - 计算底稿：" + plain("、".join(finding["calculation_ids"])))
-    if not notebook.get("findings"):
+    if not notebook.get("findings") and not notebook.get("investigation_plan"):
         lines.append("本次未形成带原文引用的调查发现。")
     if notebook.get("calculations"):
         lines.extend(["", "### 可复算的分析底稿（不等于已核实事实）", ""])

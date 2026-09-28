@@ -23,7 +23,7 @@ def clean_state():
         "agent_investigation": {"status": "completed"}, "final_report": "# 调查报告\n原文",
         "quality_score": 10, "critic_feedback": [],
         "quality_review": {"verdict": "pass", "score": 10, "analysis_checks": [
-            {"id": key, "status": "supported", "reason": "已对照证据"} for key in CHECKS]},
+            {"id": key, "status": "supported", "reason": "已对照证据", "report_quote": "原文"} for key in CHECKS]},
         "risk_assessment": {"level": "低风险", "requires_human_review": False,
                             "credit_recommendation": {"recommendable": True}},
     }

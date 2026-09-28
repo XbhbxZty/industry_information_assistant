@@ -47,6 +47,18 @@ export interface CalculationWorkpaper {
   verified: false
 }
 
+export interface InvestigationQuestion {
+  id: string
+  question: string
+  done_when: string
+  calculation_required: boolean
+  status: 'open' | 'answered' | 'blocked'
+  answer: string
+  citations: FindingCitation[]
+  calculation_ids: string[]
+  limitations: string
+}
+
 export interface AgentNotebook {
   status: InvestigationStatus
   questions: string[]
@@ -63,6 +75,7 @@ export interface AgentNotebook {
   missing_materials: string[]
   material_coverage: MaterialCoverage | null
   calculations: CalculationWorkpaper[]
+  investigation_plan: InvestigationQuestion[]
   display_warnings: string[]
 }
 
@@ -145,6 +158,29 @@ function calculation(value: unknown): CalculationWorkpaper | null {
     literal_constants: constants, arithmetic_status: 'computed', inference_status: 'not_reviewed', verified: false }
 }
 
+function investigationQuestion(value: unknown, calculationIds: Set<string>): InvestigationQuestion | null {
+  if (!record(value) || !id(value.id) || !text(value.question, 300, true) || !text(value.done_when, 400, true)) return null
+  if (typeof value.calculation_required !== 'boolean' || typeof value.status !== 'string' || !['open', 'answered', 'blocked'].includes(value.status)) return null
+  if (!text(value.answer, 1200) || !text(value.limitations, 600) || !Array.isArray(value.citations) || value.citations.length > 6) return null
+  const citations: FindingCitation[] = []
+  const identities = new Set<string>()
+  for (const raw of value.citations) {
+    const origin = citation(raw)
+    if (!origin) return null
+    const identity = `${origin.source_id}\u0000${origin.quote_id}`
+    if (identities.has(identity)) return null
+    identities.add(identity)
+    citations.push(origin)
+  }
+  const refs = strings(value.calculation_ids, 6, 128)
+  if (!refs || new Set(refs).size !== refs.length || refs.some(ref => !calculationIds.has(ref))) return null
+  if (value.status === 'answered' && (!value.answer.trim() || !citations.length || (value.calculation_required && !refs.length))) return null
+  if (value.status === 'blocked' && !value.limitations.trim()) return null
+  return { id: value.id, question: value.question, done_when: value.done_when,
+    calculation_required: value.calculation_required, status: value.status as InvestigationQuestion['status'],
+    answer: value.answer, citations, calculation_ids: refs, limitations: value.limitations }
+}
+
 export function parseAgentNotebook(value: unknown): AgentNotebook | null {
   if (!record(value)) return null
   const materialCoverage = has(value, 'material_coverage') ? coverage(value.material_coverage) : null
@@ -210,10 +246,27 @@ export function parseAgentNotebook(value: unknown): AgentNotebook | null {
     calculationChars += size
     calculations.push(parsed)
   }
+  const plan: InvestigationQuestion[] = []
+  if (value.investigation_plan !== undefined && value.investigation_plan !== null) {
+    const rows = value.investigation_plan
+    const invalidPlan = () => warnings.add('部分调查问题的状态或证据回执无效，未展示；不能据此确认问题已全部回答。')
+    // Do not show a truncated prefix as a complete investigation plan.
+    if (!Array.isArray(rows) || rows.length > 6) invalidPlan()
+    else {
+      const occurrences = new Map<unknown, number>()
+      for (const raw of rows) if (record(raw)) occurrences.set(raw.id, (occurrences.get(raw.id) || 0) + 1)
+      for (const raw of rows) {
+        const parsed = investigationQuestion(raw, seenCalculations)
+        // Conflicting duplicates cannot prefer an earlier "answered" receipt.
+        if (!parsed || occurrences.get(parsed.id) !== 1) { invalidPlan(); continue }
+        plan.push(parsed)
+      }
+    }
+  }
   const summary = text(value.summary, 2000) ? value.summary : ''
   if (value.summary !== undefined && value.summary !== null && !text(value.summary, 2000)) warnings.add('调查概述格式无效，未展示。')
   const questions = boundedStrings(value.questions)
   const missing = boundedStrings(value.missing_materials)
   return { status: status as InvestigationStatus, questions, findings, summary, missing_materials: missing,
-    material_coverage: materialCoverage, calculations, display_warnings: [...warnings] }
+    material_coverage: materialCoverage, calculations, investigation_plan: plan, display_warnings: [...warnings] }
 }

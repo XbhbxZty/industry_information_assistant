@@ -27,6 +27,8 @@ class InvestigationTools:
 
     def definitions(self):
         tools = {
+            "plan_investigation": '先将用户问题拆为1至6个核心调查问题：{"questions":[{"question":"需要回答什么","done_when":"哪些比较、分类、勾稽或核验才能回答","calculation_required":true}]}。不要按二十项清单逐项复制任务；量化比较、覆盖率、勾稽须计算。计划建立后不能删问题或降低条件。',
+            "address_question": '逐项交代调查结果：{"question_id":"p1","status":"answered|blocked|open","answer":"回答用户问题的具体分析，含必要数字、推断和限制，最多1200字","citations":[{"source_id":"s1","quote_id":"q1"}],"calculation_ids":["c1"],"limitations":"无法回答的具体缺口与用途"}。answered必须有已读引文，要求计算的问题还须关联底稿；blocked须说明资料不足；尚未读相关已有材料应open，不能称缺失。',
             "read_source": '阅读原文，不自动抽取或核实字段：{"source_id":"s1", "chunk_index":可选片段序号, "offset":可选正文偏移量}。返回可引用原文及后续片段导航；每次最多6000字。',
             "read_next": '继续阅读同一材料的下一未读片段：{"source_id":"s1"}；不要把只读一片当作全文已读。',
             "record_finding": '记录分析：{"claim":"判断或替代解释", "citations":[{"source_id":"s1","quote_id":"q1"},{"source_id":"s2","quote_id":"q3"}], "kind":"support|counter|gap", "calculation_ids":["c1"]}。最多6条精确引文；也兼容单source_id配quote_id或quote_ids。',
@@ -131,6 +133,12 @@ class InvestigationTools:
     async def execute(self, action, args):
         if action not in self.definitions():
             raise ValueError("未授权的工具")
+        if action in ("plan_investigation", "address_question"):
+            from .question_ledger import create_plan, address_question
+            receipt = (create_plan(self.notebook, args) if action == "plan_investigation" else
+                       address_question(self.notebook, args, self.resolve_citation))
+            self._publish()
+            return receipt
         if action == "list_materials":
             return await self.list_materials()
         if action == "calculate":
@@ -462,6 +470,7 @@ class InvestigationTools:
         return feedback
 
     async def run(self):
+        self.notebook["plan_required"] = True
         if self.state.get("search_local") and self.state.get("_user_id") and not self.notebook.get("documents"):
             started = monotonic()
             receipt = await self.list_materials()
@@ -496,7 +505,7 @@ class InvestigationTools:
 def public_notebook(notebook):
     """Only product-facing findings and action purposes, not raw source state."""
     result = {k: notebook.get(k) for k in
-              ("status", "questions", "findings", "summary", "missing_materials", "elapsed_seconds", "calculations")}
+              ("status", "questions", "findings", "summary", "missing_materials", "elapsed_seconds", "calculations", "investigation_plan")}
     sources = list((notebook.get("sources") or {}).values())
     documents = []
     for doc in notebook.get("documents", [])[:40]:
