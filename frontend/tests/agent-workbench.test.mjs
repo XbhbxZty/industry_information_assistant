@@ -270,3 +270,48 @@ test('an invalid later event cannot replace a valid workbench with fabricated su
   assert.equal(run.state().agentNotebook.status, 'running')
   assert.equal(run.state().agentNotebook.calculations[0].verified, false)
 })
+
+test('live SSE nullable optional fields mean no receipt yet, not malformed or verified output', async () => {
+  // Minimal equivalent of STAGE2-live-002's actual early agent_investigation
+  // payload; do not copy private source state or the full archived event stream.
+  const early = {
+    status: 'running', questions: ['下一步读哪份材料？'], findings: [],
+    summary: null, missing_materials: null, calculations: null,
+    material_coverage: coverage(),
+  }
+  const run = streamHarness([{ type: 'agent_investigation', content: early }])
+  await run.hook.start('分析回款')
+  const parsed = run.state().agentNotebook
+  assert.equal(parsed.status, 'running')
+  assert.equal(parsed.summary, '')
+  assert.deepEqual(plain(parsed.calculations), [])
+  assert.deepEqual(plain(parsed.missing_materials), [])
+  assert.deepEqual(plain(parsed.display_warnings), [])
+  assert.doesNotMatch(render(parsed), /格式无效|未能完整展示/)
+  assert.match(render(parsed), /尚无可展示的计算回执/)
+})
+
+test('initial directory-only null status is visible as not_started, never as a completed investigation', async () => {
+  const directory = {
+    status: null, questions: null, findings: null, summary: null,
+    missing_materials: null, calculations: null, material_coverage: coverage({
+      documents_read: 0, read_chunks: 0,
+      documents: coverage().documents.map(document => ({ ...document, read_chunks: 0 })),
+    }),
+  }
+  const run = streamHarness([{ type: 'agent_investigation', content: directory }])
+  await run.hook.start('分析回款')
+  const parsed = run.state().agentNotebook
+  assert.equal(parsed.status, 'not_started')
+  assert.deepEqual(plain(parsed.display_warnings), [])
+  const html = render(parsed)
+  assert.match(html, /尚未开始/)
+  assert.match(html, /0 \/ 4 份/)
+  assert.doesNotMatch(html, /调查结束/)
+  for (const status of [undefined, 'approved', [], false]) {
+    assert.equal(parseAgentNotebook({ ...directory, status }), null)
+  }
+  assert.equal(parseAgentNotebook({ status: null }), null)
+  assert.equal(parseAgentNotebook({ ...directory, material_coverage: { catalog_status: 'available' } }), null)
+  assert.equal(parseAgentNotebook({ ...directory, material_coverage: coverage({ catalog_status: 'unavailable' }) }), null)
+})

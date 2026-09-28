@@ -146,16 +146,21 @@ function calculation(value: unknown): CalculationWorkpaper | null {
 }
 
 export function parseAgentNotebook(value: unknown): AgentNotebook | null {
-  if (!record(value) || typeof value.status !== 'string' || !['not_started', 'running', 'completed', 'stalled', 'time_limit', 'step_limit', 'cancelled'].includes(value.status)) return null
+  if (!record(value)) return null
+  const materialCoverage = has(value, 'material_coverage') ? coverage(value.material_coverage) : null
+  // The server publishes the authorized directory before the investigation loop
+  // starts. Only this explicit null + valid available directory means not_started.
+  const status = value.status === null && materialCoverage?.catalog_status === 'available' ? 'not_started' : value.status
+  if (typeof status !== 'string' || !['not_started', 'running', 'completed', 'stalled', 'time_limit', 'step_limit', 'cancelled'].includes(status)) return null
   const warnings = new Set<string>()
   const boundedStrings = (items: unknown) => {
-    if (items === undefined) return []
+    if (items === undefined || items === null) return []
     const parsed = strings(items, 8, 400)
     if (!parsed) warnings.add('部分问题或补件回执格式无效，未展示；不能视为已解决。')
     return parsed || []
   }
   const findings: AgentNotebook['findings'] = []
-  if (value.findings !== undefined && (!Array.isArray(value.findings) || value.findings.length > 20)) {
+  if (value.findings !== undefined && value.findings !== null && (!Array.isArray(value.findings) || value.findings.length > 20)) {
     warnings.add('调查发现回执超出显示范围或格式无效，未完整展示。')
   }
   for (const raw of Array.isArray(value.findings) ? value.findings.slice(0, 20) : []) {
@@ -187,11 +192,10 @@ export function parseAgentNotebook(value: unknown): AgentNotebook | null {
       source_id: origins[0].source_id, kind: typeof raw.kind === 'string' ? raw.kind : '',
       citations: origins, calculation_ids: calculationIds })
   }
-  const materialCoverage = has(value, 'material_coverage') ? coverage(value.material_coverage) : null
   if (has(value, 'material_coverage') && !materialCoverage) warnings.add('材料目录回执格式无效，无法确认阅读覆盖范围。')
   const calculations: CalculationWorkpaper[] = []
   let calculationChars = 0
-  if (value.calculations !== undefined && (!Array.isArray(value.calculations) || value.calculations.length > 12)) {
+  if (value.calculations !== undefined && value.calculations !== null && (!Array.isArray(value.calculations) || value.calculations.length > 12)) {
     warnings.add('计算底稿回执超出显示范围或格式无效，未完整展示。')
   }
   const seenCalculations = new Set<string>()
@@ -207,9 +211,9 @@ export function parseAgentNotebook(value: unknown): AgentNotebook | null {
     calculations.push(parsed)
   }
   const summary = text(value.summary, 2000) ? value.summary : ''
-  if (value.summary !== undefined && !text(value.summary, 2000)) warnings.add('调查概述格式无效，未展示。')
+  if (value.summary !== undefined && value.summary !== null && !text(value.summary, 2000)) warnings.add('调查概述格式无效，未展示。')
   const questions = boundedStrings(value.questions)
   const missing = boundedStrings(value.missing_materials)
-  return { status: value.status as InvestigationStatus, questions, findings, summary, missing_materials: missing,
+  return { status: status as InvestigationStatus, questions, findings, summary, missing_materials: missing,
     material_coverage: materialCoverage, calculations, display_warnings: [...warnings] }
 }
