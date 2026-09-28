@@ -320,16 +320,30 @@ def score(
 
     # —— 加权：核实率过低的维度不参与 ——
     by_cat = completeness.get("by_category") or {}
+    dimension_rates = {
+        dim: (stat or {}).get("rate", 0.0) for dim, stat in by_cat.items()
+    }
+    # 报告分类不等于评分依赖：登记状态属于 basic 章节，却是 operation
+    # 评分的必要输入；该章节唯一的核心项 bidding_record 只是选查佐证。
+    # 不改报告完整度统计，也不让场景扩展经营项改变核心评分门槛。
+    status_check = by_id.get("operating_status")
+    if status_check is not None and status_check.get("status") == "not_applicable":
+        # 必要输入明确不适用时，补充中标信息不单独建立一个评分维度。
+        dimension_rates.pop("operation", None)
+    elif status_check is not None or "operation" in by_cat:
+        # 中标项不适用时也不能丢掉已核实的登记状态；反过来，经营分类
+        # 仍适用却缺少登记状态 check 时必须 fail closed，不能靠中标放行。
+        dimension_rates["operation"] = 1.0 if _ok("operating_status") else 0.0
     usable = {}
     # 必须遍历「应评估的维度」，不能只遍历已经算出分数的维度。
     # 整个维度都没有 verified 字段时，dim_scores 恰好没有该键；若从
     # dim_scores 出发，最严重的 0% 核实率反而不会进入 skipped，完整度
-    # 闸门就会失效（BC-21）。完全不适用于当前主体、因而不在 by_category
-    # 出现的维度则不强行施加闸门。
+    # 闸门就会失效（BC-21）。完全不适用于当前主体、因而不在评分依赖
+    # 或 by_category 出现的维度则不强行施加闸门。
     for dim in WEIGHTS:
-        if dim not in by_cat:
+        if dim not in dimension_rates:
             continue
-        rate = (by_cat.get(dim) or {}).get("rate", 0.0)
+        rate = dimension_rates[dim]
         if rate < MIN_CATEGORY_RATE:
             skipped.append(dim)
             continue
@@ -375,8 +389,9 @@ def score(
     for dim in skipped:
         if level != INSUFFICIENT:
             level = _level_at_least(level, "中风险")
+        dependency_note = "（必要评分输入 operating_status 未核实）" if dim == "operation" else ""
         _gate(GATE_CATEGORY_RATE,
-              f"{dim} 维度核实率不足 {MIN_CATEGORY_RATE:.0%}，不参与加权且等级下限提升")
+              f"{dim} 维度核实率不足 {MIN_CATEGORY_RATE:.0%}{dependency_note}，不参与加权且等级下限提升")
         requires_review = True
 
     # 3b) 能力缺失 → 至少中风险（BC-18）
