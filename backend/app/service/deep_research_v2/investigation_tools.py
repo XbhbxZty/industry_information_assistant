@@ -27,12 +27,12 @@ class InvestigationTools:
 
     def definitions(self):
         tools = {
-            "plan_investigation": '先将用户问题拆为1至6个核心调查问题：{"questions":[{"question":"需要回答什么","done_when":"哪些比较、分类、勾稽或核验才能回答","calculation_required":true}]}。不要按二十项清单逐项复制任务；量化比较、覆盖率、勾稽须计算。计划建立后不能删问题或降低条件。',
+            "plan_investigation": '先将用户问题拆为1至6个核心调查问题（通常2至4个，勿凑满）：{"questions":[{"question":"需要回答什么","done_when":"哪些比较、分类、勾稽才能回答","calculation_required":true}]}。未读材料时不预设账龄阈值或审计门槛，写明按原文确认口径；不要复制二十项清单。量化比较、覆盖率、勾稽须计算。计划建立后不能删问题或降低条件。',
             "address_question": '逐项交代调查结果：{"question_id":"p1","status":"answered|blocked|open","answer":"回答用户问题的具体分析，含必要数字、推断和限制，最多1200字","citations":[{"source_id":"s1","quote_id":"q1"}],"calculation_ids":["c1"],"limitations":"无法回答的具体缺口与用途"}。answered必须有已读引文，要求计算的问题还须关联底稿；blocked须说明资料不足；尚未读相关已有材料应open，不能称缺失。',
             "read_source": '阅读原文，不自动抽取或核实字段：{"source_id":"s1", "chunk_index":可选片段序号, "offset":可选正文偏移量}。返回可引用原文及后续片段导航；每次最多6000字。',
             "read_next": '继续阅读同一材料的下一未读片段：{"source_id":"s1"}；不要把只读一片当作全文已读。',
             "record_finding": '记录分析：{"claim":"判断或替代解释", "citations":[{"source_id":"s1","quote_id":"q1"},{"source_id":"s2","quote_id":"q3"}], "kind":"support|counter|gap", "calculation_ids":["c1"]}。最多6条精确引文；也兼容单source_id配quote_id或quote_ids。',
-            "calculate": '用已读引文计算工作底稿：{"label":"计算用途", "expression":"(current-prior)/prior*100", "variables":{"current":{"value":"120","source_id":"s1","quote_id":"q1","unit":"万元","period":"本期"},"prior":{"value":"100","source_id":"s1","quote_id":"q2","unit":"万元","period":"上期"}},"result_unit":"%","limitations":"主体、期间及口径限制"}。仅四则运算；不证明分类或因果成立，结果可用calculation_ids引用。',
+            "calculate": '用已读引文计算工作底稿：{"label":"计算用途", "expression":"(current-prior)/prior*100", "variables":{"current":{"value":"120","source_id":"s1","quote_id":"q1","unit":"万元","period":"本期"},"prior":{"value":"100","source_id":"s1","quote_id":"q2","unit":"万元","period":"上期"}},"result_unit":"%","limitations":"主体、期间及口径限制"}。仅四则运算，表达式用变量名且每个变量都须使用。value保留原文数值，中文加减方向写在expression，不自行给value改符号；不证明分类或因果成立，结果可用calculation_ids引用。',
             "inspect_checks": "查看当前核查状态和证据校验反馈，参数 {}。",
         }
         if self.state.get("search_local"):

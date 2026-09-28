@@ -123,6 +123,15 @@ def test_substrings_malformed_grouping_and_sign_changes_cannot_supply_operand(va
         single(value, quote)
 
 
+def test_worded_subtraction_keeps_source_operand_sign_and_explains_repair():
+    quote = "本期减费用80万元。"
+    with pytest.raises(ValueError, match="value须与该原文数字及其符号一致"):
+        single("-80", quote, expression="amount")
+    assert single("80", quote, expression="-amount")["result"] == "-80"
+    with pytest.raises(ValueError, match="expression须用variables的键名"):
+        single("80", quote, expression="0")
+
+
 @pytest.mark.parametrize("expression", [
     "__import__('os').system('echo bad') + amount", "amount.__class__", "amount[0]",
     "amount ** 100", "amount // 1", "amount % 1", "[amount for _ in range(1)]",

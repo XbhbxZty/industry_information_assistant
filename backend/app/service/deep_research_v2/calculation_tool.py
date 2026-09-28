@@ -130,7 +130,9 @@ def calculate_workpaper(arguments: dict, resolve_citation: Callable[[str, str], 
         raise ValueError("only variables, decimal constants, parentheses and + - * / are allowed")
     used = {node.id for node in nodes if isinstance(node, ast.Name)}
     if not used or used != set(supplied):
-        raise ValueError("all expression variables must have citations and all supplied variables must be used")
+        raise ValueError("all expression variables must have citations and all supplied variables must be used; "
+                         "expression须用variables的键名，每个变量都须参与运算；不要把事实数字直接写进公式，"
+                         "不要用0代替实际推导。示例：income-expense，仅提供income与expense。")
 
     variables, numbers = {}, {}
     for name, item in supplied.items():
@@ -150,7 +152,9 @@ def calculate_workpaper(arguments: dict, resolve_citation: Callable[[str, str], 
             raise ValueError(f"citation identity does not match variable {name}")
         quote = _text(citation.get("quote"), "quote", 5000)
         if not _located(number, quote):
-            raise ValueError(f"numeric value for variable {name} was not located in its exact quote")
+            raise ValueError(f"numeric value for variable {name} was not located in its exact quote; "
+                             "value须与该原文数字及其符号一致。中文‘减费用80’用value=80、"
+                             "expression=income-expense，不能擅自把value改成-80；请重新核对原文。")
         variables[name] = {
             "value": _render(number), "source_id": sid, "quote_id": qid,
             "quote": quote, "unit": unit, "period": period, "subject": subject,
