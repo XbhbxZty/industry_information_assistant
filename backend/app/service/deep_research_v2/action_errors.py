@@ -6,6 +6,7 @@ import re
 DETERMINISTIC_ERROR_CODES = frozenset({
     "citation_source_unavailable", "citation_source_unread", "citation_quote_not_found",
     "citation_changed", "calculation_reference_invalid", "calculation_required",
+    "calculation_expression_invalid",
 })
 
 

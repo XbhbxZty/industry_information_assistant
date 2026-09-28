@@ -39,6 +39,23 @@ _BOUNDARY_NOTE = (
 _CONSTANT_NOTE = "公式常量仅允许 0、1、100（百分比参数）；其他事实数值必须通过带引文的变量提供。"
 
 
+def _expression_error(message):
+    return ActionError(
+        "calculation_expression_invalid", message,
+        field_path="expression",
+        repair={
+            "instruction": "修改 expression 本身后再调用 calculate；只改 label、result_unit 或 limitations 不会修复语法。"
+                           "仅支持变量、十进制常量、括号、+ - * /（含一元负号），不支持 abs、sum、round 等函数或幂运算。"
+                           "如确需绝对值，先核对原文符号：已知负变量可在表达式中写 (-变量)，已知非负变量直接使用；"
+                           "不能擅改 variables.value 的原文符号。不确定符号或用途时不要强行计算。"
+                           "输出百分比时需由调用者明确表达百分比运算，仅写 result_unit=% 不会乘100。"
+                           "语法有效不等于分析目的或因果解释正确。",
+            "allowed_operators": ["+", "-", "*", "/"], "functions_allowed": False,
+            "actions": [],
+        },
+    )
+
+
 def _text(value, name: str, maximum: int, *, required: bool = True) -> str:
     if not isinstance(value, str) or len(value) > maximum or (required and not value.strip()):
         raise ValueError(f"{name} must be a {'nonempty ' if required else ''}string of at most {maximum} characters")
@@ -121,15 +138,15 @@ def calculate_workpaper(arguments: dict, resolve_citation: Callable[[str, str], 
 
     try:
         tree = ast.parse(expression, mode="eval")
-    except (SyntaxError, RecursionError, ValueError) as exc:
-        raise ValueError("invalid arithmetic expression") from exc
+    except (SyntaxError, RecursionError, ValueError):
+        raise _expression_error("invalid arithmetic expression") from None
     nodes = list(ast.walk(tree))
     if len(nodes) > MAX_AST_NODES:
         raise ValueError("expression complexity exceeds calculation limits")
     allowed = (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Name, ast.Load,
                ast.Constant, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.UAdd, ast.USub)
     if any(not isinstance(node, allowed) for node in nodes):
-        raise ValueError("only variables, decimal constants, parentheses and + - * / are allowed")
+        raise _expression_error("only variables, decimal constants, parentheses and + - * / are allowed")
     used = {node.id for node in nodes if isinstance(node, ast.Name)}
     if not used or used != set(supplied):
         raise ValueError("all expression variables must have citations and all supplied variables must be used; "

@@ -287,3 +287,22 @@ def test_available_calculation_ids_are_bounded_actual_ids_not_workpaper_content(
     result = failure(lambda: execute(tool, "address_question", answer(sid, calculation_ids=["c999"])))
     assert result["repair"]["available_calculation_ids"] == [f"c{i}" for i in range(1, 13)]
     assert "PRIVATE" not in json.dumps(result)
+
+
+@pytest.mark.parametrize("expression", ["abs(current) / abs(previous)", "current ** previous", "current + (", "current.__class__"])
+def test_expression_error_gives_repair_without_resolving_or_rewriting(expression):
+    tool, sid, _ = make_tools()
+    read = execute(tool, "read_source", {"source_id": sid})
+    args = calculation_args(sid, read["quote_options"])
+    args["expression"] = expression
+    before = copy.deepcopy((tool.notebook, args))
+    resolver = Mock(side_effect=AssertionError("invalid AST must not resolve citations"))
+    result = failure(lambda: calculate_workpaper(args, resolver))
+    assert result["error_code"] == "calculation_expression_invalid"
+    assert result["field_path"] == "expression"
+    assert result["repair"]["functions_allowed"] is False
+    assert "expression 本身" in result["repair"]["instruction"]
+    assert "variables.value" in result["repair"]["instruction"]
+    assert result["repair"]["actions"] == []
+    resolver.assert_not_called()
+    assert before == (tool.notebook, args)

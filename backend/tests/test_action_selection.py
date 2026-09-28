@@ -233,3 +233,34 @@ def test_transient_resolver_failure_can_succeed_on_unchanged_retry():
     result = run_loop(tool, choose, execute_action=transient)
     assert result["status"] == "completed" and len(calls) == 2
     assert all(a["action"] != "retry_suppressed" for a in result["actions"])
+
+
+def test_model_can_repair_rejected_abs_without_tool_rewriting_operands_or_formula():
+    tool, sid, _ = make_tools([{"chunk_index": 0, "content": "增加金额为150万元。经营现金流净额为-300万元。"}])
+    execute(tool, "read_source", {"source_id": sid})
+    args = {"label": "语法恢复示例，不表示归因成立", "expression": "abs(delta)/abs(net)",
+            "variables": {"delta": {"value": "150", "source_id": sid, "quote_id": "q1"},
+                          "net": {"value": "-300", "source_id": sid, "quote_id": "q2"}},
+            "result_unit": "%"}
+    original = deepcopy(args)
+    step = 0
+    async def choose(_, context):
+        nonlocal step
+        step += 1
+        if step == 1:
+            return {"action": "calculate", "arguments": args}
+        if step == 2:
+            assert not tool.notebook.get("calculations")
+            assert context["observation"]["error_code"] == "calculation_expression_invalid"
+            assert context["observation"]["field_path"] == "expression"
+            assert "(-变量)" in context["observation"]["repair"]["instruction"]
+            # The chooser, not the tool, revises the expression after the error.
+            return {"action": "calculate", "arguments": {**args, "expression": "delta/(-net)*100"}}
+        return {"action": "finish", "arguments": {"summary": "计算已保存但不代表归因成立", "partial": True}}
+    result = run_loop(tool, choose)
+    assert result["status"] == "completed"
+    assert len(result["calculations"]) == 1
+    calculation = result["calculations"][0]
+    assert calculation["result"] == "50" and calculation["verified"] is False
+    assert calculation["variables"]["net"]["value"] == "-300"
+    assert args == original
