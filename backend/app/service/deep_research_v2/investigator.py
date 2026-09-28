@@ -221,7 +221,11 @@ async def investigate(
             if action not in available_tools:
                 raise ValueError("工具不可用，请使用 tools 中列出的工具")
             key = json.dumps([action, arguments], sort_keys=True, ensure_ascii=False)
-            if key in seen and (action != "read_source" or recovering):
+            # These commands are stateful: identical source IDs can address a
+            # new page or its extraction. Their tools own coverage/cache
+            # deduplication; the loop still limits consecutive no-progress.
+            repeat_safe = action in ("read_next", "extract_evidence") or (action == "read_source" and not recovering)
+            if key in seen and not repeat_safe:
                 raise ValueError("该行动已执行。请查看 source_inventory，选择相关的 retrieved_unread 来源；已读原文在 read_evidence 中，不需重复读取。若无相关未读材料则结束。")
             emit({"title": f"调查行动：{action}", "subtitle": reason})
             observation = await bounded(execute(action, arguments))

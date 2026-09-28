@@ -15,6 +15,7 @@ from uuid import UUID
 
 from .investigator import investigate, InvestigationBudget
 from ..rag_evidence_bridge import collect_analysis_evidence, finalize_rag_evidence
+from ..statement_scope import UNKNOWN, resolve_in_chunk
 
 
 class InvestigationTools:
@@ -333,6 +334,12 @@ class InvestigationTools:
             if not sid:
                 raise ValueError("来源数量已达上限")
             source = self.sources[sid]
+            # Catalogue placeholders have no accounting scope yet. Preserve
+            # the server's document-level annotation when reusing their ID.
+            for key in ("statement_scope", "statement_scope_marks"):
+                source.pop(key, None)
+                if key in expanded:
+                    source[key] = expanded[key]
             source["known_chunk_count"] = len(rows)
             unread = [r["chunk_index"] for r in rows if r["chunk_index"] != index and not self._chunk_read(source, r["chunk_index"])]
             navigation = {"known_chunk_count": len(rows), "next_chunk_index": next((i for i in unread if i > index), unread[0] if unread else None),
@@ -405,6 +412,16 @@ class InvestigationTools:
         feedback = {}
         section = {"id": "agent_research", "title": "自主调查", "description": self.state["query"]}
         projection = {**source, "summary": source["read_receipt"]["text"]}
+        # Verification locates quotations relative to this page, whereas the
+        # authoritative scope markers use full-chunk offsets. Rebase both the
+        # starting scope and transitions without changing the stored source.
+        page_start = source["read_receipt"].get("offset", 0)
+        scope_marks = source.get("statement_scope_marks") or []
+        projection["statement_scope"] = resolve_in_chunk(
+            source.get("statement_scope") or UNKNOWN, scope_marks, page_start)
+        projection["statement_scope_marks"] = [
+            (offset - page_start, scope) for offset, scope in scope_marks
+            if page_start <= offset < page_start + len(projection["summary"])]
         if source.get("is_local"):
             try:
                 from config.dd_checklist import CHECKLIST_BY_ID

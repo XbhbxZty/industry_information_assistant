@@ -13,6 +13,7 @@ from service.deep_research_v2 import material_catalog
 from service.deep_research_v2.investigation_tools import InvestigationTools, public_notebook
 from service.deep_research_v2.investigation_report import append_investigation_report
 from service.deep_research_v2.investigator import InvestigationBudget, evidence_context, investigate
+from service.statement_scope import resolve_in_chunk
 
 
 KB = "f2c69e49-a811-4968-9c43-5d8e68d4a611"
@@ -238,6 +239,80 @@ def test_explicit_extraction_uses_newly_read_page_and_only_reuses_same_page_rece
     assert tool.scout._analyze_search_results.call_count == 2
 
 
+def test_real_loop_allows_three_page_read_next_with_unchanged_source_id():
+    tool, sid, _ = make_tools([{"chunk_index": 0, "content": "甲" * 6000 + "乙" * 6000 + "丙" * 1000}])
+    decisions = iter([
+        {"action": "read_source", "arguments": {"source_id": sid}},
+        {"action": "read_next", "arguments": {"source_id": sid}},
+        {"action": "read_next", "arguments": {"source_id": sid}},
+        {"action": "finish", "arguments": {"summary": "三页原文已读完，仍需独立核实。"}},
+    ])
+    choose = AsyncMock(side_effect=lambda *_: next(decisions))
+    result = asyncio.run(investigate(brief={"query": "调查"}, tools=tool.definitions(), choose=choose,
+        execute=tool.execute, notebook=tool.notebook, critique=False,
+        budget=InvestigationBudget(max_steps=5, max_seconds=5)))
+    assert result["status"] == "completed"
+    assert [a["action"] for a in result["actions"]] == ["read_source", "read_next", "read_next"]
+    assert tool.sources[sid]["read_complete"] and tool.sources[sid]["read_receipt"]["offset"] == 12000
+
+
+def test_real_loop_allows_same_source_extraction_after_new_page_was_read():
+    tool, sid, _ = make_tools([{"chunk_index": 0, "content": FIRST_TEXT + "甲" * (6000 - len(FIRST_TEXT)) + THIRD_TEXT}])
+    decisions = iter([
+        {"action": "read_source", "arguments": {"source_id": sid}},
+        {"action": "extract_evidence", "arguments": {"source_id": sid}},
+        {"action": "read_next", "arguments": {"source_id": sid}},
+        {"action": "extract_evidence", "arguments": {"source_id": sid}},
+        {"action": "finish", "arguments": {"summary": "原文已分两页阅读并尝试抽取，未自动核实任何字段。"}},
+    ])
+    choose = AsyncMock(side_effect=lambda *_: next(decisions))
+    result = asyncio.run(investigate(brief={"query": "调查"}, tools=tool.definitions(), choose=choose,
+        execute=tool.execute, notebook=tool.notebook, critique=False,
+        budget=InvestigationBudget(max_steps=6, max_seconds=5)))
+    assert result["status"] == "completed"
+    assert not any(a["action"] == "invalid_action" for a in result["actions"])
+    assert tool.scout._analyze_search_results.call_count == 2
+    assert tool.scout._analyze_search_results.call_args.args[2][0]["summary"] == THIRD_TEXT
+
+
+def test_existing_catalog_placeholder_keeps_authoritative_statement_scope(monkeypatch):
+    catalog_fixture(monkeypatch)
+    tool, _, _ = make_tools()
+    tool.sources.clear()
+    sid = execute(tool, "list_materials")["documents"][0]["source_id"]
+
+    def annotate(rows, _):
+        for item in rows:
+            item.update(statement_scope="parent", statement_scope_marks=[[18, "consolidated"]])
+
+    tool.scout._annotate_statement_scope.side_effect = annotate
+    execute(tool, "read_source", {"source_id": sid})
+    assert tool.sources[sid]["statement_scope"] == "parent"
+    assert tool.sources[sid]["statement_scope_marks"] == [[18, "consolidated"]]
+    execute(tool, "extract_evidence", {"source_id": sid})
+    projection = tool.scout._analyze_search_results.call_args.args[2][0]
+    assert projection["statement_scope"] == "parent"
+    assert resolve_in_chunk(projection["statement_scope"], projection["statement_scope_marks"], 20) == "consolidated"
+
+
+def test_extraction_rebases_absolute_statement_scope_marks_to_current_read_page():
+    tool, sid, _ = make_tools([{"chunk_index": 0, "content": "甲" * 6000 + "乙" * 1000}])
+
+    def annotate(rows, _):
+        for item in rows:
+            item.update(statement_scope="consolidated", statement_scope_marks=[[5000, "parent"], [6500, "consolidated"]])
+
+    tool.scout._annotate_statement_scope.side_effect = annotate
+    execute(tool, "read_source", {"source_id": sid, "offset": 6000})
+    execute(tool, "extract_evidence", {"source_id": sid})
+    projection = tool.scout._analyze_search_results.call_args.args[2][0]
+    assert projection["summary"] == "乙" * 1000
+    assert resolve_in_chunk(projection["statement_scope"], projection.get("statement_scope_marks", []), 100) == "parent"
+    assert resolve_in_chunk(projection["statement_scope"], projection.get("statement_scope_marks", []), 600) == "consolidated"
+    assert tool.sources[sid]["statement_scope"] == "consolidated"
+    assert tool.sources[sid]["statement_scope_marks"] == [[5000, "parent"], [6500, "consolidated"]]
+
+
 @pytest.mark.parametrize("rows", [[], [{"chunk_index": True, "content": FIRST_TEXT}],
     [{"chunk_index": -1, "content": FIRST_TEXT}], [{"chunk_index": 0, "content": None}],
     [{"chunk_index": 0, "content": FIRST_TEXT}, {"chunk_index": 0, "content": SECOND_TEXT}],
@@ -333,6 +408,22 @@ def test_cited_passage_after_memory_prefix_survives_context_and_report():
     assert context["read_evidence"][0]["truncated"]
     assert {"source_id": sid, "quote_id": qid, "quote": tail} in context["cited_evidence"]
     assert tail in append_investigation_report("原文", tool.notebook)
+
+
+def test_export_keeps_source_urls_but_escapes_html_and_markdown_payloads():
+    safe_url = "https://example.test/financial-report-2025.pdf"
+    hostile_url = "https://example.test/report?label=[open](javascript:alert(1))&x=<script>alert(1)</script>"
+    notebook = {"findings": [{"claim": "两份来源仍需交叉验证", "kind": "support", "citations": [
+        {"source_id": "s1", "quote_id": "q1", "title": "正式财务报告", "quote": "本期余额100万元。", "url": safe_url},
+        {"source_id": "s2", "quote_id": "q2", "title": "**不可信标题**", "quote": "<img src=x onerror=alert(1)>", "url": hostile_url},
+    ]}]}
+    report = append_investigation_report("# 原评级", notebook)
+    assert safe_url in report and "s1/q1" in report and "s2/q2" in report
+    assert "\\[open\\]\\(javascript:alert\\(1\\)\\)" in report
+    assert "&amp;x=&lt;script&gt;alert\\(1\\)&lt;/script&gt;" in report
+    assert "\\*\\*不可信标题\\*\\*" in report
+    assert "<script>" not in report and "<img" not in report and hostile_url not in report
+    assert append_investigation_report(report, notebook) == report
 
 
 @pytest.mark.parametrize("action", ["search_web", "list_materials", "extract_evidence", "search_local"])

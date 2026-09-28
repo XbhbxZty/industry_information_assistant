@@ -26,6 +26,8 @@ def append_investigation_report(report, notebook):
                 lines.append(f"  - 依据：{plain(citation.get('quote'))}")
                 quoted.add(key)
             lines.append(f"  - 来源：{plain(citation.get('title'))}；{plain(citation.get('source_id'))}/{plain(citation.get('quote_id'))}")
+            if citation.get("url"):
+                lines.append(f"    - 地址：{plain(citation['url'])}")
         if finding.get("calculation_ids"):
             lines.append("  - 计算底稿：" + plain("、".join(finding["calculation_ids"])))
     if not notebook.get("findings"):
