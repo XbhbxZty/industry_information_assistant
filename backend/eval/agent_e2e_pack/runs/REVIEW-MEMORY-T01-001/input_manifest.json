@@ -1,0 +1,62 @@
+{
+  "input_path": "D:\\pythoncode\\industry_information_assistant\\industry_information_assistant\\backend\\eval\\agent_e2e_pack\\runs\\MEMORY-T01-001\\result.json",
+  "input_sha256": "5d5097d19310bff953cf02d21ce1c3e318cc4326fb6078ce5b3a2f98c21581fe",
+  "input_git_revision": "07441fb83aea088de0276209ae3f3cc0f999c7fa",
+  "input_model": "qwen-plus",
+  "query": "请对海岫精密部件有限公司拟申请的800万元、12个月流动资金贷款开展截至2026年2月20日的尽职调查。只使用我选择的本地材料。重点判断2025年经营现金流转负是否主要由提前备货解释，核查回款改善能否缓释风险。请区分已观察事实、推断、相互矛盾的陈述和仍缺失的信息，给出可追溯依据及按优先级排列的补件清单。不要代替人工审批。",
+  "as_of": "2026-02-20",
+  "subject_name": "海岫精密部件有限公司",
+  "source_manifest": [
+    {
+      "filename": "01_subject_and_request.txt",
+      "file_sha256": "ce4e9321567b193164e6bd06ee31f325934aaf0c74fb70074e7dc2072d96e85e",
+      "normalized_body_utf8_sha256": "8b800b630d711108ca7beaa02e6014dfc893353c63156ff8abeb00b7234e6c95"
+    },
+    {
+      "filename": "02_financial_statements.txt",
+      "file_sha256": "da72a0b6b74801007b201dd89f44a0945e94ce32ee48ebc173f807f32e572a7a",
+      "normalized_body_utf8_sha256": "d99110616df233c2732cdfbb172ad7a6bec1c98e4af08d4137722cb2d2876555"
+    },
+    {
+      "filename": "03_management_explanation.txt",
+      "file_sha256": "1add50429322b25b0bdb1bb2609723cfdee8038f10a6532012cfd962d5f01560",
+      "normalized_body_utf8_sha256": "34d84c996dfb3143ca0ad5d3ec5148936e418c2e012a43440e8d7b64261ab6b2"
+    },
+    {
+      "filename": "04_receivable_aging.txt",
+      "file_sha256": "eb67aeaf614b74670e9dfaec7677c7e776668fd91aa62a242434e1a682bb7253",
+      "normalized_body_utf8_sha256": "e6eafb6626d9cad63dd33b94991c7762a1726dac7fbeec100d762d360f1cf44a"
+    },
+    {
+      "filename": "05_receipts_until_cutoff.txt",
+      "file_sha256": "eeea0eb912a253b013698a89c7dbb9da62be6a454810e1ab8a50b339e63e7014",
+      "normalized_body_utf8_sha256": "147dafa4d06c5ff9222b0147d501e703d2c1e10822549ce5d9635fed942da588"
+    }
+  ],
+  "initial_report_sha256": "6f8b1d40801c0103939212f235fbb0494edd796092d12a2be27648f5e7219bbe",
+  "git_revision": "b33c0d9f643d0f0c121c6dd2ebc64e790c08394f",
+  "checkout_dirty": true,
+  "configured_models": {
+    "critic": {
+      "model": "deepseek-v4-flash",
+      "temperature": 0.0,
+      "max_tokens": 8000
+    },
+    "writer": {
+      "model": "deepseek-v4-flash",
+      "temperature": 0.7,
+      "max_tokens": 16000
+    }
+  },
+  "max_iterations": 1,
+  "model_or_budget_overrides": false,
+  "test_boundaries": [
+    "Synthetic frozen archive only; original input and failure records are never rewritten.",
+    "At most two production Critic calls and one committed AI analysis revision; no reruns until pass.",
+    "Empty checklist and risk state: no rule rating, credit decision, approval or verification acceptance.",
+    "No database, Scout, search, Graph, HTTP/UI or ORACLE invocation.",
+    "Node call_llm parameters and raw responses are recorded; production time anchor is separately shown.",
+    "Production node parameters remain untouched, including existing Writer-specific limits.",
+    "Exit code zero means harness completion, not semantic quality or end-to-end acceptance."
+  ]
+}

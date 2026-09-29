@@ -136,12 +136,28 @@ def test_transport_failure_is_persisted_and_not_repeated_as_writer_fix(failure, 
     assert data["quality_review"]["review_failure_kind"] == "transport"
     assert data["quality_review"]["review_failure"] == code
     assert "DO NOT DISCLOSE" not in str(data)
+    assert data["critic_feedback"][0]["evidence"] == "模型服务请求失败，未获得可用的审核结果"
     assert data["phase"] == "completed"
     assert data["risk_assessment"]["requires_human_review"]
     assert data["iteration"] == 1  # No empty revision, added loop or budget reset.
     critic.call_llm.assert_awaited_once()
     event = next(value for name, value in critic.events if name == "review")
     assert event["review_failure_kind"] == "transport"
+
+
+@pytest.mark.parametrize("kind,evidence", [
+    ("protocol", "审核响应未通过结构或引用校验"),
+    ("input_limit", "审核输入超过完整复核上限，本轮未调用模型"),
+    (None, "未获得可用审核结果（原因未分类）"),
+])
+def test_failure_card_distinguishes_non_transport_causes_without_claiming_a_model_review(kind, evidence):
+    critic = CriticStub(wire_review())
+    result = critic.merge_review(state(), {"review_failure_kind": kind})
+    assert result["degraded"] is True
+    issue = result["issues"][0]
+    assert issue["issue_type"] == "review_not_executed"
+    assert issue["evidence"] == evidence
+    assert "执行结束不代表质检通过" in issue["suggestion"]
 
 
 def test_cancellation_is_not_swallowed_as_review_failure():

@@ -346,7 +346,7 @@ class CriticMaster(BaseAgent):
 
         原设计里 LLM 不可用时退回"仅由扫描器审核"，产出 `needs_revision`。
         扫描器删除后没有第二条链路，而**审核没有执行**与**审核通过**必须区分：
-        此时返回不可用结论并显式标记 `degraded`，由编排层拒绝进入完成态。
+        此时返回不可用结论并显式标记 `degraded`；执行可以结束，但不能视为复核通过。
         这与完整度闸门、证据链校验一致——最后一道关，后面没人接，宁可不出结论。
 
         ## 本方法必须同时被生产流程与评测调用
@@ -367,6 +367,11 @@ class CriticMaster(BaseAgent):
         if not _usable:
             failure_meta = {k: llm_result[k] for k in ("review_failure", "review_failure_kind", "review_report_sha256", "call_meta")
                             if isinstance(llm_result, dict) and k in llm_result}
+            failure_evidence = {
+                "transport": "模型服务请求失败，未获得可用的审核结果",
+                "protocol": "审核响应未通过结构或引用校验",
+                "input_limit": "审核输入超过完整复核上限，本轮未调用模型",
+            }.get(failure_meta.get("review_failure_kind"), "未获得可用审核结果（原因未分类）")
             self.logger.error(
                 "[CriticMaster] LLM 审核不可用，且已无确定性兜底链路，按未审核处理"
             )
@@ -387,9 +392,9 @@ class CriticMaster(BaseAgent):
                     "issue_type": "review_not_executed",
                     "severity": "critical",
                     "location": "",
-                    "description": "Critic 审核链路不可用，报告未经任何质量检查",
-                    "evidence": "LLM 返回不可用结构",
-                    "suggestion": "重跑审核；在审核成功前不得进入完成态",
+                    "description": "Critic 本轮未完成有效质量复核",
+                    "evidence": failure_evidence,
+                    "suggestion": "保留未审核限制并重新安排复核；执行结束不代表质检通过",
                     "requires_new_search": False,
                     "detected_by": "none",
                 }],
