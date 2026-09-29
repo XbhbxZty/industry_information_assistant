@@ -181,10 +181,12 @@ def test_protocol_failure_is_unreviewed_not_a_financial_error_or_research_instru
     critic = CriticStub(raw)
     data = state()
     asyncio.run(critic.process(data))
-    assert data["phase"] == ResearchPhase.REVISING.value
+    assert data["phase"] == ResearchPhase.COMPLETED.value
     assert data["quality_review"]["degraded"] and not data["quality_review"]["analysis_review_validated"]
     assert {item["issue_type"] for item in data["critic_feedback"]} == {"review_not_executed"}
     assert data["risk_assessment"]["level"] == "低风险"
+    assert data["risk_assessment"]["requires_human_review"] is True
+    assert data["quality_review"]["review_failure_kind"] == "protocol"
 
 
 def test_history_requires_complete_question_recheck_and_server_validated_receipt():
@@ -427,4 +429,4 @@ def test_quote_ids_do_not_relax_existing_report_truncation_failure():
     critic = CriticStub(raw)
     result = asyncio.run(critic._review_agent_content(state(), report))
     assert result["review_failure"] == "review_report_truncated"
-    critic.call_llm.assert_awaited_once()
+    critic.call_llm.assert_not_awaited()

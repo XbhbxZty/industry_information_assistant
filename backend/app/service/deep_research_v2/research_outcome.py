@@ -110,9 +110,19 @@ _START = "<!-- research-outcome:start -->"
 _END = "<!-- research-outcome:end -->"
 
 
+def strip_outcome_notice(report):
+    """Exclude only the code-owned delivery notice from content review identity.
+
+    The graph adds this status projection after Critic. It is not an editable
+    model assertion and must not invalidate that same review's report anchors.
+    Any other report edit still changes the review digest.
+    """
+    return re.sub(re.escape(_START) + r".*?" + re.escape(_END), "", report, flags=re.S).rstrip()
+
+
 def append_outcome_notice(report, outcome):
     """Render only code-owned status text, never model-provided HTML."""
-    report = re.sub(re.escape(_START) + r".*?" + re.escape(_END), "", report, flags=re.S).rstrip()
+    report = strip_outcome_notice(report)
     if not report:
         return report
     status = outcome["report_status"]

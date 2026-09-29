@@ -365,7 +365,7 @@ class CriticMaster(BaseAgent):
             and ("issues" in llm_result or "overall_assessment" in llm_result)
         )
         if not _usable:
-            failure_meta = {k: llm_result[k] for k in ("review_failure", "call_meta")
+            failure_meta = {k: llm_result[k] for k in ("review_failure", "review_failure_kind", "review_report_sha256", "call_meta")
                             if isinstance(llm_result, dict) and k in llm_result}
             self.logger.error(
                 "[CriticMaster] LLM 审核不可用，且已无确定性兜底链路，按未审核处理"
@@ -444,6 +444,9 @@ class CriticMaster(BaseAgent):
         """
         final_report = state.get("final_report") or ""
         if final_report.strip():
+            if state.get("research_strategy") == "agent" and state.get("due_diligence_mode"):
+                from ..research_outcome import strip_outcome_notice
+                return strip_outcome_notice(final_report)
             return final_report
 
         parts = []
@@ -521,16 +524,28 @@ class CriticMaster(BaseAgent):
         self.logger.info(f"[CriticMaster] 审核完成，结果: {bool(review_result)}")
 
         review_result = self.merge_review(state, review_result)
-        if state.get("research_strategy") == "agent" and state.get("due_diligence_mode"):
-            from ..analysis_quality import resolve_prior_analysis_issues
+        agent_review = state.get("research_strategy") == "agent" and state.get("due_diligence_mode")
+        if agent_review:
+            from ..analysis_quality import resolve_prior_analysis_issues, upsert_review_issues
             resolve_prior_analysis_issues(state.get("critic_feedback", []), review_result)
 
         if review_result is not None:
             # 记录反馈
-            for issue in review_result.get("issues", []):
-                issue["id"] = f"issue_{uuid.uuid4().hex[:8]}"
-                issue["resolved"] = False
-                state["critic_feedback"].append(issue)
+            if agent_review:
+                review_result["issues"] = upsert_review_issues(state["critic_feedback"], review_result.get("issues", []))
+                # A new passing label cannot hide historical issues that were
+                # not explicitly rechecked (including legacy checkpoint rows).
+                assessment = review_result["overall_assessment"]
+                assessment.update(derive_verdict(
+                    [i for i in state["critic_feedback"] if not i.get("resolved")],
+                    assessment.get("quality_score", 0),
+                    llm_verdict=assessment.get("llm_verdict", assessment.get("verdict")),
+                ))
+            else:
+                for issue in review_result.get("issues", []):
+                    issue["id"] = f"issue_{uuid.uuid4().hex[:8]}"
+                    issue["resolved"] = False
+                    state["critic_feedback"].append(issue)
 
             # 更新质量分数。
             # 提示词声明取值 1-10，但模型不保证遵守——实测返回过 -1。
@@ -555,6 +570,12 @@ class CriticMaster(BaseAgent):
                 "reviewed_question_ids": review_result.get("reviewed_question_ids", []),
                 "analysis_review_validated": bool(review_result.get("analysis_review_validated")),
                 "degraded": bool(review_result.get("degraded")),
+                "issue_checks": review_result.get("issue_checks", []),
+                "reviewed_issue_ids": review_result.get("reviewed_issue_ids", []),
+                "review_report_sha256": review_result.get("review_report_sha256"),
+                "review_failure": review_result.get("review_failure"),
+                "review_failure_kind": review_result.get("review_failure_kind"),
+                "call_meta": review_result.get("call_meta", {}),
             }
 
             # 发送审核结果
@@ -574,6 +595,10 @@ class CriticMaster(BaseAgent):
                 "degraded": bool(review_result.get("degraded")),
                 "call_meta": review_result.get("call_meta", {}),
                 "review_failure": review_result.get("review_failure"),
+                "review_failure_kind": review_result.get("review_failure_kind"),
+                "review_report_sha256": review_result.get("review_report_sha256"),
+                "issue_checks": review_result.get("issue_checks", []),
+                "reviewed_issue_ids": review_result.get("reviewed_issue_ids", []),
             })
 
             # 如果有严重问题，发送具体反馈
@@ -592,7 +617,12 @@ class CriticMaster(BaseAgent):
 
             if verdict == "pass":
                 state["phase"] = ResearchPhase.COMPLETED.value
-            elif state["iteration"] >= state["max_iterations"]:
+            elif (agent_review and review_result.get("degraded")) or state["iteration"] + 1 >= state["max_iterations"]:
+                # iteration counts earlier failed rounds; this review is the
+                # current (+1) round. Stop before a final unreviewable rewrite.
+                # A protocol/transport failure has no semantic fixes for Writer.
+                stop_reason = ("审核未能完成" if agent_review and review_result.get("degraded")
+                               else "审核迭代已用尽")
                 # 达到最大迭代次数，强制完成
                 state["phase"] = ResearchPhase.COMPLETED.value
                 # ⚠️ 迭代用尽 ≠ 问题解决了（BC-29 的另一半）。
@@ -600,7 +630,8 @@ class CriticMaster(BaseAgent):
                 #    的报告就这样出厂了——只留下一句 warning，而 warning
                 #    不参与任何判定。与 BC-33 同形：披露不是控制。
                 #    现在把它接到 v0.6 的复核卡点上：出厂可以，但必须有人签字。
-                blocking = unresolved_blocking_issues(review_result.get("issues"))
+                blocking = unresolved_blocking_issues(
+                    [i for i in state["critic_feedback"] if not i.get("resolved")])
                 if blocking:
                     kinds = "、".join(sorted({i.get("issue_type", "?") for i in blocking}))
                     assessment = state.get("risk_assessment")
@@ -609,11 +640,11 @@ class CriticMaster(BaseAgent):
                         assessment["gates_applied"] = list(
                             assessment.get("gates_applied") or []
                         ) + [
-                            f"审核迭代已用尽但仍存在未解决的阻断级问题（{kinds}），"
+                            f"{stop_reason}但仍存在未解决的阻断级问题（{kinds}），"
                             f"强制人工复核后方可出具"
                         ]
                     state.setdefault("errors", []).append(
-                        f"审核未收敛：迭代用尽仍有 {len(blocking)} 条阻断级问题（{kinds}）"
+                        f"审核未收敛：{stop_reason}，仍有 {len(blocking)} 条阻断级问题（{kinds}）"
                     )
                     self.logger.error(
                         f"[CriticMaster] 迭代用尽仍有阻断级问题，强制转人工复核: {kinds}"
@@ -621,9 +652,9 @@ class CriticMaster(BaseAgent):
                 self.add_message(state, "warning", {
                     "agent": self.name,
                     "content": (
-                        f"已达最大迭代次数，仍有 {len(blocking)} 条阻断级问题未解决，"
+                        f"{stop_reason}，仍有 {len(blocking)} 条阻断级问题未解决，"
                         f"已强制转人工复核"
-                        if blocking else "已达最大迭代次数，部分问题可能未解决"
+                        if blocking else f"{stop_reason}，部分问题可能未解决"
                     ),
                     "unresolved_blocking": len(blocking),
                 })
@@ -812,8 +843,10 @@ class CriticMaster(BaseAgent):
         """One compact, bounded review call; keep legacy workflow protocol unchanged."""
         import asyncio
         import json
+        import hashlib
         from ..analysis_quality import (COMPACT_REVIEW_PROMPT, QUESTION_REVIEW_PROTOCOL,
-            REPORT_QUOTE_PROTOCOL, REPORT_REVIEW_LIMIT, report_with_quote_ids, parse_compact_review)
+            REPORT_QUOTE_PROTOCOL, REPORT_REVIEW_LIMIT, report_with_quote_ids, parse_compact_review,
+            ISSUE_RECHECK_PROTOCOL, pending_review_issues)
         from ..investigator import evidence_context
         context = {"query": state["query"], "report": report_with_quote_ids(report),
                    "report_truncated": len(report) > REPORT_REVIEW_LIMIT,
@@ -832,24 +865,45 @@ class CriticMaster(BaseAgent):
         # Keep the established substantive review boundaries; compact only the response protocol.
         review_boundaries = self.REVIEW_PROMPT.split("## 研究问题", 1)[0].format(
             field_checks=context["checklist"], as_of_section=self._format_as_of_section(state))
+        report_digest = hashlib.sha256(report.encode("utf-8")).hexdigest()
         try:
-            content, meta = await asyncio.wait_for(self.call_llm(
-                system_prompt=review_boundaries + COMPACT_REVIEW_PROMPT + (
-                    QUESTION_REVIEW_PROTOCOL if notebook.get("investigation_plan") else "") + REPORT_QUOTE_PROTOCOL,
-                user_prompt=json.dumps(context, ensure_ascii=False), json_mode=True,
-                temperature=self._cfg_temperature(), max_tokens=self._cfg_max_tokens(),
-                timeout=60, max_retries=0, return_meta=True,
-            ), timeout=70)
-            result = parse_compact_review(content, meta, report, notebook.get("investigation_plan"))
+            # These bounds are known before any model call. A partial input
+            # cannot yield a complete review; don't pay for a doomed request.
             if context["report_truncated"]:
                 raise ValueError("review_report_truncated")
             if context["cited_evidence_truncated"]:
                 raise ValueError("review_cited_evidence_truncated")
+            prior_issues = pending_review_issues(state.get("critic_feedback", []))
+            if len(prior_issues) > 32:
+                raise ValueError("review_history_limit")
+            if prior_issues:
+                context["prior_issues"] = prior_issues
+            content, meta = await asyncio.wait_for(self.call_llm(
+                system_prompt=review_boundaries + COMPACT_REVIEW_PROMPT + (
+                    QUESTION_REVIEW_PROTOCOL if notebook.get("investigation_plan") else "") + REPORT_QUOTE_PROTOCOL + (
+                    ISSUE_RECHECK_PROTOCOL if prior_issues else ""),
+                user_prompt=json.dumps(context, ensure_ascii=False), json_mode=True,
+                temperature=self._cfg_temperature(), max_tokens=self._cfg_max_tokens(),
+                timeout=60, max_retries=0, return_meta=True,
+            ), timeout=70)
+            result = parse_compact_review(content, meta, report, notebook.get("investigation_plan"),
+                                          prior_issues=prior_issues)
+            result["review_report_sha256"] = report_digest
             return result
-        except (ValueError, TypeError, asyncio.TimeoutError) as exc:
+        except asyncio.TimeoutError:
+            return {"review_failure": "review_call_timeout", "review_failure_kind": "transport",
+                    "review_report_sha256": report_digest, "call_meta": {}}
+        except (ValueError, TypeError) as exc:
             # The normal merge path records review_not_executed and blocks approval.
             self.logger.warning("自主分析复核未完成: %s", type(exc).__name__)
-            return {"review_failure": str(exc)[:100], "call_meta": locals().get("meta", {})}
+            code = str(exc)[:100]
+            return {"review_failure": code, "review_failure_kind": (
+                "input_limit" if code in ("review_report_truncated", "review_cited_evidence_truncated", "review_history_limit")
+                else "protocol"), "review_report_sha256": report_digest,
+                "call_meta": locals().get("meta", {})}
+        except Exception as exc:
+            return {"review_failure": "review_provider_error:" + type(exc).__name__,
+                    "review_failure_kind": "transport", "review_report_sha256": report_digest, "call_meta": {}}
 
     async def final_check(self, state: ResearchState) -> Dict[str, Any]:
         """最终检查"""

@@ -224,7 +224,7 @@ def test_real_critic_process_saves_receipt_and_preserves_historical_blockers(his
     original_assessment = copy.deepcopy(state["risk_assessment"])
     state = asyncio.run(graph._review_node(state))
     assert state["phase"] == "completed"
-    assert state["quality_review"]["verdict"] == "pass"
+    assert state["quality_review"]["verdict"] == ("major_issues" if historical_issue else "pass")
     assert state["quality_review"]["score"] == 10
     assert len(state["quality_review"]["analysis_checks"]) == 4
     assert state["critic_feedback"][0]["resolved"] is True
@@ -235,7 +235,14 @@ def test_real_critic_process_saves_receipt_and_preserves_historical_blockers(his
     assert events[-1]["content"]["research_outcome"] == complete["research_outcome"]
     assert ("受限报告" in state["final_report"]) is historical_issue
     assert "报告草稿：" not in state["final_report"]
-    assert state["risk_assessment"] == original_assessment
+    if historical_issue:
+        assert state["risk_assessment"]["requires_human_review"] is True
+        assert any("审核迭代已用尽" in gate for gate in state["risk_assessment"]["gates_applied"])
+        for key, value in original_assessment.items():
+            if key not in ("requires_human_review", "gates_applied"):
+                assert state["risk_assessment"][key] == value
+    else:
+        assert state["risk_assessment"] == original_assessment
 
 
 def test_real_agent_exception_reaches_restricted_notice_and_degraded_event():

@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import re
+import uuid
 
 
 CHECKS = ("question_coverage", "period_basis", "cashflow_attribution", "receipt_reconciliation")
@@ -50,8 +51,8 @@ COMPACT_REVIEW_PROMPT = """你是尽调复核员，只依据提供的报告、�
 清单核实率统计、并列披露冲突、客观说明证据缺口均不应误报。
 不要补造资料缺少的日期或单位；说明限制与核查需求即可。建议本身也必须遵守计算口径。
 只输出紧凑JSON对象，不输出Markdown、内部思维过程或其他字段。
-无investigation_plan时顶层只有score（1至10的数值）、summary（简短结论）、issues（数组）、checks（数组）；
-有逐问题计划时，另按后附协议输出question_checks。
+基础顶层字段为score（1至10的数值）、summary（简短结论）、issues（数组）、checks（数组）；
+有逐问题计划时另输出question_checks，有prior_issues时另输出issue_checks，分别遵守后附协议。
 checks必须包含question_coverage、period_basis、cashflow_attribution、receipt_reconciliation四项各一次。
 每项只有id、status、reason、report_quote；status仅supported/issue/not_applicable，不预设通过。
 reason给可审计结论、必要的计算式和限制，每项最多200字。不适用须说明原因；
@@ -95,6 +96,65 @@ report_quote_id；issues可将quote替换为report_quote_id。其他字段不变
 问题漏答可引用其“当前答复：本轮尚未形成答复”或总概述。不要把问题标题/完成条件当成已给出的答案。
 不能猜测ID、改写ID或使用来源q1/s1等引文ID。仍可不用ID而提供报告真实连续原文，验证不会放宽。
 """
+
+
+ISSUE_RECHECK_PROTOCOL = """
+本次提供prior_issues，顶层必须额外返回issue_checks，逐个覆盖每个历史问题id恰好一次。
+每项只有{"id":"原问题ID","status":"resolved|unresolved","reason":"当前报告如何解决或仍保留该问题",
+"report_quote":"当前报告中对应判断、替代答复或限制的连续原文"}；可用report_quote_id替代report_quote。
+必须对照原问题的具体错误复核当前报告，不能仅因原句被删除、换了措辞、评级保守或本轮总体通过就判resolved。
+resolved要求问题实质已纠正且相关交付仍被如实覆盖；无法确认时标unresolved，并指出剩余问题。
+只使用提供的历史ID，不新增、遗漏或合并ID。新发现仍按checks、question_checks、issues原协议报告。
+"""
+
+
+def _valid_issue_id(value):
+    return (isinstance(value, str) and 0 < len(value) <= 200
+            and value == value.strip() and not any(ord(char) < 32 for char in value))
+
+
+def pending_review_issues(feedback):
+    """Project the exact unresolved identities; never truncate or merge meanings."""
+    fields = {"id", "issue_type", "severity", "location", "target_section", "evidence",
+              "description", "suggestion", "requires_new_search", "search_query",
+              "detected_by", "check_id", "question_id", "report_quote_id",
+              "initial_description", "initial_evidence"}
+    result, seen = [], set()
+    for issue in feedback or []:
+        if (not isinstance(issue, dict) or issue.get("resolved") is True
+                or issue.get("issue_type") == "review_not_executed"
+                or not _valid_issue_id(issue.get("id"))):
+            continue
+        if issue["id"] in seen:
+            raise ValueError("review_duplicate_prior_issue_id")
+        seen.add(issue["id"])
+        result.append({key: deepcopy(value) for key, value in issue.items() if key in fields})
+    return result
+
+
+def _valid_issue_check(row, report=None):
+    if (not isinstance(row, dict)
+            or set(row) - {"id", "status", "reason", "report_quote", "report_quote_id"}
+            or not {"id", "status", "reason", "report_quote"} <= set(row)
+            or not _valid_issue_id(row.get("id"))
+            or row.get("status") not in ("resolved", "unresolved")
+            or not isinstance(row.get("reason"), str) or not row["reason"].strip()
+            or not isinstance(row.get("report_quote"), str) or not row["report_quote"].strip()):
+        return False
+    if report is not None:
+        if row["report_quote"] not in report:
+            return False
+        if ("report_quote_id" in row and (not isinstance(row["report_quote_id"], str)
+                or report_quote_spans(report).get(row["report_quote_id"], {}).get("quote") != row["report_quote"])):
+            return False
+    return True
+
+
+def _valid_issue_checks(rows, ids, report=None):
+    return (isinstance(ids, list) and all(_valid_issue_id(key) for key in ids)
+            and len(set(ids)) == len(ids) and isinstance(rows, list) and len(rows) == len(ids)
+            and all(_valid_issue_check(row, report) for row in rows)
+            and {row["id"] for row in rows} == set(ids))
 
 
 def report_quote_spans(report):
@@ -188,7 +248,7 @@ def _question_ids(plan):
     return ids
 
 
-def parse_compact_review(content, meta, report, investigation_plan=None):
+def parse_compact_review(content, meta, report, investigation_plan=None, prior_issues=None):
     """Strict closed protocol. Do not salvage truncated or duplicate-key decisions."""
     if meta.get("finish_reason") != "stop":
         raise ValueError("review_incomplete_response")
@@ -203,7 +263,10 @@ def parse_compact_review(content, meta, report, investigation_plan=None):
 
     raw = json.loads(content, object_pairs_hook=unique_object)
     question_ids = _question_ids(investigation_plan)
-    expected = {"score", "summary", "issues", "checks"} | ({"question_checks"} if question_ids else set())
+    previous = pending_review_issues(prior_issues)
+    expected = ({"score", "summary", "issues", "checks"}
+                | ({"question_checks"} if question_ids else set())
+                | ({"issue_checks"} if previous else set()))
     if not isinstance(raw, dict) or set(raw) != expected:
         raise ValueError("review_invalid_structure")
     score = raw["score"]
@@ -255,10 +318,32 @@ def parse_compact_review(content, meta, report, investigation_plan=None):
                 raise ValueError("review_unlocated_quote")
             if not _valid_audit_row(row, report, question=is_question):
                 raise ValueError("review_invalid_audit_row")
+    recheck_fields = {}
+    if previous:
+        issue_checks = raw.get("issue_checks")
+        if not isinstance(issue_checks, list):
+            raise ValueError("review_invalid_issue_checks")
+        issue_checks = [_resolve_report_anchor(row, spans, "report_quote") for row in issue_checks]
+        previous_by_id = {issue["id"]: issue for issue in previous}
+        if not _valid_issue_checks(issue_checks, list(previous_by_id), report):
+            raise ValueError("review_invalid_issue_checks")
+        for row in issue_checks:
+            if row["status"] != "unresolved":
+                continue
+            issue = deepcopy(previous_by_id[row["id"]])
+            issue.pop("report_quote_id", None)
+            issue.update(recheck_of=row["id"], evidence=row["report_quote"],
+                         description=row["reason"])
+            if not issue.get("check_id") and not issue.get("question_id"):
+                issue["location"] = row["report_quote"][:100]
+            if "report_quote_id" in row:
+                issue["report_quote_id"] = row["report_quote_id"]
+            issues.append(issue)
+        recheck_fields = {"issue_checks": issue_checks, "reviewed_issue_ids": list(previous_by_id)}
     return {"overall_assessment": {"quality_score": score, "summary": raw["summary"],
                                     "verdict": "needs_revision" if issues or any(c.get("status") == "issue" for c in checks + question_checks) or score < 7 else "pass"},
             "issues": issues, "analysis_checks": checks, "question_checks": question_checks,
-            "missing_aspects": [], "call_meta": meta}
+            "missing_aspects": [], "call_meta": meta, **recheck_fields}
 
 
 def enforce_analysis_review(result, report, investigation_plan=None):
@@ -274,7 +359,7 @@ def enforce_analysis_review(result, report, investigation_plan=None):
     checks = checks if isinstance(checks, list) else []
     valid_protocol = True
 
-    def add_issue(key, row, valid):
+    def add_issue(key, row, valid, *, is_question=False):
         nonlocal valid_protocol
         reason, quote = row.get("reason"), row.get("report_quote")
         result["issues"].append({
@@ -286,6 +371,9 @@ def enforce_analysis_review(result, report, investigation_plan=None):
             "requires_new_search": bool(valid and row.get("needs_more_evidence")),
             "search_query": row.get("followup_question", "") if valid else "",
             "detected_by": "llm" if valid else "protocol",
+            **({"question_id" if is_question else "check_id": key} if valid else {}),
+            **({"report_quote_id": row["report_quote_id"]}
+               if valid and "report_quote_id" in row else {}),
         })
         if not valid:
             valid_protocol = False
@@ -306,32 +394,116 @@ def enforce_analysis_review(result, report, investigation_plan=None):
             row = matches[0] if len(matches) == 1 else {}
             valid = _valid_audit_row(row, report, question=is_question)
             if not valid or row.get("status") == "issue":
-                add_issue(key, row, valid)
+                add_issue(key, row, valid, is_question=is_question)
+    if "issue_checks" in result or "reviewed_issue_ids" in result:
+        if not _valid_issue_checks(result.get("issue_checks"), result.get("reviewed_issue_ids"), report):
+            add_issue("issue_checks", {}, False)
     result["analysis_review_validated"] = valid_protocol and not result.get("degraded")
     result["reviewed_question_ids"] = question_ids
     return result
 
 
 def resolve_prior_analysis_issues(feedback, review):
-    """Close previous analysis/protocol issues only after a complete passing recheck."""
-    if (review.get("degraded") or review.get("overall_assessment", {}).get("verdict") != "pass"
-            or review.get("analysis_review_validated") is not True or review.get("issues")):
+    """Close identities explicitly rechecked; a new global pass is not a receipt."""
+    if review.get("degraded") or review.get("analysis_review_validated") is not True:
         return
     checks = review.get("analysis_checks") or []
     if len(checks) != len(CHECKS) or any(not isinstance(c, dict) for c in checks):
         return
     if {c.get("id") for c in checks} != set(CHECKS) or any(
-            c.get("status") not in ("supported", "not_applicable") or not c.get("reason") for c in checks):
+            c.get("status") not in ("supported", "issue", "not_applicable")
+            or not isinstance(c.get("reason"), str) or not c["reason"].strip() for c in checks):
         return
     question_checks = review.get("question_checks") or []
     question_ids = review.get("reviewed_question_ids") or []
     if (len(question_checks) != len(question_ids)
-            or any(not isinstance(c, dict) or c.get("status") != "supported" for c in question_checks)
+            or any(not isinstance(c, dict) or c.get("status") not in ("supported", "issue")
+                   or not isinstance(c.get("reason"), str) or not c["reason"].strip() for c in question_checks)
             or {c.get("id") for c in question_checks} != set(question_ids)):
         return
+    explicit = "issue_checks" in review or "reviewed_issue_ids" in review
+    if explicit:
+        rows, ids = review.get("issue_checks"), review.get("reviewed_issue_ids")
+        if not _valid_issue_checks(rows, ids):
+            return
+        try:
+            pending_ids = {issue["id"] for issue in pending_review_issues(feedback)}
+        except ValueError:
+            return
+        if set(ids) != pending_ids:
+            return
+        resolved = {row["id"]: row for row in rows if row["status"] == "resolved"}
+        for issue in feedback:
+            if (isinstance(issue, dict) and issue.get("resolved") is not True
+                    and issue.get("issue_type") != "review_not_executed" and issue.get("id") in resolved):
+                row = resolved[issue["id"]]
+                issue.update(resolved=True, resolution="explicit_issue_recheck",
+                             resolution_reason=row["reason"], resolution_quote=row["report_quote"])
+                if "report_quote_id" in row:
+                    issue["resolution_quote_id"] = row["report_quote_id"]
+    # Backward compatibility for old, identity-less analysis receipts. New
+    # identified issues can only be closed above, never by a blanket pass.
+    passing = (review.get("overall_assessment", {}).get("verdict") == "pass"
+               and not review.get("issues")
+               and all(c["status"] in ("supported", "not_applicable") for c in checks)
+               and all(c["status"] == "supported" for c in question_checks))
+    if not passing:
+        return
     for issue in feedback:
-        if not issue.get("resolved") and issue.get("issue_type") in ("analysis_quality_error", "review_not_executed"):
+        if (isinstance(issue, dict) and issue.get("resolved") is not True
+                and (issue.get("issue_type") == "review_not_executed"
+                     or (not explicit and issue.get("issue_type") == "analysis_quality_error"
+                         and not _valid_issue_id(issue.get("id"))))):
             issue.update(resolved=True, resolution="subsequent_complete_analysis_review")
+
+
+def upsert_review_issues(feedback, issues):
+    """Retain issue identities using explicit rechecks or exact equality only.
+
+    Mutate the ledger atomically and return the stored rows for this review.
+    Similar wording or matching categories alone never prove two issues equal.
+    """
+    if not isinstance(feedback, list) or not isinstance(issues, list):
+        raise ValueError("review_invalid_issue_ledger")
+    updated, stored, seen = deepcopy(feedback), [], set()
+    fields = ("issue_type", "location", "evidence", "description")
+    for issue in issues:
+        if not isinstance(issue, dict):
+            raise ValueError("review_invalid_issue")
+        incoming = deepcopy(issue)
+        recheck_id = incoming.pop("recheck_of", None)
+        if recheck_id is not None:
+            matches = [row for row in updated if isinstance(row, dict)
+                       and row.get("id") == recheck_id and row.get("resolved") is not True]
+            if not _valid_issue_id(recheck_id) or len(matches) != 1:
+                raise ValueError("review_unknown_recheck_issue")
+        else:
+            matches = [row for row in updated if isinstance(row, dict)
+                       and row.get("resolved") is not True and _valid_issue_id(row.get("id"))
+                       and all(row.get(key) == incoming.get(key) for key in fields)]
+        incoming.pop("id", None)
+        incoming.pop("resolved", None)
+        if matches:
+            target = matches[0]
+            identity = target["id"]
+            count = target.get("occurrences", 1)
+            if type(count) is not int or count < 1:
+                count = 1
+            if recheck_id is not None:
+                target.setdefault("initial_description", target.get("description"))
+                target.setdefault("initial_evidence", target.get("evidence"))
+            target.pop("report_quote_id", None)
+            target.update(incoming)
+            target.update(id=identity, resolved=False, occurrences=count + (identity not in seen))
+        else:
+            target = {**incoming, "id": f"issue_{uuid.uuid4().hex[:8]}",
+                      "resolved": False, "occurrences": 1}
+            updated.append(target)
+        if target["id"] not in seen:
+            stored.append(target)
+            seen.add(target["id"])
+    feedback[:] = updated
+    return stored
 
 
 def apply_analysis_revision(notebook, revision):
