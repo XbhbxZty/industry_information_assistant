@@ -14,6 +14,7 @@ from typing import Any, Awaitable, Callable
 from .analysis_quality import ANALYSIS_RULES
 from .action_errors import ActionError, DETERMINISTIC_ERROR_CODES
 from .action_selection import action_options, selectable_tools
+from .working_memory import working_memory
 
 
 @dataclass(frozen=True)
@@ -54,7 +55,7 @@ value保留原文数值符号：例如原文“减费用80”，变量expense.va
 不能将中文“减”擅自改写为value=-80。若原文明确为-80则保留负号，表达式按含义处理，避免重复取负。
 一条底稿只完成一个真实推导；不得用expression=0附带一堆变量代替计算，也不为证明读到数字而虚设公式。
 优先阅读与待查问题相关的未读来源；可以先交叉阅读再记录关键发现，不必每读一份就记录。
-source_inventory 是工具维护的来源目录，read_evidence 是已读原文；不要重复读取其中已读的同一片段。
+source_inventory 是工具维护的来源目录，read_evidence 是已读原文窗口；省略的已读引文可用recall_evidence精确回取，不算新进展。
 不要为了获得理想字段而丢弃已经读到的有效证据。
 支持证据、反证和信息缺口应分别记录；没有证据不能声称没有风险。
 action_options提供当前可继续阅读的位置和待答问题，不强制固定顺序；无需重新建立已有计划。
@@ -217,7 +218,7 @@ async def investigate(
             },
         }
         try:
-            decision = await bounded(choose(SYSTEM_PROMPT, context))
+            decision = await bounded(choose(SYSTEM_PROMPT, working_memory(context, notebook)))
             if not isinstance(decision, dict):
                 raise ValueError("行动必须是 JSON 对象")
             action, arguments = decision.get("action"), decision.get("arguments", {})
@@ -240,7 +241,8 @@ async def investigate(
                                          "；继续阅读、计算并address_question，或partial=true如实交付未完成部分")
                 if critique and not reviewed and step < budget.max_steps - 1:
                     reviewed = True
-                    review = await bounded(choose(REVIEW_PROMPT, {**context, "proposed_finish": arguments}))
+                    review = await bounded(choose(REVIEW_PROMPT, working_memory(
+                        {**context, "proposed_finish": arguments}, notebook)))
                     qs = review.get("questions", []) if isinstance(review, dict) else []
                     qs = [q[:300] for q in qs if isinstance(q, str)][:2] if isinstance(qs, list) else []
                     notebook["review_questions"] = qs
@@ -290,7 +292,7 @@ async def investigate(
             # These commands are stateful: identical source IDs can address a
             # new page or its extraction. Their tools own coverage/cache
             # deduplication; the loop still limits consecutive no-progress.
-            repeat_safe = action in ("read_next", "read_source", "extract_evidence", "address_question")
+            repeat_safe = action in ("read_next", "read_source", "extract_evidence", "address_question", "recall_evidence")
             if key in seen and not repeat_safe:
                 raise ValueError("该行动已执行。请查看 source_inventory，选择相关的 retrieved_unread 来源；已读原文在 read_evidence 中，不需重复读取。若无相关未读材料则结束。")
             emit({"title": f"调查行动：{action}", "subtitle": reason})
@@ -351,11 +353,11 @@ async def investigate(
         # One bounded close-out call turns unresolved questions into explicit
         # requests without authorizing more tools or changing the status.
         try:
-            closeout = await bounded(choose(RECOVERY_PROMPT, {
+            closeout = await bounded(choose(RECOVERY_PROMPT, working_memory({
                 "brief": brief, "findings": notebook["findings"][-16:],
                 "questions": notebook["questions"], "status": notebook["status"],
                 **evidence_context(notebook),
-            }))
+            }, notebook)))
             if isinstance(closeout, dict):
                 notebook["summary"] = str(closeout.get("summary") or "")[:2000]
                 missing = closeout.get("missing_materials", [])

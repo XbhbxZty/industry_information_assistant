@@ -32,6 +32,7 @@ class InvestigationTools:
             "address_question": '逐项交代调查结果：{"question_id":"p1","status":"answered|blocked|open","answer":"回答用户问题的具体分析，含必要数字、推断和限制，最多1200字","citations":[{"source_id":"s1","quote_id":"q1"}],"calculation_ids":["c1"],"limitations":"无法回答的具体缺口与用途"}。answered必须有已读引文，要求计算的问题还须关联底稿；blocked须说明资料不足；尚未读相关已有材料应open，不能称缺失。',
             "read_source": '阅读原文，不自动抽取或核实字段：{"source_id":"s1", "chunk_index":可选片段序号, "offset":可选正文偏移量}。返回可引用原文及后续片段导航；每次最多6000字。',
             "read_next": '继续阅读同一材料的下一未读片段：{"source_id":"s1"}；不要把只读一片当作全文已读。',
+            "recall_evidence": '回取已读引文，不重新阅读或核实：{"source_id":"s1","quote_ids":["q21","q22"]}，或 {"source_id":"s1","start":0} 按 next_start 翻页。quote_ids 1至6个精确ID，不能与start同时使用；每页最多8条、总计6000字。仅补回工作记忆，不算新增调查进展。',
             "record_finding": '记录分析：{"claim":"判断或替代解释", "citations":[{"source_id":"s1","quote_id":"q1"},{"source_id":"s2","quote_id":"q3"}], "kind":"support|counter|gap", "calculation_ids":["c1"]}。最多6条精确引文；也兼容单source_id配quote_id或quote_ids。',
             "calculate": '用已读引文计算工作底稿：{"label":"计算用途", "expression":"(current-prior)/prior*100", "variables":{"current":{"value":"120","source_id":"s1","quote_id":"q1","unit":"万元","period":"本期"},"prior":{"value":"100","source_id":"s1","quote_id":"q2","unit":"万元","period":"上期"}},"result_unit":"%","limitations":"主体、期间及口径限制"}。仅四则运算，表达式用变量名且每个变量都须使用。value保留原文数值，中文加减方向写在expression，不自行给value改符号；不证明分类或因果成立，结果可用calculation_ids引用。',
             "inspect_checks": "查看当前核查状态和证据校验反馈，参数 {}。",
@@ -139,6 +140,58 @@ class InvestigationTools:
         return {"source_id": source_id, "quote_id": quote_id, "quote": quote,
                 "title": source.get("title"), "url": source.get("url")}
 
+    def recall_evidence(self, args):
+        """Project authorized, already-read quotations without I/O or mutation."""
+        if not isinstance(args, dict) or set(args) - {"source_id", "quote_ids", "start"}:
+            raise ValueError("recall_evidence 仅接受 source_id、quote_ids 或 start")
+        exact = "quote_ids" in args
+        if exact and "start" in args:
+            raise ValueError("quote_ids 与 start 不能同时提供")
+        requested = args.get("quote_ids")
+        if exact and (not isinstance(requested, list) or not 1 <= len(requested) <= 6
+                      or any(not isinstance(qid, str) or not qid for qid in requested)
+                      or len(set(requested)) != len(requested)):
+            raise ValueError("quote_ids 必须含 1 至 6 个不重复的精确引文 ID")
+        start = args.get("start", 0)
+        if type(start) is not int or start < 0:
+            raise ValueError("start 必须是非负整数")
+
+        sid = args.get("source_id")
+        source = self._citation_source(sid, None)
+        # A historical notebook may lack quotation IDs. Never rebuild IDs from
+        # snippets or expose entries that cannot be located in actual read text.
+        options = [(qid, quote) for qid, quote in (source.get("quote_options") or {}).items()
+                   if isinstance(qid, str) and qid and isinstance(quote, str) and quote
+                   and any(isinstance(text, str) and quote in text
+                           for text in source.get("read_texts", []))]
+        quote_count = len(options)
+        next_start = None
+        if exact:
+            # Resolve the complete request first: a single invalid ID rejects
+            # the whole request and leaves both source and ledger untouched.
+            selected = {qid: self.resolve_citation(sid, qid)["quote"] for qid in requested}
+            if sum(map(len, selected.values())) > 6000:
+                raise ValueError("回取引文合计超过6000字，请减少 quote_ids")
+        else:
+            if start >= quote_count and (quote_count or start):
+                raise ValueError("start 超出已读引文范围，请从0开始并按 next_start 翻页")
+            selected, size = {}, 0
+            for qid, quote in options[start:start + 8]:
+                if len(quote) > 6000:
+                    raise ValueError("该已读引文超过回取上限，请使用 read_source 核对原阅读窗口")
+                if size + len(quote) > 6000:
+                    break
+                selected[qid] = quote
+                size += len(quote)
+            end = start + len(selected)
+            next_start = end if end < quote_count else None
+        note = "这是已读证据的记忆回取，不是新阅读或独立核实，不增加调查进展。"
+        if not options:
+            note += "该旧来源没有可定位的已读引文 ID；需要引文时请 read_source 核对原文，不要猜测 ID。"
+        return {"ok": True, "progress": False, "memory_only": True, "source_id": sid,
+                "quote_options": selected, "quote_count": quote_count, "next_start": next_start,
+                "note": note}
+
     async def list_materials(self):
         from .material_catalog import load_material_catalog
         try:
@@ -180,6 +233,8 @@ class InvestigationTools:
     async def execute(self, action, args):
         if action not in self.definitions():
             raise ValueError("未授权的工具")
+        if action == "recall_evidence":
+            return self.recall_evidence(args)
         if action in ("plan_investigation", "address_question"):
             from .question_ledger import create_plan, address_question
             receipt = (create_plan(self.notebook, args) if action == "plan_investigation" else
